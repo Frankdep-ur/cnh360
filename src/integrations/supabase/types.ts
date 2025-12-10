@@ -133,6 +133,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "aulas_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "aulas_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -245,6 +252,13 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "avaliacoes_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       disponibilidade: {
@@ -281,6 +295,13 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disponibilidade_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_public"
             referencedColumns: ["id"]
           },
         ]
@@ -457,6 +478,13 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_public"
             referencedColumns: ["id"]
           },
         ]
@@ -654,11 +682,70 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "veiculos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      instrutores_public: {
+        Row: {
+          ativo: boolean | null
+          autoescola_id: string | null
+          bio: string | null
+          cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
+          created_at: string | null
+          id: string | null
+          nota_media: number | null
+          preco_hora: number | null
+          raio_atendimento_km: number | null
+          total_aulas: number | null
+          total_avaliacoes: number | null
+          user_id: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          autoescola_id?: string | null
+          bio?: string | null
+          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          created_at?: string | null
+          id?: string | null
+          nota_media?: number | null
+          preco_hora?: number | null
+          raio_atendimento_km?: number | null
+          total_aulas?: number | null
+          total_avaliacoes?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          autoescola_id?: string | null
+          bio?: string | null
+          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          created_at?: string | null
+          id?: string | null
+          nota_media?: number | null
+          preco_hora?: number | null
+          raio_atendimento_km?: number | null
+          total_aulas?: number | null
+          total_avaliacoes?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
