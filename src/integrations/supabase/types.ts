@@ -796,6 +796,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_instructor_owner: { Args: { _instrutor_id: string }; Returns: boolean }
+      is_student_owner: { Args: { _aluno_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "aluno" | "instrutor" | "autoescola"
