@@ -372,6 +372,13 @@ export type Database = {
             referencedRelation: "autoescolas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       logs_renach: {
@@ -693,6 +700,33 @@ export type Database = {
       }
     }
     Views: {
+      autoescolas_public: {
+        Row: {
+          ativa: boolean | null
+          cidade: string | null
+          created_at: string | null
+          estado: string | null
+          id: string | null
+          nome_fantasia: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          cidade?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string | null
+          nome_fantasia?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          cidade?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string | null
+          nome_fantasia?: string | null
+        }
+        Relationships: []
+      }
       instrutores_public: {
         Row: {
           ativo: boolean | null
@@ -742,6 +776,13 @@ export type Database = {
             columns: ["autoescola_id"]
             isOneToOne: false
             referencedRelation: "autoescolas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas_public"
             referencedColumns: ["id"]
           },
         ]
