@@ -10,18 +10,23 @@ import {
   Calendar,
   Clock,
   MapPin,
-  Star
+  Star,
+  Shield,
+  Timer,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 
 const steps = [
-  { id: 1, name: "Curso Teórico", icon: BookOpen, status: "completed", progress: 100 },
-  { id: 2, name: "Exame Teórico", icon: ClipboardCheck, status: "completed", progress: 100 },
-  { id: 3, name: "Aulas Práticas", icon: Car, status: "current", progress: 50, detail: "1h de 2h" },
-  { id: 4, name: "Exame Prático", icon: Trophy, status: "locked", progress: 0 },
+  { id: 1, name: "Exame Médico/Psico", icon: FileText, status: "completed", progress: 100 },
+  { id: 2, name: "Curso Teórico EAD", icon: BookOpen, status: "completed", progress: 100, link: "/aluno/curso-teorico" },
+  { id: 3, name: "Exame Teórico", icon: ClipboardCheck, status: "completed", progress: 100 },
+  { id: 4, name: "Aulas Práticas", icon: Car, status: "current", progress: 50, detail: "1h de 2h mínimas", link: "/aluno/buscar" },
+  { id: 5, name: "Exame Prático", icon: Trophy, status: "locked", progress: 0, link: "/aluno/exame-pratico" },
 ];
 
 const nextLesson = {
@@ -29,18 +34,24 @@ const nextLesson = {
   photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
   date: "Amanhã",
   time: "14:00",
-  location: "Av. Brasil, 1234",
+  location: "Av. Brasil, 1234 - Araçatuba",
   duration: "1 hora",
 };
 
 export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
   const totalProgress = 62;
+  const practicalHours = 1;
+  const requiredHours = 2;
+  const ppdDaysLeft = 365; // Days remaining for PPD
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {/* Compliance Banner */}
+      <ComplianceBanner variant="full" dismissible />
+
       {/* Header */}
-      <header className="gradient-hero text-primary-foreground px-6 pt-8 pb-20 safe-top">
+      <header className="gradient-hero text-primary-foreground px-6 pt-6 pb-20">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -53,9 +64,21 @@ export default function AlunoDashboard() {
             </button>
           </div>
 
+          {/* RENACH Progress Card */}
           <div className="bg-primary-foreground/10 backdrop-blur-sm rounded-2xl p-4">
-            <p className="text-sm text-primary-foreground/80 mb-1">Nova lei CONTRAN</p>
-            <p className="font-medium">Apenas 2h de aula prática obrigatória!</p>
+            <div className="flex items-center gap-3 mb-2">
+              <Shield className="w-5 h-5" />
+              <span className="text-sm font-medium">Progresso RENACH</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-2xl font-bold">{practicalHours}h</span>
+                <span className="text-primary-foreground/80"> / {requiredHours}h práticas</span>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-primary-foreground/60">Validadas GPS/QR</p>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -75,7 +98,18 @@ export default function AlunoDashboard() {
                 <p className="text-sm text-muted-foreground mb-3">Categoria B - Primeira Habilitação</p>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 rounded-full bg-primary" />
-                  <span className="text-primary font-medium">Falta 1h de aula prática</span>
+                  <span className="text-primary font-medium">Falta {requiredHours - practicalHours}h de aula prática</span>
+                </div>
+              </div>
+            </div>
+
+            {/* PPD Counter */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="flex items-center gap-3 p-3 bg-secondary/5 rounded-xl">
+                <Timer className="w-5 h-5 text-secondary" />
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">PPD automática após aprovação</p>
+                  <p className="text-sm font-semibold text-foreground">1 ano sem infrações graves</p>
                 </div>
               </div>
             </div>
@@ -94,9 +128,8 @@ export default function AlunoDashboard() {
               const isCurrent = step.status === "current";
               const isLocked = step.status === "locked";
 
-              return (
+              const content = (
                 <div
-                  key={step.id}
                   className={cn(
                     "bg-card rounded-2xl p-4 border-2 transition-all",
                     isCurrent && "border-primary shadow-card",
@@ -147,6 +180,16 @@ export default function AlunoDashboard() {
                   )}
                 </div>
               );
+
+              if (step.link && !isLocked) {
+                return (
+                  <Link key={step.id} to={step.link}>
+                    {content}
+                  </Link>
+                );
+              }
+
+              return <div key={step.id}>{content}</div>;
             })}
           </div>
         </div>
@@ -197,9 +240,11 @@ export default function AlunoDashboard() {
               <Button variant="outline" className="flex-1">
                 Reagendar
               </Button>
-              <Button variant="hero" className="flex-1">
-                Iniciar chat
-              </Button>
+              <Link to="/aluno/validacao-aula" className="flex-1">
+                <Button variant="hero" className="w-full">
+                  Iniciar Aula
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -224,7 +269,7 @@ export default function AlunoDashboard() {
             >
               <BookOpen className="w-8 h-8 text-secondary mb-2" />
               <h4 className="font-medium text-foreground">Simulado</h4>
-              <p className="text-xs text-muted-foreground">Pratique para o exame</p>
+              <p className="text-xs text-muted-foreground">30 questões DETRAN</p>
             </Link>
           </div>
         </div>
