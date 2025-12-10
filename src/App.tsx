@@ -27,6 +27,8 @@ import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
 // Instrutor Pages
 import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
 import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
+import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
+import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,8 @@ const App = () => (
           {/* Instrutor */}
           <Route path="/instrutor" element={<InstrutorDashboard />} />
           <Route path="/instrutor/ganhos" element={<InstrutorGanhos />} />
+          <Route path="/instrutor/agenda" element={<InstrutorAgenda />} />
+          <Route path="/instrutor/validar-aula" element={<ValidarAulaInstrutor />} />
 
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
