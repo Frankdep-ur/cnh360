@@ -740,7 +740,6 @@ export type Database = {
           raio_atendimento_km: number | null
           total_aulas: number | null
           total_avaliacoes: number | null
-          user_id: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -754,7 +753,6 @@ export type Database = {
           raio_atendimento_km?: number | null
           total_aulas?: number | null
           total_avaliacoes?: number | null
-          user_id?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -768,7 +766,6 @@ export type Database = {
           raio_atendimento_km?: number | null
           total_aulas?: number | null
           total_avaliacoes?: number | null
-          user_id?: string | null
         }
         Relationships: [
           {
