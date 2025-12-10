@@ -3,10 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Pages
 import Index from "./pages/Index";
-import Login from "./pages/Login";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 // Onboarding
@@ -38,35 +40,98 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          {/* Landing */}
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
+        <AuthProvider>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/login" element={<Auth />} />
 
-          {/* Onboarding */}
-          <Route path="/onboarding/aluno" element={<AlunoOnboarding />} />
-          <Route path="/onboarding/instrutor" element={<InstrutorOnboarding />} />
+            {/* Onboarding - Protected */}
+            <Route path="/onboarding/aluno" element={
+              <ProtectedRoute>
+                <AlunoOnboarding />
+              </ProtectedRoute>
+            } />
+            <Route path="/onboarding/instrutor" element={
+              <ProtectedRoute>
+                <InstrutorOnboarding />
+              </ProtectedRoute>
+            } />
 
-          {/* Aluno */}
-          <Route path="/aluno" element={<AlunoDashboard />} />
-          <Route path="/aluno/buscar" element={<BuscarInstrutores />} />
-          <Route path="/aluno/instrutor/:id" element={<InstrutorPerfil />} />
-          <Route path="/aluno/agendar/:id" element={<AgendarAula />} />
-          <Route path="/aluno/aula-confirmada" element={<AulaConfirmada />} />
-          <Route path="/aluno/curso-teorico" element={<CursoTeoricoEAD />} />
-          <Route path="/aluno/exame-pratico" element={<ExamePratico />} />
-          <Route path="/aluno/validacao-aula" element={<ValidacaoAula />} />
-          <Route path="/aluno/simulado" element={<SimuladoTeorico />} />
+            {/* Aluno - Protected */}
+            <Route path="/aluno" element={
+              <ProtectedRoute>
+                <AlunoDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/buscar" element={
+              <ProtectedRoute>
+                <BuscarInstrutores />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/instrutor/:id" element={
+              <ProtectedRoute>
+                <InstrutorPerfil />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/agendar/:id" element={
+              <ProtectedRoute>
+                <AgendarAula />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/aula-confirmada" element={
+              <ProtectedRoute>
+                <AulaConfirmada />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/curso-teorico" element={
+              <ProtectedRoute>
+                <CursoTeoricoEAD />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/exame-pratico" element={
+              <ProtectedRoute>
+                <ExamePratico />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/validacao-aula" element={
+              <ProtectedRoute>
+                <ValidacaoAula />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/simulado" element={
+              <ProtectedRoute>
+                <SimuladoTeorico />
+              </ProtectedRoute>
+            } />
 
-          {/* Instrutor */}
-          <Route path="/instrutor" element={<InstrutorDashboard />} />
-          <Route path="/instrutor/ganhos" element={<InstrutorGanhos />} />
-          <Route path="/instrutor/agenda" element={<InstrutorAgenda />} />
-          <Route path="/instrutor/validar-aula" element={<ValidarAulaInstrutor />} />
+            {/* Instrutor - Protected */}
+            <Route path="/instrutor" element={
+              <ProtectedRoute>
+                <InstrutorDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/ganhos" element={
+              <ProtectedRoute>
+                <InstrutorGanhos />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/agenda" element={
+              <ProtectedRoute>
+                <InstrutorAgenda />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/validar-aula" element={
+              <ProtectedRoute>
+                <ValidarAulaInstrutor />
+              </ProtectedRoute>
+            } />
 
-          {/* Catch-all */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            {/* Catch-all */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
