@@ -2,11 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
 
 @layer base {
   :root {
-    /* CNH 360 Brand Colors */
+    /* CNH 360 Brand Colors - Res. CONTRAN 1.020/2025 */
     --background: 210 20% 98%;
     --foreground: 220 25% 10%;
 
@@ -16,13 +16,13 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 10%;
 
-    /* Primary: Vibrant Green (Go/Traffic) */
-    --primary: 152 76% 42%;
+    /* Primary: Green #4CAF50 (Segurança/Trânsito) */
+    --primary: 122 39% 49%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 152 76% 52%;
+    --primary-glow: 122 39% 59%;
 
-    /* Secondary: Trust Blue */
-    --secondary: 199 89% 48%;
+    /* Secondary: Blue #2196F3 (Confiança) */
+    --secondary: 207 90% 54%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 210 20% 94%;
@@ -41,16 +41,16 @@
     --radius: 1rem;
 
     /* Custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(152, 76%, 42%) 0%, hsl(152, 76%, 32%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(199, 89%, 48%) 0%, hsl(199, 89%, 38%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(152, 76%, 42%) 0%, hsl(199, 89%, 48%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(122, 39%, 49%) 0%, hsl(122, 39%, 39%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(207, 90%, 54%) 0%, hsl(207, 90%, 44%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(122, 39%, 49%) 0%, hsl(207, 90%, 54%) 100%);
     --gradient-card: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(210, 20%, 98%) 100%);
     
     --shadow-soft: 0 4px 20px -4px hsl(220 25% 10% / 0.1);
     --shadow-card: 0 8px 32px -8px hsl(220 25% 10% / 0.12);
     --shadow-elevated: 0 16px 48px -12px hsl(220 25% 10% / 0.15);
-    --shadow-glow-primary: 0 8px 32px -8px hsl(152 76% 42% / 0.35);
-    --shadow-glow-secondary: 0 8px 32px -8px hsl(199 89% 48% / 0.35);
+    --shadow-glow-primary: 0 8px 32px -8px hsl(122 39% 49% / 0.35);
+    --shadow-glow-secondary: 0 8px 32px -8px hsl(207 90% 54% / 0.35);
 
     /* Sidebar */
     --sidebar-background: 0 0% 98%;
@@ -110,7 +110,7 @@
   }
 
   html {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: 'Roboto', system-ui, sans-serif;
   }
 
   body {

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Car, Bike, Truck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Car, Bike, Truck, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 
 const categories = [
@@ -29,6 +30,7 @@ export default function AlunoOnboarding() {
   const [name, setName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
+  const [useOwnCar, setUseOwnCar] = useState(false);
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -47,11 +49,12 @@ export default function AlunoOnboarding() {
     if (step === 1) return cpf.length === 14 && name.length > 2;
     if (step === 2) return selectedGoal !== null;
     if (step === 3) return selectedCategory !== null;
+    if (step === 4) return true; // Car preference is optional
     return false;
   };
 
   const handleNext = () => {
-    if (step < 3) {
+    if (step < 4) {
       setStep(step + 1);
     } else {
       navigate("/aluno");
@@ -60,8 +63,11 @@ export default function AlunoOnboarding() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Compliance Banner */}
+      <ComplianceBanner variant="full" />
+
       {/* Header */}
-      <header className="px-6 pt-6 pb-4 safe-top">
+      <header className="px-6 pt-4 pb-4">
         <div className="max-w-md mx-auto flex items-center gap-4">
           <button
             onClick={() => step > 1 ? setStep(step - 1) : navigate("/")}
@@ -71,7 +77,7 @@ export default function AlunoOnboarding() {
           </button>
           <div className="flex-1">
             <div className="flex gap-2">
-              {[1, 2, 3].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <div
                   key={s}
                   className={cn(
@@ -211,6 +217,96 @@ export default function AlunoOnboarding() {
               </div>
             </div>
           )}
+
+          {/* Step 4: Own Car Option */}
+          {step === 4 && (
+            <div className="animate-fade-in">
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Usar carro próprio? 🚙
+              </h1>
+              <p className="text-muted-foreground mb-8">
+                Nova lei permite usar seu veículo nas aulas práticas
+              </p>
+
+              <div className="space-y-4">
+                <button
+                  onClick={() => setUseOwnCar(true)}
+                  className={cn(
+                    "w-full p-5 rounded-2xl border-2 transition-all duration-200",
+                    useOwnCar
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-14 h-14 rounded-xl flex items-center justify-center",
+                      useOwnCar ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    )}>
+                      <Car className="w-7 h-7" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground">Sim, usar meu carro</h3>
+                        <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                          20% OFF
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Economize usando seu veículo</p>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                      useOwnCar ? "border-primary bg-primary" : "border-muted-foreground"
+                    )}>
+                      {useOwnCar && <Check className="w-4 h-4 text-primary-foreground" />}
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setUseOwnCar(false)}
+                  className={cn(
+                    "w-full p-5 rounded-2xl border-2 transition-all duration-200",
+                    !useOwnCar
+                      ? "border-secondary bg-secondary/5"
+                      : "border-border hover:border-secondary/50"
+                  )}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-14 h-14 rounded-xl flex items-center justify-center",
+                      !useOwnCar ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
+                    )}>
+                      <Car className="w-7 h-7" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="font-semibold text-foreground">Não, usar carro do instrutor</h3>
+                      <p className="text-sm text-muted-foreground">Veículo adaptado para aulas</p>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                      !useOwnCar ? "border-secondary bg-secondary" : "border-muted-foreground"
+                    )}>
+                      {!useOwnCar && <Check className="w-4 h-4 text-secondary-foreground" />}
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Info Box */}
+              <div className="mt-6 p-4 bg-muted/50 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-foreground text-sm">Res. CONTRAN 1.020/2025</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      A nova lei permite o uso do veículo próprio do aluno nas aulas práticas, com desconto de até 20%.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -224,7 +320,7 @@ export default function AlunoOnboarding() {
             disabled={!canProceed()}
             onClick={handleNext}
           >
-            {step === 3 ? "Começar a usar" : "Continuar"}
+            {step === 4 ? "Começar a usar" : "Continuar"}
             <ArrowRight className="w-5 h-5" />
           </Button>
         </div>

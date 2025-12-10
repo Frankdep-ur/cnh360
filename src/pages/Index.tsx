@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 
 export default function Index() {
@@ -48,8 +49,11 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Compliance Banner */}
+      <ComplianceBanner variant="full" />
+
       {/* Hero Section */}
-      <div className="gradient-hero text-primary-foreground px-6 pt-16 pb-12 safe-top">
+      <div className="gradient-hero text-primary-foreground px-6 pt-12 pb-12 safe-top">
         <div className={cn(
           "max-w-md mx-auto transition-all duration-700",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"

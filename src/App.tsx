@@ -19,6 +19,10 @@ import BuscarInstrutores from "./pages/aluno/BuscarInstrutores";
 import InstrutorPerfil from "./pages/aluno/InstrutorPerfil";
 import AgendarAula from "./pages/aluno/AgendarAula";
 import AulaConfirmada from "./pages/aluno/AulaConfirmada";
+import CursoTeoricoEAD from "./pages/aluno/CursoTeoricoEAD";
+import ExamePratico from "./pages/aluno/ExamePratico";
+import ValidacaoAula from "./pages/aluno/ValidacaoAula";
+import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
 
 // Instrutor Pages
 import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
@@ -47,6 +51,10 @@ const App = () => (
           <Route path="/aluno/instrutor/:id" element={<InstrutorPerfil />} />
           <Route path="/aluno/agendar/:id" element={<AgendarAula />} />
           <Route path="/aluno/aula-confirmada" element={<AulaConfirmada />} />
+          <Route path="/aluno/curso-teorico" element={<CursoTeoricoEAD />} />
+          <Route path="/aluno/exame-pratico" element={<ExamePratico />} />
+          <Route path="/aluno/validacao-aula" element={<ValidacaoAula />} />
+          <Route path="/aluno/simulado" element={<SimuladoTeorico />} />
 
           {/* Instrutor */}
           <Route path="/instrutor" element={<InstrutorDashboard />} />
