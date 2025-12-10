@@ -17,8 +17,9 @@ import InstrutorOnboarding from "./pages/onboarding/InstrutorOnboarding";
 
 // Aluno Pages
 import AlunoDashboard from "./pages/aluno/AlunoDashboard";
+import AlunoPerfil from "./pages/aluno/AlunoPerfil";
 import BuscarInstrutores from "./pages/aluno/BuscarInstrutores";
-import InstrutorPerfil from "./pages/aluno/InstrutorPerfil";
+import InstrutorPerfilView from "./pages/aluno/InstrutorPerfil";
 import AgendarAula from "./pages/aluno/AgendarAula";
 import AulaConfirmada from "./pages/aluno/AulaConfirmada";
 import CursoTeoricoEAD from "./pages/aluno/CursoTeoricoEAD";
@@ -28,6 +29,7 @@ import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
 
 // Instrutor Pages
 import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
+import InstrutorPerfil from "./pages/instrutor/InstrutorPerfil";
 import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
 import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
 import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
@@ -72,7 +74,12 @@ const App = () => (
             } />
             <Route path="/aluno/instrutor/:id" element={
               <ProtectedRoute>
-                <InstrutorPerfil />
+                <InstrutorPerfilView />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/perfil" element={
+              <ProtectedRoute>
+                <AlunoPerfil />
               </ProtectedRoute>
             } />
             <Route path="/aluno/agendar/:id" element={
@@ -125,6 +132,11 @@ const App = () => (
             <Route path="/instrutor/validar-aula" element={
               <ProtectedRoute>
                 <ValidarAulaInstrutor />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/perfil" element={
+              <ProtectedRoute>
+                <InstrutorPerfil />
               </ProtectedRoute>
             } />
 
