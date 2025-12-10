@@ -4,33 +4,39 @@ import { ArrowLeft, ArrowRight, Check, Car, Bike, Truck, Shield } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const categories = [
-  { id: "acc", label: "ACC", description: "Autorização para Conduzir Ciclomotor", icon: Bike },
-  { id: "a", label: "A", description: "Motocicleta", icon: Bike },
-  { id: "b", label: "B", description: "Carro (até 8 passageiros)", icon: Car },
-  { id: "ab", label: "A + B", description: "Moto e Carro", icon: Car },
-  { id: "c", label: "C", description: "Caminhão", icon: Truck },
-  { id: "d", label: "D", description: "Ônibus", icon: Truck },
-  { id: "e", label: "E", description: "Veículo articulado", icon: Truck },
+  { id: "ACC", label: "ACC", description: "Autorização para Conduzir Ciclomotor", icon: Bike },
+  { id: "A", label: "A", description: "Motocicleta", icon: Bike },
+  { id: "B", label: "B", description: "Carro (até 8 passageiros)", icon: Car },
+  { id: "AB", label: "A + B", description: "Moto e Carro", icon: Car },
+  { id: "C", label: "C", description: "Caminhão", icon: Truck },
+  { id: "D", label: "D", description: "Ônibus", icon: Truck },
+  { id: "E", label: "E", description: "Veículo articulado", icon: Truck },
 ];
 
 const goals = [
-  { id: "primeira", label: "Primeira Habilitação", description: "Nunca tive CNH" },
-  { id: "adicao", label: "Adição de Categoria", description: "Já tenho CNH e quero adicionar" },
-  { id: "mudanca", label: "Mudança de Categoria", description: "Quero mudar minha categoria" },
-  { id: "reciclagem", label: "Reciclagem", description: "Preciso reciclar minha CNH" },
+  { id: "primeira_habilitacao", label: "Primeira Habilitação", description: "Nunca tive CNH" },
+  { id: "adicao_categoria", label: "Adição de Categoria", description: "Já tenho CNH e quero adicionar" },
+  { id: "mudanca_categoria", label: "Mudança de Categoria", description: "Quero mudar minha categoria" },
+  { id: "renovacao", label: "Renovação", description: "Preciso renovar minha CNH" },
 ];
 
 export default function AlunoOnboarding() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
   const [name, setName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [useOwnCar, setUseOwnCar] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -49,15 +55,84 @@ export default function AlunoOnboarding() {
     if (step === 1) return cpf.length === 14 && name.length > 2;
     if (step === 2) return selectedGoal !== null;
     if (step === 3) return selectedCategory !== null;
-    if (step === 4) return true; // Car preference is optional
+    if (step === 4) return true;
     return false;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      navigate("/aluno");
+      // Save to database
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Você precisa estar logado para continuar.",
+        });
+        navigate("/auth?type=aluno");
+        return;
+      }
+
+      setLoading(true);
+      
+      try {
+        // Update profile with CPF
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ cpf, full_name: name })
+          .eq("id", user.id);
+
+        if (profileError) throw profileError;
+
+        // Create aluno record
+        const { error: alunoError } = await supabase
+          .from("alunos")
+          .insert({
+            user_id: user.id,
+            objetivo: selectedGoal as "primeira_habilitacao" | "adicao_categoria" | "renovacao" | "mudanca_categoria",
+            categoria_pretendida: selectedCategory as "ACC" | "A" | "B" | "AB" | "C" | "D" | "E",
+            possui_carro_proprio: useOwnCar,
+          });
+
+        if (alunoError) {
+          if (alunoError.code === "23505") {
+            // Already exists, update instead
+            const { error: updateError } = await supabase
+              .from("alunos")
+              .update({
+                objetivo: selectedGoal as "primeira_habilitacao" | "adicao_categoria" | "renovacao" | "mudanca_categoria",
+                categoria_pretendida: selectedCategory as "ACC" | "A" | "B" | "AB" | "C" | "D" | "E",
+                possui_carro_proprio: useOwnCar,
+              })
+              .eq("user_id", user.id);
+            
+            if (updateError) throw updateError;
+          } else {
+            throw alunoError;
+          }
+        }
+
+        // Add aluno role
+        await supabase
+          .from("user_roles")
+          .upsert({ user_id: user.id, role: "aluno" as const }, { onConflict: "user_id,role" });
+
+        toast({
+          title: "Cadastro concluído!",
+          description: "Bem-vindo ao CNH 360.",
+        });
+
+        navigate("/aluno");
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao salvar",
+          description: error.message || "Tente novamente.",
+        });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -317,10 +392,10 @@ export default function AlunoOnboarding() {
             variant="hero"
             size="xl"
             className="w-full"
-            disabled={!canProceed()}
+            disabled={!canProceed() || loading}
             onClick={handleNext}
           >
-            {step === 4 ? "Começar a usar" : "Continuar"}
+            {loading ? "Salvando..." : step === 4 ? "Começar a usar" : "Continuar"}
             <ArrowRight className="w-5 h-5" />
           </Button>
         </div>

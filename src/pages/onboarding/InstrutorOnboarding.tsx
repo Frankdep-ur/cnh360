@@ -3,10 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export default function InstrutorOnboarding() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
   const [name, setName] = useState("");
@@ -14,7 +19,8 @@ export default function InstrutorOnboarding() {
   const [cnh, setCnh] = useState("");
   const [carModel, setCarModel] = useState("");
   const [carPlate, setCarPlate] = useState("");
-  const [transmission, setTransmission] = useState<"manual" | "auto" | null>(null);
+  const [transmission, setTransmission] = useState<"manual" | "automatico" | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -32,11 +38,113 @@ export default function InstrutorOnboarding() {
     return false;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 3) {
       setStep(step + 1);
     } else {
-      navigate("/instrutor");
+      // Save to database
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Você precisa estar logado para continuar.",
+        });
+        navigate("/auth?type=instrutor");
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        // Update profile with CPF
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ cpf, full_name: name })
+          .eq("id", user.id);
+
+        if (profileError) throw profileError;
+
+        // Create instrutor record
+        const { data: instrutorData, error: instrutorError } = await supabase
+          .from("instrutores")
+          .insert({
+            user_id: user.id,
+            credencial_detran: detranCredential,
+            cnh_numero: cnh,
+            cnh_categoria: "B" as const,
+            cnh_validade: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 1 year from now
+          })
+          .select()
+          .single();
+
+        if (instrutorError) {
+          if (instrutorError.code === "23505") {
+            // Already exists, get existing
+            const { data: existingInstrutor, error: fetchError } = await supabase
+              .from("instrutores")
+              .select()
+              .eq("user_id", user.id)
+              .single();
+
+            if (fetchError) throw fetchError;
+
+            // Update existing
+            const { error: updateError } = await supabase
+              .from("instrutores")
+              .update({
+                credencial_detran: detranCredential,
+                cnh_numero: cnh,
+              })
+              .eq("id", existingInstrutor.id);
+
+            if (updateError) throw updateError;
+
+            // Update or create vehicle
+            await supabase
+              .from("veiculos")
+              .upsert({
+                instrutor_id: existingInstrutor.id,
+                modelo: carModel,
+                placa: carPlate,
+                transmissao: transmission,
+                categoria: "B" as const,
+              }, { onConflict: "instrutor_id" });
+          } else {
+            throw instrutorError;
+          }
+        } else {
+          // Create vehicle for new instrutor
+          await supabase
+            .from("veiculos")
+            .insert({
+              instrutor_id: instrutorData.id,
+              modelo: carModel,
+              placa: carPlate,
+              transmissao: transmission!,
+              categoria: "B" as const,
+            });
+        }
+
+        // Add instrutor role
+        await supabase
+          .from("user_roles")
+          .upsert({ user_id: user.id, role: "instrutor" as const }, { onConflict: "user_id,role" });
+
+        toast({
+          title: "Cadastro concluído!",
+          description: "Bem-vindo ao CNH 360, instrutor!",
+        });
+
+        navigate("/instrutor");
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao salvar",
+          description: error.message || "Tente novamente.",
+        });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -220,17 +328,17 @@ export default function InstrutorOnboarding() {
                       <span className="font-medium">Manual</span>
                     </button>
                     <button
-                      onClick={() => setTransmission("auto")}
+                      onClick={() => setTransmission("automatico")}
                       className={cn(
                         "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
-                        transmission === "auto"
+                        transmission === "automatico"
                           ? "border-secondary bg-secondary/5"
                           : "border-border hover:border-secondary/50"
                       )}
                     >
                       <Car className={cn(
                         "w-8 h-8",
-                        transmission === "auto" ? "text-secondary" : "text-muted-foreground"
+                        transmission === "automatico" ? "text-secondary" : "text-muted-foreground"
                       )} />
                       <span className="font-medium">Automático</span>
                     </button>
@@ -249,10 +357,10 @@ export default function InstrutorOnboarding() {
             variant="hero-secondary"
             size="xl"
             className="w-full"
-            disabled={!canProceed()}
+            disabled={!canProceed() || loading}
             onClick={handleNext}
           >
-            {step === 3 ? "Começar a dar aulas" : "Continuar"}
+            {loading ? "Salvando..." : step === 3 ? "Começar a dar aulas" : "Continuar"}
             <ArrowRight className="w-5 h-5" />
           </Button>
         </div>

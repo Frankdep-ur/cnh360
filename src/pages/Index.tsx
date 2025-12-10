@@ -21,7 +21,7 @@ export default function Index() {
       title: "Sou Aluno",
       description: "Quero tirar ou renovar minha CNH",
       color: "primary",
-      path: "/onboarding/aluno",
+      path: "/auth?type=aluno",
     },
     {
       id: "instrutor",
@@ -29,7 +29,7 @@ export default function Index() {
       title: "Sou Instrutor",
       description: "Quero dar aulas e aumentar minha renda",
       color: "secondary",
-      path: "/onboarding/instrutor",
+      path: "/auth?type=instrutor",
     },
     {
       id: "autoescola",
@@ -37,7 +37,7 @@ export default function Index() {
       title: "Sou Autoescola",
       description: "Quero captar alunos e gerenciar turmas",
       color: "accent",
-      path: "/onboarding/autoescola",
+      path: "/auth?type=autoescola",
     },
   ];
 
@@ -154,7 +154,7 @@ export default function Index() {
             <p className="text-sm text-muted-foreground mb-2">
               Já tem uma conta?
             </p>
-            <Button variant="link" onClick={() => navigate("/login")}>
+            <Button variant="link" onClick={() => navigate("/auth")}>
               Fazer login
             </Button>
           </div>
