@@ -133,13 +133,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "aulas_instrutor_id_fkey"
-            columns: ["instrutor_id"]
-            isOneToOne: false
-            referencedRelation: "instrutores_public"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "aulas_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -252,13 +245,6 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "avaliacoes_instrutor_id_fkey"
-            columns: ["instrutor_id"]
-            isOneToOne: false
-            referencedRelation: "instrutores_public"
-            referencedColumns: ["id"]
-          },
         ]
       }
       disponibilidade: {
@@ -295,13 +281,6 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "disponibilidade_instrutor_id_fkey"
-            columns: ["instrutor_id"]
-            isOneToOne: false
-            referencedRelation: "instrutores_public"
             referencedColumns: ["id"]
           },
         ]
@@ -372,14 +351,46 @@ export type Database = {
             referencedRelation: "autoescolas"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "instrutores_autoescola_id_fkey"
-            columns: ["autoescola_id"]
-            isOneToOne: false
-            referencedRelation: "autoescolas_public"
-            referencedColumns: ["id"]
-          },
         ]
+      }
+      instrutores_publico_cache: {
+        Row: {
+          ativo: boolean | null
+          bio: string | null
+          cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
+          id: string
+          nota_media: number | null
+          preco_hora: number | null
+          raio_atendimento_km: number | null
+          total_aulas: number | null
+          total_avaliacoes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          bio?: string | null
+          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          id: string
+          nota_media?: number | null
+          preco_hora?: number | null
+          raio_atendimento_km?: number | null
+          total_aulas?: number | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          bio?: string | null
+          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          id?: string
+          nota_media?: number | null
+          preco_hora?: number | null
+          raio_atendimento_km?: number | null
+          total_aulas?: number | null
+          total_avaliacoes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       logs_renach: {
         Row: {
@@ -485,13 +496,6 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pagamentos_instrutor_id_fkey"
-            columns: ["instrutor_id"]
-            isOneToOne: false
-            referencedRelation: "instrutores_public"
             referencedColumns: ["id"]
           },
         ]
@@ -689,103 +693,43 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "veiculos_instrutor_id_fkey"
-            columns: ["instrutor_id"]
-            isOneToOne: false
-            referencedRelation: "instrutores_public"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
     Views: {
-      autoescolas_public: {
-        Row: {
-          ativa: boolean | null
-          cidade: string | null
-          created_at: string | null
-          estado: string | null
-          id: string | null
-          nome_fantasia: string | null
-        }
-        Insert: {
-          ativa?: boolean | null
-          cidade?: string | null
-          created_at?: string | null
-          estado?: string | null
-          id?: string | null
-          nome_fantasia?: string | null
-        }
-        Update: {
-          ativa?: boolean | null
-          cidade?: string | null
-          created_at?: string | null
-          estado?: string | null
-          id?: string | null
-          nome_fantasia?: string | null
-        }
-        Relationships: []
-      }
-      instrutores_public: {
-        Row: {
-          ativo: boolean | null
-          autoescola_id: string | null
-          bio: string | null
-          cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
-          created_at: string | null
-          id: string | null
-          nota_media: number | null
-          preco_hora: number | null
-          raio_atendimento_km: number | null
-          total_aulas: number | null
-          total_avaliacoes: number | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          autoescola_id?: string | null
-          bio?: string | null
-          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
-          created_at?: string | null
-          id?: string | null
-          nota_media?: number | null
-          preco_hora?: number | null
-          raio_atendimento_km?: number | null
-          total_aulas?: number | null
-          total_avaliacoes?: number | null
-        }
-        Update: {
-          ativo?: boolean | null
-          autoescola_id?: string | null
-          bio?: string | null
-          cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
-          created_at?: string | null
-          id?: string | null
-          nota_media?: number | null
-          preco_hora?: number | null
-          raio_atendimento_km?: number | null
-          total_aulas?: number | null
-          total_avaliacoes?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "instrutores_autoescola_id_fkey"
-            columns: ["autoescola_id"]
-            isOneToOne: false
-            referencedRelation: "autoescolas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instrutores_autoescola_id_fkey"
-            columns: ["autoescola_id"]
-            isOneToOne: false
-            referencedRelation: "autoescolas_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
+      get_public_autoescolas: {
+        Args: never
+        Returns: {
+          cidade: string
+          estado: string
+          id: string
+          nome_fantasia: string
+        }[]
+      }
+      get_public_instructors: {
+        Args: never
+        Returns: {
+          bio: string
+          cnh_categoria: Database["public"]["Enums"]["categoria_cnh"]
+          id: string
+          nota_media: number
+          preco_hora: number
+          total_avaliacoes: number
+        }[]
+      }
+      get_vehicle_display_info: {
+        Args: { p_instrutor_id: string }
+        Returns: {
+          ano: number
+          categoria: Database["public"]["Enums"]["categoria_cnh"]
+          id: string
+          modelo: string
+          transmissao: Database["public"]["Enums"]["tipo_transmissao"]
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
