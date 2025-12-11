@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Upload, CheckCircle, ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,40 @@ export default function AutoescolaOnboarding() {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  // Check if user already has autoescola registration
+  useEffect(() => {
+    const checkExistingAutoescola = async () => {
+      if (!user) {
+        setCheckingExisting(false);
+        return;
+      }
+      
+      const { data } = await supabase
+        .from("autoescolas")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (data) {
+        navigate("/autoescola", { replace: true });
+      } else {
+        setCheckingExisting(false);
+      }
+    };
+    
+    checkExistingAutoescola();
+  }, [user, navigate]);
+
+  if (checkingExisting) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    );
+  }
   const [formData, setFormData] = useState({
     cnpj: "",
     razaoSocial: "",
