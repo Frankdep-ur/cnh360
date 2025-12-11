@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Car, Shield, Zap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -59,11 +60,12 @@ export default function Index() {
     { icon: Users, text: "Use seu próprio carro nas aulas" },
   ];
 
-  if (loading) {
+  if (loading || isSigningIn) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Carregando...</div>
-      </div>
+      <LoadingScreen 
+        message={isSigningIn ? "Entrando com Google..." : "Carregando..."} 
+        submessage={isSigningIn ? "Aguarde enquanto verificamos sua conta" : undefined}
+      />
     );
   }
 
