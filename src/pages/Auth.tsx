@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { z } from "zod";
-import { Car, GraduationCap, ArrowLeft, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Car, GraduationCap, Building2, ArrowLeft, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +12,7 @@ const emailSchema = z.string().email("Email inválido");
 const passwordSchema = z.string().min(6, "Senha deve ter no mínimo 6 caracteres");
 const nameSchema = z.string().min(2, "Nome deve ter no mínimo 2 caracteres");
 
-type UserType = "aluno" | "instrutor";
+type UserType = "aluno" | "instrutor" | "autoescola";
 type AuthMode = "login" | "signup";
 
 export default function Auth() {
@@ -34,7 +34,7 @@ export default function Auth() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const type = params.get("type");
-    if (type === "aluno" || type === "instrutor") {
+    if (type === "aluno" || type === "instrutor" || type === "autoescola") {
       setUserType(type);
     }
   }, [location.search]);
@@ -163,50 +163,73 @@ export default function Auth() {
       <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
           {/* User Type Selector */}
-          <div className="grid grid-cols-2 gap-3 mb-8">
+          <div className="grid grid-cols-3 gap-2 mb-8">
             <button
               onClick={() => setUserType("aluno")}
               className={cn(
-                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
                 userType === "aluno"
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               )}
             >
               <div className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center",
+                "w-10 h-10 rounded-xl flex items-center justify-center",
                 userType === "aluno" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
               )}>
-                <Car className="w-6 h-6" />
+                <Car className="w-5 h-5" />
               </div>
               <span className={cn(
-                "font-medium",
+                "font-medium text-sm",
                 userType === "aluno" ? "text-primary" : "text-muted-foreground"
               )}>
-                Sou Aluno
+                Aluno
               </span>
             </button>
 
             <button
               onClick={() => setUserType("instrutor")}
               className={cn(
-                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
                 userType === "instrutor"
                   ? "border-secondary bg-secondary/5"
                   : "border-border hover:border-secondary/50"
               )}
             >
               <div className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center",
+                "w-10 h-10 rounded-xl flex items-center justify-center",
                 userType === "instrutor" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
               )}>
-                <GraduationCap className="w-6 h-6" />
+                <GraduationCap className="w-5 h-5" />
               </div>
               <span className={cn(
-                "font-medium",
+                "font-medium text-sm",
                 userType === "instrutor" ? "text-secondary" : "text-muted-foreground"
               )}>
-                Sou Instrutor
+                Instrutor
+              </span>
+            </button>
+
+            <button
+              onClick={() => setUserType("autoescola")}
+              className={cn(
+                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
+                userType === "autoescola"
+                  ? "border-emerald-500 bg-emerald-500/5"
+                  : "border-border hover:border-emerald-500/50"
+              )}
+            >
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center",
+                userType === "autoescola" ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"
+              )}>
+                <Building2 className="w-5 h-5" />
+              </div>
+              <span className={cn(
+                "font-medium text-sm",
+                userType === "autoescola" ? "text-emerald-500" : "text-muted-foreground"
+              )}>
+                Autoescola
               </span>
             </button>
           </div>
@@ -281,9 +304,9 @@ export default function Auth() {
 
             <Button
               type="submit"
-              variant={userType === "aluno" ? "hero" : "hero-secondary"}
+              variant={userType === "aluno" ? "hero" : userType === "instrutor" ? "hero-secondary" : "default"}
               size="xl"
-              className="w-full mt-6"
+              className={cn("w-full mt-6", userType === "autoescola" && "bg-emerald-500 hover:bg-emerald-600 text-white")}
               disabled={loading}
             >
               {loading ? "Carregando..." : mode === "login" ? "Entrar" : "Criar conta"}
@@ -301,7 +324,7 @@ export default function Auth() {
                   Não tem conta?{" "}
                   <span className={cn(
                     "font-semibold",
-                    userType === "aluno" ? "text-primary" : "text-secondary"
+                    userType === "aluno" ? "text-primary" : userType === "instrutor" ? "text-secondary" : "text-emerald-500"
                   )}>
                     Criar agora
                   </span>
@@ -311,7 +334,7 @@ export default function Auth() {
                   Já tem conta?{" "}
                   <span className={cn(
                     "font-semibold",
-                    userType === "aluno" ? "text-primary" : "text-secondary"
+                    userType === "aluno" ? "text-primary" : userType === "instrutor" ? "text-secondary" : "text-emerald-500"
                   )}>
                     Entrar
                   </span>
