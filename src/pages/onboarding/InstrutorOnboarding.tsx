@@ -7,6 +7,22 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  instrutorStep1Schema,
+  instrutorStep2Schema,
+  instrutorStep3Schema,
+  validateCPF,
+} from "@/lib/validations";
+
+type FormErrors = {
+  name?: string;
+  cpf?: string;
+  detranCredential?: string;
+  cnh?: string;
+  carModel?: string;
+  carPlate?: string;
+  transmission?: string;
+};
 
 export default function InstrutorOnboarding() {
   const navigate = useNavigate();
@@ -21,6 +37,7 @@ export default function InstrutorOnboarding() {
   const [carPlate, setCarPlate] = useState("");
   const [transmission, setTransmission] = useState<"manual" | "automatico" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -31,6 +48,31 @@ export default function InstrutorOnboarding() {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
+  const validateStep = (currentStep: number): boolean => {
+    setErrors({});
+    
+    try {
+      if (currentStep === 1) {
+        instrutorStep1Schema.parse({ name, cpf });
+      } else if (currentStep === 2) {
+        instrutorStep2Schema.parse({ detranCredential, cnh });
+      } else if (currentStep === 3) {
+        instrutorStep3Schema.parse({ carModel, carPlate, transmission });
+      }
+      return true;
+    } catch (error: any) {
+      if (error.errors) {
+        const newErrors: FormErrors = {};
+        error.errors.forEach((err: any) => {
+          const field = err.path[0] as keyof FormErrors;
+          newErrors[field] = err.message;
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
   const canProceed = () => {
     if (step === 1) return cpf.length === 14 && name.length > 2;
     if (step === 2) return detranCredential.length > 0 && cnh.length > 0;
@@ -39,6 +81,15 @@ export default function InstrutorOnboarding() {
   };
 
   const handleNext = async () => {
+    if (!validateStep(step)) {
+      toast({
+        variant: "destructive",
+        title: "Dados inválidos",
+        description: "Por favor, corrija os erros antes de continuar.",
+      });
+      return;
+    }
+
     if (step < 3) {
       setStep(step + 1);
     } else {
@@ -59,7 +110,7 @@ export default function InstrutorOnboarding() {
         // Update profile with CPF
         const { error: profileError } = await supabase
           .from("profiles")
-          .update({ cpf, full_name: name })
+          .update({ cpf: cpf.replace(/\D/g, ""), full_name: name.trim() })
           .eq("id", user.id);
 
         if (profileError) throw profileError;
@@ -69,10 +120,10 @@ export default function InstrutorOnboarding() {
           .from("instrutores")
           .insert({
             user_id: user.id,
-            credencial_detran: detranCredential,
-            cnh_numero: cnh,
+            credencial_detran: detranCredential.trim(),
+            cnh_numero: cnh.trim(),
             cnh_categoria: "B" as const,
-            cnh_validade: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 1 year from now
+            cnh_validade: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
           })
           .select()
           .single();
@@ -92,8 +143,8 @@ export default function InstrutorOnboarding() {
             const { error: updateError } = await supabase
               .from("instrutores")
               .update({
-                credencial_detran: detranCredential,
-                cnh_numero: cnh,
+                credencial_detran: detranCredential.trim(),
+                cnh_numero: cnh.trim(),
               })
               .eq("id", existingInstrutor.id);
 
@@ -104,8 +155,8 @@ export default function InstrutorOnboarding() {
               .from("veiculos")
               .upsert({
                 instrutor_id: existingInstrutor.id,
-                modelo: carModel,
-                placa: carPlate,
+                modelo: carModel.trim(),
+                placa: carPlate.trim().toUpperCase(),
                 transmissao: transmission,
                 categoria: "B" as const,
               }, { onConflict: "instrutor_id" });
@@ -118,8 +169,8 @@ export default function InstrutorOnboarding() {
             .from("veiculos")
             .insert({
               instrutor_id: instrutorData.id,
-              modelo: carModel,
-              placa: carPlate,
+              modelo: carModel.trim(),
+              placa: carPlate.trim().toUpperCase(),
               transmissao: transmission!,
               categoria: "B" as const,
             });
@@ -196,9 +247,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="Digite seu nome"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-14 text-lg rounded-xl"
+                    maxLength={100}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors({ ...errors, name: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.name && "border-destructive")}
                   />
+                  {errors.name && <p className="text-sm text-destructive mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
@@ -208,10 +264,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="000.000.000-00"
                     value={cpf}
-                    onChange={(e) => setCpf(formatCPF(e.target.value))}
+                    onChange={(e) => {
+                      setCpf(formatCPF(e.target.value));
+                      if (errors.cpf) setErrors({ ...errors, cpf: undefined });
+                    }}
                     maxLength={14}
-                    className="h-14 text-lg rounded-xl tracking-wide"
+                    className={cn("h-14 text-lg rounded-xl tracking-wide", errors.cpf && "border-destructive")}
                   />
+                  {errors.cpf && <p className="text-sm text-destructive mt-1">{errors.cpf}</p>}
                 </div>
               </div>
             </div>
@@ -235,9 +295,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="Ex: 123456789"
                     value={detranCredential}
-                    onChange={(e) => setDetranCredential(e.target.value)}
-                    className="h-14 text-lg rounded-xl"
+                    maxLength={50}
+                    onChange={(e) => {
+                      setDetranCredential(e.target.value);
+                      if (errors.detranCredential) setErrors({ ...errors, detranCredential: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.detranCredential && "border-destructive")}
                   />
+                  {errors.detranCredential && <p className="text-sm text-destructive mt-1">{errors.detranCredential}</p>}
                 </div>
 
                 <div>
@@ -247,9 +312,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="Ex: 00000000000"
                     value={cnh}
-                    onChange={(e) => setCnh(e.target.value)}
-                    className="h-14 text-lg rounded-xl"
+                    maxLength={11}
+                    onChange={(e) => {
+                      setCnh(e.target.value.replace(/\D/g, ""));
+                      if (errors.cnh) setErrors({ ...errors, cnh: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.cnh && "border-destructive")}
                   />
+                  {errors.cnh && <p className="text-sm text-destructive mt-1">{errors.cnh}</p>}
                 </div>
 
                 <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
@@ -290,9 +360,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="Ex: VW Polo 2023"
                     value={carModel}
-                    onChange={(e) => setCarModel(e.target.value)}
-                    className="h-14 text-lg rounded-xl"
+                    maxLength={50}
+                    onChange={(e) => {
+                      setCarModel(e.target.value);
+                      if (errors.carModel) setErrors({ ...errors, carModel: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.carModel && "border-destructive")}
                   />
+                  {errors.carModel && <p className="text-sm text-destructive mt-1">{errors.carModel}</p>}
                 </div>
 
                 <div>
@@ -302,9 +377,14 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="ABC-1234"
                     value={carPlate}
-                    onChange={(e) => setCarPlate(e.target.value.toUpperCase())}
-                    className="h-14 text-lg rounded-xl uppercase"
+                    maxLength={8}
+                    onChange={(e) => {
+                      setCarPlate(e.target.value.toUpperCase());
+                      if (errors.carPlate) setErrors({ ...errors, carPlate: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl uppercase", errors.carPlate && "border-destructive")}
                   />
+                  {errors.carPlate && <p className="text-sm text-destructive mt-1">{errors.carPlate}</p>}
                 </div>
 
                 <div>

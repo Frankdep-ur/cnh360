@@ -9,6 +9,21 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import {
+  autoescolaStep1Schema,
+  autoescolaStep2Schema,
+  autoescolaStep3Schema,
+} from "@/lib/validations";
+
+type FormErrors = {
+  cnpj?: string;
+  razaoSocial?: string;
+  nomeFantasia?: string;
+  credencialDetran?: string;
+  responsavel?: string;
+  email?: string;
+  whatsapp?: string;
+};
 
 export default function AutoescolaOnboarding() {
   const navigate = useNavigate();
@@ -16,6 +31,7 @@ export default function AutoescolaOnboarding() {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState({
     cnpj: "",
     razaoSocial: "",
@@ -47,6 +63,53 @@ export default function AutoescolaOnboarding() {
       .slice(0, 15);
   };
 
+  const validateStep = (currentStep: number): boolean => {
+    setErrors({});
+    
+    try {
+      if (currentStep === 1) {
+        autoescolaStep1Schema.parse({
+          cnpj: formData.cnpj,
+          razaoSocial: formData.razaoSocial,
+          nomeFantasia: formData.nomeFantasia || undefined,
+        });
+      } else if (currentStep === 2) {
+        autoescolaStep2Schema.parse({
+          credencialDetran: formData.credencialDetran,
+        });
+      } else if (currentStep === 3) {
+        autoescolaStep3Schema.parse({
+          responsavel: formData.responsavel,
+          email: formData.email,
+          whatsapp: formData.whatsapp,
+        });
+      }
+      return true;
+    } catch (error: any) {
+      if (error.errors) {
+        const newErrors: FormErrors = {};
+        error.errors.forEach((err: any) => {
+          const field = err.path[0] as keyof FormErrors;
+          newErrors[field] = err.message;
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
+  const handleStepChange = (newStep: number) => {
+    if (newStep > step && !validateStep(step)) {
+      toast({
+        title: "Dados inválidos",
+        description: "Por favor, corrija os erros antes de continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setStep(newStep);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
@@ -66,6 +129,14 @@ export default function AutoescolaOnboarding() {
 
   const handleSubmit = async () => {
     if (!user) return;
+    if (!validateStep(3)) {
+      toast({
+        title: "Dados inválidos",
+        description: "Por favor, corrija os erros antes de continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setLoading(true);
     try {
@@ -79,10 +150,10 @@ export default function AutoescolaOnboarding() {
       await supabase.from("autoescolas").insert({
         user_id: user.id,
         cnpj: formData.cnpj.replace(/\D/g, ""),
-        razao_social: formData.razaoSocial,
-        nome_fantasia: formData.nomeFantasia,
-        credencial_detran: formData.credencialDetran,
-        email: formData.email,
+        razao_social: formData.razaoSocial.trim(),
+        nome_fantasia: formData.nomeFantasia.trim() || null,
+        credencial_detran: formData.credencialDetran.trim(),
+        email: formData.email.trim().toLowerCase(),
         telefone: formData.whatsapp.replace(/\D/g, ""),
         cidade: formData.cidade,
         estado: formData.estado,
@@ -161,10 +232,13 @@ export default function AutoescolaOnboarding() {
                       id="cnpj"
                       placeholder="00.000.000/0000-00"
                       value={formData.cnpj}
-                      onChange={(e) =>
-                        setFormData({ ...formData, cnpj: formatCNPJ(e.target.value) })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, cnpj: formatCNPJ(e.target.value) });
+                        if (errors.cnpj) setErrors({ ...errors, cnpj: undefined });
+                      }}
+                      className={errors.cnpj ? "border-destructive" : ""}
                     />
+                    {errors.cnpj && <p className="text-sm text-destructive">{errors.cnpj}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -172,11 +246,15 @@ export default function AutoescolaOnboarding() {
                     <Input
                       id="razaoSocial"
                       placeholder="Nome da empresa"
+                      maxLength={200}
                       value={formData.razaoSocial}
-                      onChange={(e) =>
-                        setFormData({ ...formData, razaoSocial: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, razaoSocial: e.target.value });
+                        if (errors.razaoSocial) setErrors({ ...errors, razaoSocial: undefined });
+                      }}
+                      className={errors.razaoSocial ? "border-destructive" : ""}
                     />
+                    {errors.razaoSocial && <p className="text-sm text-destructive">{errors.razaoSocial}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -184,6 +262,7 @@ export default function AutoescolaOnboarding() {
                     <Input
                       id="nomeFantasia"
                       placeholder="Como é conhecida"
+                      maxLength={200}
                       value={formData.nomeFantasia}
                       onChange={(e) =>
                         setFormData({ ...formData, nomeFantasia: e.target.value })
@@ -193,7 +272,7 @@ export default function AutoescolaOnboarding() {
 
                   <Button
                     className="w-full bg-emerald-500 hover:bg-emerald-600"
-                    onClick={() => setStep(2)}
+                    onClick={() => handleStepChange(2)}
                     disabled={!formData.cnpj || !formData.razaoSocial}
                   >
                     Continuar
@@ -212,11 +291,15 @@ export default function AutoescolaOnboarding() {
                     <Input
                       id="credencial"
                       placeholder="Ex: CFC-SP-12345"
+                      maxLength={50}
                       value={formData.credencialDetran}
-                      onChange={(e) =>
-                        setFormData({ ...formData, credencialDetran: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, credencialDetran: e.target.value });
+                        if (errors.credencialDetran) setErrors({ ...errors, credencialDetran: undefined });
+                      }}
+                      className={errors.credencialDetran ? "border-destructive" : ""}
                     />
+                    {errors.credencialDetran && <p className="text-sm text-destructive">{errors.credencialDetran}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -261,7 +344,7 @@ export default function AutoescolaOnboarding() {
 
                   <Button
                     className="w-full bg-emerald-500 hover:bg-emerald-600"
-                    onClick={() => setStep(3)}
+                    onClick={() => handleStepChange(3)}
                     disabled={!formData.credencialDetran}
                   >
                     Continuar
@@ -280,11 +363,15 @@ export default function AutoescolaOnboarding() {
                     <Input
                       id="responsavel"
                       placeholder="Seu nome"
+                      maxLength={100}
                       value={formData.responsavel}
-                      onChange={(e) =>
-                        setFormData({ ...formData, responsavel: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, responsavel: e.target.value });
+                        if (errors.responsavel) setErrors({ ...errors, responsavel: undefined });
+                      }}
+                      className={errors.responsavel ? "border-destructive" : ""}
                     />
+                    {errors.responsavel && <p className="text-sm text-destructive">{errors.responsavel}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -293,11 +380,15 @@ export default function AutoescolaOnboarding() {
                       id="email"
                       type="email"
                       placeholder="email@autoescola.com"
+                      maxLength={255}
                       value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        if (errors.email) setErrors({ ...errors, email: undefined });
+                      }}
+                      className={errors.email ? "border-destructive" : ""}
                     />
+                    {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -306,10 +397,13 @@ export default function AutoescolaOnboarding() {
                       id="whatsapp"
                       placeholder="(00) 00000-0000"
                       value={formData.whatsapp}
-                      onChange={(e) =>
-                        setFormData({ ...formData, whatsapp: formatPhone(e.target.value) })
-                      }
+                      onChange={(e) => {
+                        setFormData({ ...formData, whatsapp: formatPhone(e.target.value) });
+                        if (errors.whatsapp) setErrors({ ...errors, whatsapp: undefined });
+                      }}
+                      className={errors.whatsapp ? "border-destructive" : ""}
                     />
+                    {errors.whatsapp && <p className="text-sm text-destructive">{errors.whatsapp}</p>}
                   </div>
 
                   <Button

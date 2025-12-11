@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { alunoStep1Schema, validateCPF } from "@/lib/validations";
 
 const categories = [
   { id: "ACC", label: "ACC", description: "Autorização para Conduzir Ciclomotor", icon: Bike },
@@ -26,6 +27,11 @@ const goals = [
   { id: "renovacao", label: "Renovação", description: "Preciso renovar minha CNH" },
 ];
 
+type FormErrors = {
+  name?: string;
+  cpf?: string;
+};
+
 export default function AlunoOnboarding() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -37,6 +43,7 @@ export default function AlunoOnboarding() {
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [useOwnCar, setUseOwnCar] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -49,6 +56,26 @@ export default function AlunoOnboarding() {
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCpf(formatCPF(e.target.value));
+    if (errors.cpf) setErrors({ ...errors, cpf: undefined });
+  };
+
+  const validateStep1 = (): boolean => {
+    setErrors({});
+    
+    try {
+      alunoStep1Schema.parse({ name, cpf });
+      return true;
+    } catch (error: any) {
+      if (error.errors) {
+        const newErrors: FormErrors = {};
+        error.errors.forEach((err: any) => {
+          const field = err.path[0] as keyof FormErrors;
+          newErrors[field] = err.message;
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
   };
 
   const canProceed = () => {
@@ -60,6 +87,15 @@ export default function AlunoOnboarding() {
   };
 
   const handleNext = async () => {
+    if (step === 1 && !validateStep1()) {
+      toast({
+        variant: "destructive",
+        title: "Dados inválidos",
+        description: "Por favor, corrija os erros antes de continuar.",
+      });
+      return;
+    }
+
     if (step < 4) {
       setStep(step + 1);
     } else {
@@ -80,7 +116,7 @@ export default function AlunoOnboarding() {
         // Update profile with CPF
         const { error: profileError } = await supabase
           .from("profiles")
-          .update({ cpf, full_name: name })
+          .update({ cpf: cpf.replace(/\D/g, ""), full_name: name.trim() })
           .eq("id", user.id);
 
         if (profileError) throw profileError;
@@ -187,9 +223,14 @@ export default function AlunoOnboarding() {
                   <Input
                     placeholder="Digite seu nome"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-14 text-lg rounded-xl"
+                    maxLength={100}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors({ ...errors, name: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.name && "border-destructive")}
                   />
+                  {errors.name && <p className="text-sm text-destructive mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
@@ -201,8 +242,9 @@ export default function AlunoOnboarding() {
                     value={cpf}
                     onChange={handleCPFChange}
                     maxLength={14}
-                    className="h-14 text-lg rounded-xl tracking-wide"
+                    className={cn("h-14 text-lg rounded-xl tracking-wide", errors.cpf && "border-destructive")}
                   />
+                  {errors.cpf && <p className="text-sm text-destructive mt-1">{errors.cpf}</p>}
                 </div>
               </div>
             </div>
