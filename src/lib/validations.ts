@@ -94,9 +94,8 @@ export const cnhSchema = z.string()
   .regex(/^\d+$/, "CNH deve conter apenas números");
 
 export const plateSchema = z.string()
-  .min(7, "Placa inválida")
-  .max(8, "Placa inválida")
-  .regex(/^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/i, "Formato de placa inválido");
+  .min(1, "Placa é obrigatória")
+  .max(10, "Placa muito longa");
 
 export const vehicleModelSchema = z.string()
   .min(2, "Modelo muito curto")
