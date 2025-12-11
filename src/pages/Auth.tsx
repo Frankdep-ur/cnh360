@@ -4,6 +4,7 @@ import { Car, Mail, Lock, User, Eye, EyeOff, ArrowLeft, CheckCircle } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Check URL params for reset mode
   useEffect(() => {
@@ -369,9 +371,23 @@ export default function Auth() {
                   </div>
                 )}
 
-                {/* Forgot password link - Only for login */}
+                {/* Remember me and Forgot password - Only for login */}
                 {mode === "login" && (
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="rememberMe"
+                        checked={rememberMe}
+                        onCheckedChange={(checked) => setRememberMe(checked === true)}
+                        className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                      />
+                      <label
+                        htmlFor="rememberMe"
+                        className="text-sm text-muted-foreground cursor-pointer select-none"
+                      >
+                        Lembrar-me
+                      </label>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
