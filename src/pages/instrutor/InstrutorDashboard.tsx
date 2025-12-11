@@ -1,5 +1,6 @@
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,9 +100,12 @@ export default function InstrutorDashboard() {
             </div>
           </div>
           
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-            #{instrutor.rankingCidade} em Araçatuba
-          </Badge>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+              #{instrutor.rankingCidade} em Araçatuba
+            </Badge>
+          </div>
         </div>
 
         {/* Premium Upsell */}

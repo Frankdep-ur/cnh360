@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
+import { NotificationSettings } from "@/components/notifications/NotificationSettings";
 import { cn } from "@/lib/utils";
 
 interface ProfileData {
@@ -379,6 +380,11 @@ export default function InstrutorPerfil() {
               </div>
             </div>
           )}
+
+          {/* Notification Settings */}
+          <div className="mt-4">
+            <NotificationSettings />
+          </div>
 
           {/* Actions */}
           <div className="mt-4 space-y-3">
