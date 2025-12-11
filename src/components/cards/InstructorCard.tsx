@@ -1,4 +1,4 @@
-import { Star, MapPin, Car, Clock, Shield } from "lucide-react";
+import { Star, MapPin, Car, Clock, Shield, Leaf } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ interface InstructorCardProps {
   available: boolean;
   verified: boolean;
   tags?: string[];
+  showMEIBadge?: boolean;
+  showCarroProprio?: boolean;
 }
 
 export function InstructorCard({
@@ -29,6 +31,8 @@ export function InstructorCard({
   available,
   verified,
   tags = [],
+  showMEIBadge = false,
+  showCarroProprio = false,
 }: InstructorCardProps) {
   return (
     <Link
@@ -54,9 +58,17 @@ export function InstructorCard({
           {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold text-foreground truncate">{name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-foreground truncate">{name}</h3>
+                {showMEIBadge && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5">
+                    <Leaf className="w-2.5 h-2.5" />
+                    MEI
+                  </span>
+                )}
+              </div>
               <div className={cn(
-                "px-2 py-0.5 rounded-full text-xs font-medium",
+                "px-2 py-0.5 rounded-full text-xs font-medium shrink-0",
                 available 
                   ? "bg-primary/10 text-primary" 
                   : "bg-muted text-muted-foreground"
@@ -85,15 +97,18 @@ export function InstructorCard({
             </div>
 
             {/* Tags */}
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {tags.slice(0, 3).map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {showCarroProprio && (
+                <Badge variant="outline" className="text-[10px] px-2 py-0 border-primary/30 text-primary">
+                  Aceita carro próprio
+                </Badge>
+              )}
+              {tags.slice(0, showCarroProprio ? 2 : 3).map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
 

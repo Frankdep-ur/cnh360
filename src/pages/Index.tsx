@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users } from "lucide-react";
+import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { BannerModoTransicao } from "@/components/transicao/BannerModoTransicao";
+import { ContadorTransicao } from "@/components/transicao/ContadorTransicao";
+import { useModoTransicao } from "@/contexts/ModoTransicaoContext";
 import { cn } from "@/lib/utils";
 
 export default function Index() {
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(false);
+  const { modo, isSP, config } = useModoTransicao();
 
   useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 100);
@@ -27,7 +31,9 @@ export default function Index() {
       id: "instrutor",
       icon: Car,
       title: "Sou Instrutor",
-      description: "Quero dar aulas e aumentar minha renda",
+      description: modo === "nova_lei" 
+        ? "Instrutor MEI ou de autoescola" 
+        : "Quero dar aulas e aumentar minha renda",
       color: "secondary",
       path: "/auth?type=instrutor",
     },
@@ -41,40 +47,91 @@ export default function Index() {
     },
   ];
 
-  const features = [
+  // Features baseadas no modo selecionado
+  const featuresNovaLei = [
     { icon: Zap, text: "Apenas 2h de aula prática obrigatória" },
-    { icon: Shield, text: "Instrutores verificados pelo DETRAN" },
+    { icon: Shield, text: "Instrutores MEI verificados pelo DETRAN" },
     { icon: Users, text: "Use seu próprio carro nas aulas" },
   ];
+
+  const featuresModoAtual = [
+    { icon: Clock, text: "20-25h de aula prática obrigatória" },
+    { icon: Shield, text: "Instrutores de CFC verificados" },
+    { icon: Building2, text: "Veículo da autoescola" },
+  ];
+
+  const features = modo === "nova_lei" ? featuresNovaLei : (modo === "atual" ? featuresModoAtual : featuresNovaLei);
+
+  // Headline baseada no modo
+  const getHeadline = () => {
+    if (modo === "nova_lei") {
+      return {
+        title: "Sua CNH por R$ 799",
+        subtitle: "Nova Lei CONTRAN 1.020: apenas 2 horas de aula prática!"
+      };
+    }
+    if (modo === "atual") {
+      return {
+        title: "Sua habilitação completa",
+        subtitle: "Processo tradicional com 20-25h de aula prática"
+      };
+    }
+    return {
+      title: "Sua habilitação mais rápida, barata e transparente",
+      subtitle: "Aproveite a nova lei CONTRAN 1.020: agora você precisa de apenas 2 horas de aula prática!"
+    };
+  };
+
+  const headline = getHeadline();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Compliance Banner */}
       <ComplianceBanner variant="full" />
 
+      {/* Banner Transição SP - Aparece se em SP e não tem modo selecionado */}
+      {isSP && !modo && (
+        <BannerModoTransicao showFullBanner={true} />
+      )}
+
       {/* Hero Section */}
-      <div className="gradient-hero text-primary-foreground px-6 pt-12 pb-12 safe-top">
+      <div className={cn(
+        "text-primary-foreground px-6 pt-12 pb-12 safe-top",
+        modo === "nova_lei" ? "gradient-primary" : modo === "atual" ? "gradient-secondary" : "gradient-hero"
+      )}>
         <div className={cn(
           "max-w-md mx-auto transition-all duration-700",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}>
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
-              <Car className="w-7 h-7" />
+          {/* Header com Logo e Contador */}
+          <div className="flex items-start justify-between mb-6">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
+                <Car className="w-7 h-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">CNH 360</h1>
+                <p className="text-primary-foreground/80 text-sm">O iFood das autoescolas</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">CNH 360</h1>
-              <p className="text-primary-foreground/80 text-sm">O iFood das autoescolas</p>
-            </div>
+
+            {/* Contador de Transição - Compacto no header */}
+            {isSP && modo && (
+              <div className="bg-primary-foreground/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                <p className="text-xs font-medium text-primary-foreground">
+                  {config.label}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Headline */}
           <h2 className="text-3xl font-bold leading-tight mb-4">
-            Sua habilitação mais rápida, barata e transparente
+            {headline.title}
           </h2>
           <p className="text-primary-foreground/90 text-base mb-6">
-            Aproveite a nova lei CONTRAN 1.020: agora você precisa de apenas 2 horas de aula prática!
+            {headline.subtitle}
           </p>
 
           {/* Features */}
@@ -95,11 +152,53 @@ export default function Index() {
               </div>
             ))}
           </div>
+
+          {/* Preço destacado */}
+          {modo && (
+            <div className={cn(
+              "mt-6 p-4 rounded-2xl bg-primary-foreground/10 backdrop-blur-sm",
+              "transition-all duration-500",
+              showContent ? "opacity-100" : "opacity-0"
+            )}
+            style={{ transitionDelay: "500ms" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-primary-foreground/80">Preço médio</span>
+                <span className="text-2xl font-bold">
+                  {modo === "nova_lei" 
+                    ? `R$ ${config.precoSugerido.min}` 
+                    : `R$ ${config.precoSugerido.min} - ${config.precoSugerido.max}`
+                  }
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Indicador de modo selecionado - Banner compacto */}
+      {isSP && modo && (
+        <div className={cn(
+          "mx-4 -mt-4 mb-2 p-3 rounded-xl border flex items-center justify-between",
+          modo === "nova_lei" 
+            ? "bg-primary/5 border-primary/20" 
+            : "bg-secondary/5 border-secondary/20"
+        )}>
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-2 h-2 rounded-full animate-pulse",
+              modo === "nova_lei" ? "bg-primary" : "bg-secondary"
+            )} />
+            <span className="text-sm font-medium">
+              Você está no {config.label}
+            </span>
+          </div>
+          <ContadorTransicao compact />
+        </div>
+      )}
+
       {/* User Type Selection */}
-      <div className="flex-1 px-6 -mt-6">
+      <div className="flex-1 px-6 -mt-2">
         <div className="max-w-md mx-auto">
           <div className={cn(
             "bg-card rounded-3xl shadow-elevated p-6 transition-all duration-500",
@@ -143,6 +242,29 @@ export default function Index() {
               })}
             </div>
           </div>
+
+          {/* Botão para trocar modo */}
+          {isSP && modo && (
+            <div className={cn(
+              "flex justify-center mt-4 transition-all duration-500",
+              showContent ? "opacity-100" : "opacity-0"
+            )}
+            style={{ transitionDelay: "550ms" }}
+            >
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  // Abrir modal ou navegar para configurações
+                  const novoModo = modo === "nova_lei" ? "atual" : "nova_lei";
+                  // Aqui você pode adicionar um modal de confirmação
+                }}
+              >
+                Mudar para {modo === "nova_lei" ? "Modo Tradicional" : "Modo Nova Lei"}
+              </Button>
+            </div>
+          )}
 
           {/* City Pilot Badge - Inline */}
           <div className={cn(

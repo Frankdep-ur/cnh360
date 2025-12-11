@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ModoTransicaoProvider } from "@/contexts/ModoTransicaoContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Pages
@@ -43,7 +44,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <ModoTransicaoProvider>
+            <Routes>
             {/* Public */}
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -143,6 +145,7 @@ const App = () => (
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ModoTransicaoProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

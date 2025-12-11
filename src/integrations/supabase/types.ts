@@ -23,6 +23,7 @@ export type Database = {
           horas_praticas_completadas: number | null
           horas_praticas_total: number | null
           id: string
+          modo_transicao: string | null
           objetivo: Database["public"]["Enums"]["objetivo_aluno"]
           possui_carro_proprio: boolean | null
           renach: string | null
@@ -37,6 +38,7 @@ export type Database = {
           horas_praticas_completadas?: number | null
           horas_praticas_total?: number | null
           id?: string
+          modo_transicao?: string | null
           objetivo: Database["public"]["Enums"]["objetivo_aluno"]
           possui_carro_proprio?: boolean | null
           renach?: string | null
@@ -51,6 +53,7 @@ export type Database = {
           horas_praticas_completadas?: number | null
           horas_praticas_total?: number | null
           id?: string
+          modo_transicao?: string | null
           objetivo?: Database["public"]["Enums"]["objetivo_aluno"]
           possui_carro_proprio?: boolean | null
           renach?: string | null
@@ -296,6 +299,7 @@ export type Database = {
           created_at: string
           credencial_detran: string
           id: string
+          is_mei_autonomo: boolean | null
           mei_cnpj: string | null
           nota_media: number | null
           preco_hora: number
@@ -315,6 +319,7 @@ export type Database = {
           created_at?: string
           credencial_detran: string
           id?: string
+          is_mei_autonomo?: boolean | null
           mei_cnpj?: string | null
           nota_media?: number | null
           preco_hora?: number
@@ -334,6 +339,7 @@ export type Database = {
           created_at?: string
           credencial_detran?: string
           id?: string
+          is_mei_autonomo?: boolean | null
           mei_cnpj?: string | null
           nota_media?: number | null
           preco_hora?: number
@@ -505,8 +511,10 @@ export type Database = {
           avatar_url: string | null
           cpf: string | null
           created_at: string
+          estado: string | null
           full_name: string | null
           id: string
+          modo_transicao: string | null
           phone: string | null
           updated_at: string
         }
@@ -514,8 +522,10 @@ export type Database = {
           avatar_url?: string | null
           cpf?: string | null
           created_at?: string
+          estado?: string | null
           full_name?: string | null
           id: string
+          modo_transicao?: string | null
           phone?: string | null
           updated_at?: string
         }
@@ -523,8 +533,10 @@ export type Database = {
           avatar_url?: string | null
           cpf?: string | null
           created_at?: string
+          estado?: string | null
           full_name?: string | null
           id?: string
+          modo_transicao?: string | null
           phone?: string | null
           updated_at?: string
         }
