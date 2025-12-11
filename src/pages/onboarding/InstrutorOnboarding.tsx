@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,40 @@ export default function InstrutorOnboarding() {
   const [carPlate, setCarPlate] = useState("");
   const [transmission, setTransmission] = useState<"manual" | "automatico" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  // Check if user already has instrutor registration
+  useEffect(() => {
+    const checkExistingInstrutor = async () => {
+      if (!user) {
+        setCheckingExisting(false);
+        return;
+      }
+      
+      const { data } = await supabase
+        .from("instrutores")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (data) {
+        navigate("/instrutor", { replace: true });
+      } else {
+        setCheckingExisting(false);
+      }
+    };
+    
+    checkExistingInstrutor();
+  }, [user, navigate]);
+
+  if (checkingExisting) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    );
+  }
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");

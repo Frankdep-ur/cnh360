@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const emailSchema = z.string().email("Email inválido");
@@ -39,12 +40,37 @@ export default function Auth() {
     }
   }, [location.search]);
 
-  // Redirect if already logged in
+  // Redirect if already logged in - check for existing registrations
   useEffect(() => {
-    if (user && !authLoading) {
-      // Check if user has completed onboarding - for now redirect to onboarding
-      navigate(`/onboarding/${userType}`);
-    }
+    const checkExistingRegistration = async () => {
+      if (!user || authLoading) return;
+      
+      // Check for existing registrations in parallel
+      const [alunoRes, instrutorRes, autoescolaRes] = await Promise.all([
+        supabase.from("alunos").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("instrutores").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("autoescolas").select("id").eq("user_id", user.id).maybeSingle(),
+      ]);
+      
+      // Redirect to appropriate dashboard if registration exists
+      if (autoescolaRes.data) {
+        navigate("/autoescola", { replace: true });
+        return;
+      }
+      if (instrutorRes.data) {
+        navigate("/instrutor", { replace: true });
+        return;
+      }
+      if (alunoRes.data) {
+        navigate("/aluno", { replace: true });
+        return;
+      }
+      
+      // No registration found, redirect to onboarding
+      navigate(`/onboarding/${userType}`, { replace: true });
+    };
+    
+    checkExistingRegistration();
   }, [user, authLoading, navigate, userType]);
 
   const validate = () => {
