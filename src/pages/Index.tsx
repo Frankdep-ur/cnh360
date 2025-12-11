@@ -58,6 +58,7 @@ export default function Index() {
     { icon: Zap, text: "Apenas 2h de aula prática obrigatória" },
     { icon: Shield, text: "Instrutores verificados pelo DETRAN" },
     { icon: Users, text: "Use seu próprio carro nas aulas" },
+    { icon: Car, text: "EAD 100% grátis e flexível" },
   ];
 
   if (loading || isSigningIn) {
