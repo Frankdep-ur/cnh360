@@ -14,6 +14,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   setUserRole: (role: AppRole) => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -115,6 +117,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRoleState(null);
   };
 
+  const resetPassword = async (email: string) => {
+    const redirectUrl = `${window.location.origin}/auth?mode=reset`;
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+    
+    return { error: error as Error | null };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error as Error | null };
+  };
+
   const setUserRole = async (role: AppRole) => {
     if (!user) {
       return { error: new Error("Usuário não autenticado") };
@@ -154,7 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
-      setUserRole 
+      setUserRole,
+      resetPassword,
+      updatePassword
     }}>
       {children}
     </AuthContext.Provider>
