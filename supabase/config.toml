@@ -1,1 +1,7 @@
 project_id = "kyvtlmpkjjinhjelipvr"
+
+[functions.send-push-notification]
+verify_jwt = true
+
+[functions.lesson-reminders]
+verify_jwt = false

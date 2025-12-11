@@ -436,6 +436,39 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body: string
+          id: string
+          read: boolean
+          reference_id: string | null
+          sent_at: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          id?: string
+          read?: boolean
+          reference_id?: string | null
+          sent_at?: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          id?: string
+          read?: boolean
+          reference_id?: string | null
+          sent_at?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pagamentos: {
         Row: {
           aluno_id: string
@@ -600,6 +633,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
