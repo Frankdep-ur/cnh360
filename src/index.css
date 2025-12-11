@@ -120,15 +120,28 @@
 
 @layer utilities {
   .gradient-primary {
-    background: var(--gradient-primary);
+    background: linear-gradient(135deg, hsl(122, 39%, 49%) 0%, hsl(122, 39%, 39%) 100%);
   }
   
   .gradient-secondary {
-    background: var(--gradient-secondary);
+    background: linear-gradient(135deg, hsl(207, 90%, 54%) 0%, hsl(207, 90%, 44%) 100%);
   }
   
   .gradient-hero {
-    background: var(--gradient-hero);
+    background: linear-gradient(180deg, hsl(122, 39%, 49%) 0%, hsl(207, 90%, 54%) 100%);
+  }
+
+  /* Modo Transição SP */
+  .gradient-nova-lei {
+    background: linear-gradient(135deg, hsl(122, 39%, 49%) 0%, hsl(152, 76%, 42%) 100%);
+  }
+  
+  .gradient-modo-atual {
+    background: linear-gradient(135deg, hsl(207, 90%, 54%) 0%, hsl(207, 90%, 44%) 100%);
+  }
+  
+  .gradient-transicao {
+    background: linear-gradient(135deg, hsl(45, 93%, 47%) 0%, hsl(32, 95%, 50%) 100%);
   }
   
   .shadow-soft {
