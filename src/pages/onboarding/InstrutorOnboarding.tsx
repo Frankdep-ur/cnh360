@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { validateCPF, formatCPF, validatePlaca } from "@/lib/validators";
 
 export default function InstrutorOnboarding() {
   const navigate = useNavigate();
@@ -14,27 +15,50 @@ export default function InstrutorOnboarding() {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [detranCredential, setDetranCredential] = useState("");
   const [cnh, setCnh] = useState("");
   const [carModel, setCarModel] = useState("");
   const [carPlate, setCarPlate] = useState("");
+  const [plateError, setPlateError] = useState<string | null>(null);
   const [transmission, setTransmission] = useState<"manual" | "automatico" | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const formatCPF = (value: string) => {
-    const numbers = value.replace(/\D/g, "");
-    return numbers
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .replace(/(-\d{2})\d+?$/, "$1");
+  const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCPF(e.target.value);
+    setCpf(formatted);
+    
+    if (formatted.length === 14) {
+      if (!validateCPF(formatted)) {
+        setCpfError("CPF inválido. Verifique os dígitos.");
+      } else {
+        setCpfError(null);
+      }
+    } else {
+      setCpfError(null);
+    }
+  };
+
+  const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase();
+    setCarPlate(value);
+    
+    if (value.length >= 7) {
+      if (!validatePlaca(value)) {
+        setPlateError("Placa inválida. Use formato ABC1234 ou ABC1D23");
+      } else {
+        setPlateError(null);
+      }
+    } else {
+      setPlateError(null);
+    }
   };
 
   const canProceed = () => {
-    if (step === 1) return cpf.length === 14 && name.length > 2;
+    if (step === 1) return cpf.length === 14 && validateCPF(cpf) && name.length > 2;
     if (step === 2) return detranCredential.length > 0 && cnh.length > 0;
-    if (step === 3) return carModel.length > 0 && carPlate.length > 0 && transmission !== null;
+    if (step === 3) return carModel.length > 0 && carPlate.length >= 7 && validatePlaca(carPlate) && transmission !== null;
     return false;
   };
 
@@ -208,10 +232,19 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="000.000.000-00"
                     value={cpf}
-                    onChange={(e) => setCpf(formatCPF(e.target.value))}
+                    onChange={handleCPFChange}
                     maxLength={14}
-                    className="h-14 text-lg rounded-xl tracking-wide"
+                    className={cn(
+                      "h-14 text-lg rounded-xl tracking-wide",
+                      cpfError && "border-destructive focus-visible:ring-destructive"
+                    )}
                   />
+                  {cpfError && (
+                    <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      {cpfError}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -300,11 +333,21 @@ export default function InstrutorOnboarding() {
                     Placa
                   </label>
                   <Input
-                    placeholder="ABC-1234"
+                    placeholder="ABC-1234 ou ABC1D23"
                     value={carPlate}
-                    onChange={(e) => setCarPlate(e.target.value.toUpperCase())}
-                    className="h-14 text-lg rounded-xl uppercase"
+                    onChange={handlePlateChange}
+                    maxLength={8}
+                    className={cn(
+                      "h-14 text-lg rounded-xl uppercase",
+                      plateError && "border-destructive focus-visible:ring-destructive"
+                    )}
                   />
+                  {plateError && (
+                    <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      {plateError}
+                    </div>
+                  )}
                 </div>
 
                 <div>
