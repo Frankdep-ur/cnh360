@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Car, Bike, Truck, Shield } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Car, Bike, Truck, Shield, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { validateCPF, formatCPF } from "@/lib/validators";
 
 const categories = [
   { id: "ACC", label: "ACC", description: "Autorização para Conduzir Ciclomotor", icon: Bike },
@@ -32,27 +33,31 @@ export default function AlunoOnboarding() {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [useOwnCar, setUseOwnCar] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const formatCPF = (value: string) => {
-    const numbers = value.replace(/\D/g, "");
-    return numbers
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .replace(/(-\d{2})\d+?$/, "$1");
-  };
-
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCpf(formatCPF(e.target.value));
+    const formatted = formatCPF(e.target.value);
+    setCpf(formatted);
+    
+    // Validar CPF quando completo
+    if (formatted.length === 14) {
+      if (!validateCPF(formatted)) {
+        setCpfError("CPF inválido. Verifique os dígitos.");
+      } else {
+        setCpfError(null);
+      }
+    } else {
+      setCpfError(null);
+    }
   };
 
   const canProceed = () => {
-    if (step === 1) return cpf.length === 14 && name.length > 2;
+    if (step === 1) return cpf.length === 14 && validateCPF(cpf) && name.length > 2;
     if (step === 2) return selectedGoal !== null;
     if (step === 3) return selectedCategory !== null;
     if (step === 4) return true;
@@ -201,8 +206,17 @@ export default function AlunoOnboarding() {
                     value={cpf}
                     onChange={handleCPFChange}
                     maxLength={14}
-                    className="h-14 text-lg rounded-xl tracking-wide"
+                    className={cn(
+                      "h-14 text-lg rounded-xl tracking-wide",
+                      cpfError && "border-destructive focus-visible:ring-destructive"
+                    )}
                   />
+                  {cpfError && (
+                    <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      {cpfError}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
