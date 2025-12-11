@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Car, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Car, Mail, Lock, User, Eye, EyeOff, GraduationCap, UserCheck, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,10 +9,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+const userTypeConfig = {
+  aluno: { icon: GraduationCap, title: "Aluno", color: "bg-primary" },
+  instrutor: { icon: UserCheck, title: "Instrutor", color: "bg-blue-500" },
+  autoescola: { icon: Building2, title: "Autoescola", color: "bg-amber-500" },
+};
+
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tipo = searchParams.get("tipo") as keyof typeof userTypeConfig | null;
   const { toast } = useToast();
-  const { signIn, signUp, loading: authLoading } = useAuth();
+  const { signIn, signUp, loading: authLoading, user, userRole, roleLoading, setUserRole } = useAuth();
   
   const [isLogin, setIsLogin] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,6 +32,37 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const typeInfo = tipo && userTypeConfig[tipo] ? userTypeConfig[tipo] : null;
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && !roleLoading && user) {
+      if (userRole) {
+        const dashboardRoutes: Record<string, string> = {
+          aluno: "/aluno",
+          instrutor: "/instrutor",
+          autoescola: "/autoescola",
+          admin: "/admin",
+        };
+        navigate(dashboardRoutes[userRole] || "/aluno");
+      } else if (tipo) {
+        // Set role and navigate
+        setUserRole(tipo as "aluno" | "instrutor" | "autoescola").then(({ error }) => {
+          if (!error) {
+            const onboardingRoutes: Record<string, string> = {
+              aluno: "/onboarding/aluno",
+              instrutor: "/onboarding/instrutor",
+              autoescola: "/onboarding/autoescola",
+            };
+            navigate(onboardingRoutes[tipo] || "/selecionar-tipo");
+          }
+        });
+      } else {
+        navigate("/selecionar-tipo");
+      }
+    }
+  }, [user, userRole, authLoading, roleLoading, tipo, navigate, setUserRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +154,15 @@ export default function Auth() {
       {/* Header */}
       <div className="gradient-hero text-primary-foreground px-6 pt-12 pb-20 safe-top">
         <div className="max-w-md mx-auto">
+          {/* Back Button */}
+          <button 
+            onClick={() => navigate("/")}
+            className="flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Voltar</span>
+          </button>
+
           {/* Logo */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
@@ -125,6 +173,18 @@ export default function Auth() {
               <p className="text-primary-foreground/80 text-sm">O iFood das autoescolas</p>
             </div>
           </div>
+
+          {/* Type Badge */}
+          {typeInfo && (
+            <div className="flex items-center gap-3 mb-4">
+              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white", typeInfo.color)}>
+                <typeInfo.icon className="w-5 h-5" />
+              </div>
+              <span className="text-primary-foreground/90 font-medium">
+                Cadastro como {typeInfo.title}
+              </span>
+            </div>
+          )}
 
           <h2 className="text-2xl font-bold">
             {isLogin ? "Bem-vindo de volta!" : "Crie sua conta"}
