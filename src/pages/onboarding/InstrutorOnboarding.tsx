@@ -410,7 +410,7 @@ export default function InstrutorOnboarding() {
                   <Input
                     placeholder="ABC-1234"
                     value={carPlate}
-                    maxLength={8}
+                    maxLength={10}
                     onChange={(e) => {
                       setCarPlate(e.target.value.toUpperCase());
                       if (errors.carPlate) setErrors({ ...errors, carPlate: undefined });
