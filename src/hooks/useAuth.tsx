@@ -10,7 +10,8 @@ interface AuthContextType {
   loading: boolean;
   userRole: AppRole | null;
   roleLoading: boolean;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   setUserRole: (role: AppRole) => Promise<{ error: Error | null }>;
 }
@@ -23,40 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRoleState] = useState<AppRole | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
-
-  // Sync Google profile data to profiles table
-  const syncGoogleProfile = async (user: User) => {
-    const googleName = user.user_metadata?.full_name || user.user_metadata?.name;
-    const googleAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
-
-    if (!googleName && !googleAvatar) return;
-
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const updates: { full_name?: string; avatar_url?: string } = {};
-      
-      if (googleName && profile?.full_name !== googleName) {
-        updates.full_name = googleName;
-      }
-      if (googleAvatar && profile?.avatar_url !== googleAvatar) {
-        updates.avatar_url = googleAvatar;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await supabase
-          .from("profiles")
-          .update(updates)
-          .eq("id", user.id);
-      }
-    } catch (err) {
-      console.error("Error syncing Google profile:", err);
-    }
-  };
 
   // Fetch user role
   const fetchUserRole = async (userId: string) => {
@@ -90,11 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
         
-        // Fetch role and sync Google profile when user logs in
+        // Fetch role when user logs in
         if (session?.user) {
           setTimeout(() => {
             fetchUserRole(session.user.id);
-            syncGoogleProfile(session.user);
           }, 0);
         } else {
           setUserRoleState(null);
@@ -111,7 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session?.user) {
         fetchUserRole(session.user.id);
-        syncGoogleProfile(session.user);
       } else {
         setRoleLoading(false);
       }
@@ -120,13 +85,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signInWithGoogle = async () => {
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { error: error as Error | null };
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
-        redirectTo: redirectUrl,
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        },
       },
     });
     
@@ -174,7 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading, 
       userRole, 
       roleLoading,
-      signInWithGoogle, 
+      signIn,
+      signUp,
       signOut,
       setUserRole 
     }}>

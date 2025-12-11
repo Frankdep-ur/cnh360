@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Pages
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import SelecionarTipo from "./pages/SelecionarTipo";
 import NotFound from "./pages/NotFound";
 
@@ -46,6 +47,7 @@ const App = () => (
           <Routes>
             {/* Public */}
             <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
             <Route path="/selecionar-tipo" element={<SelecionarTipo />} />
 
             {/* Onboarding - Protected */}
