@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 // Onboarding
 import AlunoOnboarding from "./pages/onboarding/AlunoOnboarding";
 import InstrutorOnboarding from "./pages/onboarding/InstrutorOnboarding";
+import AutoescolaOnboarding from "./pages/onboarding/AutoescolaOnboarding";
 
 // Aluno Pages
 import AlunoDashboard from "./pages/aluno/AlunoDashboard";
@@ -34,6 +35,20 @@ import InstrutorPerfil from "./pages/instrutor/InstrutorPerfil";
 import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
 import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
 import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
+
+// Autoescola Pages
+import AutoescolaDashboard from "./pages/autoescola/AutoescolaDashboard";
+import AutoescolaLeads from "./pages/autoescola/AutoescolaLeads";
+import AutoescolaTurmas from "./pages/autoescola/AutoescolaTurmas";
+import AutoescolaMEI from "./pages/autoescola/AutoescolaMEI";
+import AutoescolaAgenda from "./pages/autoescola/AutoescolaAgenda";
+import AutoescolaFinanceiro from "./pages/autoescola/AutoescolaFinanceiro";
+import AutoescolaContratos from "./pages/autoescola/AutoescolaContratos";
+import AutoescolaAvaliacoes from "./pages/autoescola/AutoescolaAvaliacoes";
+import AutoescolaComunicacao from "./pages/autoescola/AutoescolaComunicacao";
+import AutoescolaProvas from "./pages/autoescola/AutoescolaProvas";
+import AutoescolaCRM from "./pages/autoescola/AutoescolaCRM";
+import AutoescolaPerfil from "./pages/autoescola/AutoescolaPerfil";
 
 const queryClient = new QueryClient();
 
