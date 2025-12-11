@@ -1,487 +1,323 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Car, Mail, Lock, User, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { z } from "zod";
+import { Car, GraduationCap, ArrowLeft, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 
-type AuthMode = "login" | "signup" | "forgot" | "reset" | "forgot-success";
+const emailSchema = z.string().email("Email inválido");
+const passwordSchema = z.string().min(6, "Senha deve ter no mínimo 6 caracteres");
+const nameSchema = z.string().min(2, "Nome deve ter no mínimo 2 caracteres");
+
+type UserType = "aluno" | "instrutor";
+type AuthMode = "login" | "signup";
 
 export default function Auth() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { toast } = useToast();
-  const { signIn, signUp, resetPassword, updatePassword, loading: authLoading } = useAuth();
+  const { user, signIn, signUp, loading: authLoading } = useAuth();
   
+  const [userType, setUserType] = useState<UserType>("aluno");
   const [mode, setMode] = useState<AuthMode>("login");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  // Form fields
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
 
-  // Check URL params for reset mode
+  // Get userType from query params if present
   useEffect(() => {
-    const urlMode = searchParams.get("mode");
-    if (urlMode === "reset") {
-      setMode("reset");
+    const params = new URLSearchParams(location.search);
+    const type = params.get("type");
+    if (type === "aluno" || type === "instrutor") {
+      setUserType(type);
     }
-  }, [searchParams]);
+  }, [location.search]);
 
-  const resetForm = () => {
-    setPassword("");
-    setConfirmPassword("");
-    setShowPassword(false);
-    setShowConfirmPassword(false);
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      // Check if user has completed onboarding - for now redirect to onboarding
+      navigate(`/onboarding/${userType}`);
+    }
+  }, [user, authLoading, navigate, userType]);
+
+  const validate = () => {
+    const newErrors: typeof errors = {};
+    
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      newErrors.email = emailResult.error.errors[0].message;
+    }
+    
+    const passwordResult = passwordSchema.safeParse(password);
+    if (!passwordResult.success) {
+      newErrors.password = passwordResult.error.errors[0].message;
+    }
+    
+    if (mode === "signup") {
+      const nameResult = nameSchema.safeParse(name);
+      if (!nameResult.success) {
+        newErrors.name = nameResult.error.errors[0].message;
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Login validation
-    if (mode === "login") {
-      if (!email || !password) {
-        toast({
-          variant: "destructive",
-          title: "Campos obrigatórios",
-          description: "Preencha e-mail e senha",
-        });
-        return;
-      }
-    }
-
-    // Signup validation
-    if (mode === "signup") {
-      if (!fullName || !email || !password || !confirmPassword) {
-        toast({
-          variant: "destructive",
-          title: "Campos obrigatórios",
-          description: "Preencha todos os campos",
-        });
-        return;
-      }
-      if (password !== confirmPassword) {
-        toast({
-          variant: "destructive",
-          title: "Senhas não conferem",
-          description: "As senhas digitadas são diferentes",
-        });
-        return;
-      }
-      if (password.length < 6) {
-        toast({
-          variant: "destructive",
-          title: "Senha muito curta",
-          description: "A senha deve ter pelo menos 6 caracteres",
-        });
-        return;
-      }
-    }
-
-    // Forgot password validation
-    if (mode === "forgot") {
-      if (!email) {
-        toast({
-          variant: "destructive",
-          title: "E-mail obrigatório",
-          description: "Digite seu e-mail para recuperar a senha",
-        });
-        return;
-      }
-    }
-
-    // Reset password validation
-    if (mode === "reset") {
-      if (!password || !confirmPassword) {
-        toast({
-          variant: "destructive",
-          title: "Campos obrigatórios",
-          description: "Preencha a nova senha",
-        });
-        return;
-      }
-      if (password !== confirmPassword) {
-        toast({
-          variant: "destructive",
-          title: "Senhas não conferem",
-          description: "As senhas digitadas são diferentes",
-        });
-        return;
-      }
-      if (password.length < 6) {
-        toast({
-          variant: "destructive",
-          title: "Senha muito curta",
-          description: "A senha deve ter pelo menos 6 caracteres",
-        });
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
+    if (!validate()) return;
+    
+    setLoading(true);
     
     try {
-      if (mode === "login") {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast({
-            variant: "destructive",
-            title: "Erro ao entrar",
-            description: error.message === "Invalid login credentials" 
-              ? "E-mail ou senha incorretos" 
-              : error.message,
-          });
-        }
-      } else if (mode === "signup") {
-        const { error } = await signUp(email, password, fullName);
+      if (mode === "signup") {
+        const { error } = await signUp(email, password, name);
+        
         if (error) {
           if (error.message.includes("already registered")) {
             toast({
               variant: "destructive",
-              title: "E-mail já cadastrado",
-              description: "Este e-mail já está em uso. Tente fazer login.",
+              title: "Email já cadastrado",
+              description: "Tente fazer login ou use outro email.",
             });
           } else {
             toast({
               variant: "destructive",
-              title: "Erro ao cadastrar",
+              title: "Erro ao criar conta",
               description: error.message,
             });
           }
-        } else {
-          toast({
-            title: "Conta criada!",
-            description: "Bem-vindo ao CNH 360!",
-          });
+          return;
         }
-      } else if (mode === "forgot") {
-        const { error } = await resetPassword(email);
+        
+        toast({
+          title: "Conta criada!",
+          description: "Redirecionando para o cadastro...",
+        });
+        
+        // Will redirect via useEffect when user state updates
+      } else {
+        const { error } = await signIn(email, password);
+        
         if (error) {
-          toast({
-            variant: "destructive",
-            title: "Erro ao enviar",
-            description: error.message,
-          });
-        } else {
-          setMode("forgot-success");
+          if (error.message.includes("Invalid login credentials")) {
+            toast({
+              variant: "destructive",
+              title: "Credenciais inválidas",
+              description: "Verifique seu email e senha.",
+            });
+          } else {
+            toast({
+              variant: "destructive",
+              title: "Erro ao entrar",
+              description: error.message,
+            });
+          }
+          return;
         }
-      } else if (mode === "reset") {
-        const { error } = await updatePassword(password);
-        if (error) {
-          toast({
-            variant: "destructive",
-            title: "Erro ao redefinir",
-            description: error.message,
-          });
-        } else {
-          toast({
-            title: "Senha alterada!",
-            description: "Sua senha foi redefinida com sucesso.",
-          });
-          setMode("login");
-          resetForm();
-        }
+        
+        toast({
+          title: "Bem-vindo de volta!",
+          description: "Entrando na sua conta...",
+        });
       }
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   if (authLoading) {
-    return <LoadingScreen message="Carregando..." />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    );
   }
-
-  const getHeaderContent = () => {
-    switch (mode) {
-      case "login":
-        return {
-          title: "Bem-vindo de volta!",
-          subtitle: "Entre para continuar sua jornada"
-        };
-      case "signup":
-        return {
-          title: "Crie sua conta",
-          subtitle: "Comece sua habilitação agora mesmo"
-        };
-      case "forgot":
-        return {
-          title: "Esqueceu a senha?",
-          subtitle: "Enviaremos um link de recuperação"
-        };
-      case "forgot-success":
-        return {
-          title: "E-mail enviado!",
-          subtitle: "Verifique sua caixa de entrada"
-        };
-      case "reset":
-        return {
-          title: "Nova senha",
-          subtitle: "Crie sua nova senha de acesso"
-        };
-    }
-  };
-
-  const headerContent = getHeaderContent();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="gradient-hero text-primary-foreground px-6 pt-12 pb-20 safe-top">
-        <div className="max-w-md mx-auto">
-          {/* Back button for forgot/reset modes */}
-          {(mode === "forgot" || mode === "reset" || mode === "forgot-success") && (
-            <button
-              onClick={() => {
-                setMode("login");
-                resetForm();
-              }}
-              className="flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-4 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Voltar ao login</span>
-            </button>
-          )}
+      <header className="px-6 pt-6 pb-4 safe-top">
+        <div className="max-w-md mx-auto flex items-center gap-4">
+          <button
+            onClick={() => navigate("/")}
+            className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold text-foreground">
+            {mode === "login" ? "Entrar" : "Criar conta"}
+          </h1>
+        </div>
+      </header>
 
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
-              <Car className="w-7 h-7" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">CNH 360</h1>
-              <p className="text-primary-foreground/80 text-sm">O iFood das autoescolas</p>
-            </div>
+      <div className="flex-1 px-6 pb-8">
+        <div className="max-w-md mx-auto">
+          {/* User Type Selector */}
+          <div className="grid grid-cols-2 gap-3 mb-8">
+            <button
+              onClick={() => setUserType("aluno")}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                userType === "aluno"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
+              )}
+            >
+              <div className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center",
+                userType === "aluno" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              )}>
+                <Car className="w-6 h-6" />
+              </div>
+              <span className={cn(
+                "font-medium",
+                userType === "aluno" ? "text-primary" : "text-muted-foreground"
+              )}>
+                Sou Aluno
+              </span>
+            </button>
+
+            <button
+              onClick={() => setUserType("instrutor")}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                userType === "instrutor"
+                  ? "border-secondary bg-secondary/5"
+                  : "border-border hover:border-secondary/50"
+              )}
+            >
+              <div className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center",
+                userType === "instrutor" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
+              )}>
+                <GraduationCap className="w-6 h-6" />
+              </div>
+              <span className={cn(
+                "font-medium",
+                userType === "instrutor" ? "text-secondary" : "text-muted-foreground"
+              )}>
+                Sou Instrutor
+              </span>
+            </button>
           </div>
 
-          <h2 className="text-2xl font-bold">{headerContent.title}</h2>
-          <p className="text-primary-foreground/80 mt-1">{headerContent.subtitle}</p>
-        </div>
-      </div>
-
-      {/* Form Card */}
-      <div className="flex-1 px-6 -mt-10">
-        <div className="max-w-md mx-auto">
-          <div className="bg-card rounded-3xl shadow-elevated p-6">
-            
-            {/* Forgot Password Success */}
-            {mode === "forgot-success" && (
-              <div className="text-center py-6">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-primary" />
+          {/* Auth Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Nome completo
+                </label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Seu nome"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="h-14 pl-12 rounded-xl"
+                  />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  Verifique seu e-mail
-                </h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Enviamos um link de recuperação para <strong className="text-foreground">{email}</strong>. 
-                  Clique no link para criar uma nova senha.
-                </p>
-                <p className="text-muted-foreground text-xs mb-4">
-                  Não recebeu? Verifique sua pasta de spam.
-                </p>
-                <Button
-                  onClick={() => {
-                    setMode("login");
-                    resetForm();
-                  }}
-                  variant="outline"
-                  className="w-full h-12 rounded-xl"
-                >
-                  Voltar ao login
-                </Button>
+                {errors.name && (
+                  <p className="text-destructive text-sm mt-1">{errors.name}</p>
+                )}
               </div>
             )}
 
-            {/* Login / Signup / Forgot / Reset Forms */}
-            {mode !== "forgot-success" && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Full Name - Only for signup */}
-                {mode === "signup" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="fullName" className="text-foreground font-medium">
-                      Nome completo
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="fullName"
-                        type="text"
-                        placeholder="Seu nome completo"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="pl-10 h-12 rounded-xl border-border/50 focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                )}
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-14 pl-12 rounded-xl"
+                />
+              </div>
+              {errors.email && (
+                <p className="text-destructive text-sm mt-1">{errors.email}</p>
+              )}
+            </div>
 
-                {/* Email - Not for reset mode */}
-                {mode !== "reset" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-foreground font-medium">
-                      E-mail
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 h-12 rounded-xl border-border/50 focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Password - For login, signup, and reset */}
-                {(mode === "login" || mode === "signup" || mode === "reset") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-foreground font-medium">
-                      {mode === "reset" ? "Nova senha" : "Senha"}
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-12 rounded-xl border-border/50 focus:border-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Remember me and Forgot password - Only for login */}
-                {mode === "login" && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="rememberMe"
-                        checked={rememberMe}
-                        onCheckedChange={(checked) => setRememberMe(checked === true)}
-                        className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                      <label
-                        htmlFor="rememberMe"
-                        className="text-sm text-muted-foreground cursor-pointer select-none"
-                      >
-                        Lembrar-me
-                      </label>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode("forgot");
-                        resetForm();
-                      }}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Esqueceu sua senha?
-                    </button>
-                  </div>
-                )}
-
-                {/* Confirm Password - For signup and reset */}
-                {(mode === "signup" || mode === "reset") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-foreground font-medium">
-                      Confirmar {mode === "reset" ? "nova " : ""}senha
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="pl-10 pr-10 h-12 rounded-xl border-border/50 focus:border-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full h-14 rounded-2xl text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all mt-6"
-                >
-                  {isSubmitting ? (
-                    mode === "login" ? "Entrando..." :
-                    mode === "signup" ? "Criando conta..." :
-                    mode === "forgot" ? "Enviando..." :
-                    "Salvando..."
-                  ) : (
-                    mode === "login" ? "Entrar" :
-                    mode === "signup" ? "Criar conta" :
-                    mode === "forgot" ? "Enviar link de recuperação" :
-                    "Redefinir senha"
-                  )}
-                </Button>
-              </form>
-            )}
-
-            {/* Toggle Login/Signup - Only for login and signup modes */}
-            {(mode === "login" || mode === "signup") && (
-              <div className="mt-6 text-center">
-                <p className="text-muted-foreground">
-                  {mode === "login" ? "Não tem conta?" : "Já tem uma conta?"}
-                </p>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                Senha
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-14 pl-12 pr-12 rounded-xl"
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setMode(mode === "login" ? "signup" : "login");
-                    resetForm();
-                  }}
-                  className="text-primary font-semibold hover:underline mt-1"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {mode === "login" ? "Cadastre-se agora" : "Fazer login"}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-            )}
-
-            {/* Terms */}
-            {mode !== "forgot-success" && (
-              <p className="text-xs text-muted-foreground text-center mt-6">
-                Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade
-              </p>
-            )}
-          </div>
-
-          {/* City Badge */}
-          <div className="flex justify-center mt-6 mb-8">
-            <div className="bg-foreground/90 text-background px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2">
-              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              Disponível em Araçatuba/SP
+              {errors.password && (
+                <p className="text-destructive text-sm mt-1">{errors.password}</p>
+              )}
             </div>
+
+            <Button
+              type="submit"
+              variant={userType === "aluno" ? "hero" : "hero-secondary"}
+              size="xl"
+              className="w-full mt-6"
+              disabled={loading}
+            >
+              {loading ? "Carregando..." : mode === "login" ? "Entrar" : "Criar conta"}
+            </Button>
+          </form>
+
+          {/* Toggle Mode */}
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {mode === "login" ? (
+                <>
+                  Não tem conta?{" "}
+                  <span className={cn(
+                    "font-semibold",
+                    userType === "aluno" ? "text-primary" : "text-secondary"
+                  )}>
+                    Criar agora
+                  </span>
+                </>
+              ) : (
+                <>
+                  Já tem conta?{" "}
+                  <span className={cn(
+                    "font-semibold",
+                    userType === "aluno" ? "text-primary" : "text-secondary"
+                  )}>
+                    Entrar
+                  </span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

@@ -700,7 +700,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_participant_name: { Args: { p_user_id: string }; Returns: string }
       get_public_autoescolas: {
         Args: never
         Returns: {
