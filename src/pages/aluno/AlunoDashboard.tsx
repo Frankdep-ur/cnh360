@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { 
-  Bell, 
   ChevronRight, 
   BookOpen, 
   Car, 
@@ -23,6 +22,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { ContadorTransicao } from "@/components/transicao/ContadorTransicao";
 import { IndicadorModo } from "@/components/transicao/IndicadorModo";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useModoTransicao } from "@/contexts/ModoTransicaoContext";
 import { cn } from "@/lib/utils";
 
@@ -94,10 +94,7 @@ export default function AlunoDashboard() {
               <p className="text-primary-foreground/80 text-sm">Olá,</p>
               <h1 className="text-xl font-bold">Maria Santos 👋</h1>
             </div>
-            <button className="w-10 h-10 rounded-xl bg-primary-foreground/20 flex items-center justify-center relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
-            </button>
+            <NotificationBell />
           </div>
 
           {/* Indicador do Modo de Transição */}
