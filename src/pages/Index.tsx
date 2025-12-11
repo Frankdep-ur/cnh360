@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, Shield, Zap, Users, GraduationCap, UserCheck, Building2 } from "lucide-react";
+import { Car, Shield, Zap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -39,30 +39,6 @@ export default function Index() {
     { icon: Shield, text: "Instrutores verificados pelo DETRAN" },
     { icon: Users, text: "Use seu próprio carro nas aulas" },
     { icon: Car, text: "EAD 100% grátis e flexível" },
-  ];
-
-  const userTypes = [
-    { 
-      id: "aluno", 
-      icon: GraduationCap, 
-      title: "Sou Aluno", 
-      description: "Quero tirar ou renovar minha CNH",
-      color: "bg-primary"
-    },
-    { 
-      id: "instrutor", 
-      icon: UserCheck, 
-      title: "Sou Instrutor", 
-      description: "Quero dar aulas e ganhar mais",
-      color: "bg-blue-500"
-    },
-    { 
-      id: "autoescola", 
-      icon: Building2, 
-      title: "Sou Autoescola", 
-      description: "Quero gerenciar minha autoescola",
-      color: "bg-amber-500"
-    },
   ];
 
   if (loading) {
@@ -119,48 +95,45 @@ export default function Index() {
         </div>
       </div>
 
-      {/* User Type Selection */}
+      {/* CTA Section */}
       <div className="flex-1 px-6 -mt-8">
         <div className="max-w-md mx-auto">
           <div className={cn(
-            "bg-card rounded-3xl shadow-elevated p-6 transition-all duration-500",
+            "bg-card rounded-3xl shadow-elevated p-8 transition-all duration-500",
             showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           )}
           style={{ transitionDelay: "400ms" }}
           >
             <h3 className="text-xl font-bold text-foreground mb-2 text-center">
-              Como você quer usar o CNH 360?
+              Comece sua jornada
             </h3>
             <p className="text-muted-foreground text-center mb-6">
-              Selecione seu perfil para começar
+              Cadastre-se gratuitamente e tire sua CNH
             </p>
 
-            <div className="space-y-3">
-              {userTypes.map((type, index) => (
-                <Button
-                  key={type.id}
-                  onClick={() => navigate(`/auth?tipo=${type.id}`)}
-                  variant="outline"
-                  className={cn(
-                    "w-full h-auto py-4 px-4 rounded-2xl border-2 hover:border-primary/50 transition-all duration-300 flex items-center gap-4 justify-start",
-                    showContent ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
-                  )}
-                  style={{ transitionDelay: `${500 + index * 100}ms` }}
-                >
-                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-white", type.color)}>
-                    <type.icon className="w-6 h-6" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-foreground">{type.title}</p>
-                    <p className="text-sm text-muted-foreground">{type.description}</p>
-                  </div>
-                </Button>
-              ))}
-            </div>
+            <Button
+              onClick={() => navigate("/auth")}
+              className="w-full h-14 rounded-2xl text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all"
+            >
+              Começar agora
+            </Button>
 
-            <p className="text-xs text-muted-foreground text-center mt-6">
+            <p className="text-xs text-muted-foreground text-center mt-4">
               Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade
             </p>
+          </div>
+
+          {/* City Pilot Badge */}
+          <div className={cn(
+            "flex justify-center mt-6 transition-all duration-500",
+            showContent ? "opacity-100" : "opacity-0"
+          )}
+          style={{ transitionDelay: "600ms" }}
+          >
+            <div className="bg-foreground/90 text-background px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2">
+              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+              Disponível em Araçatuba/SP
+            </div>
           </div>
         </div>
       </div>
