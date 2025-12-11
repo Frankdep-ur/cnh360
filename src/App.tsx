@@ -77,6 +77,11 @@ const App = () => (
                 <InstrutorOnboarding />
               </ProtectedRoute>
             } />
+            <Route path="/onboarding/autoescola" element={
+              <ProtectedRoute>
+                <AutoescolaOnboarding />
+              </ProtectedRoute>
+            } />
 
             {/* Aluno - Protected */}
             <Route path="/aluno" element={
@@ -154,6 +159,68 @@ const App = () => (
             <Route path="/instrutor/perfil" element={
               <ProtectedRoute>
                 <InstrutorPerfil />
+              </ProtectedRoute>
+            } />
+
+            {/* Autoescola - Protected */}
+            <Route path="/autoescola" element={
+              <ProtectedRoute>
+                <AutoescolaDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/leads" element={
+              <ProtectedRoute>
+                <AutoescolaLeads />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/turmas" element={
+              <ProtectedRoute>
+                <AutoescolaTurmas />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/mei" element={
+              <ProtectedRoute>
+                <AutoescolaMEI />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/agenda" element={
+              <ProtectedRoute>
+                <AutoescolaAgenda />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/financeiro" element={
+              <ProtectedRoute>
+                <AutoescolaFinanceiro />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/contratos" element={
+              <ProtectedRoute>
+                <AutoescolaContratos />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/avaliacoes" element={
+              <ProtectedRoute>
+                <AutoescolaAvaliacoes />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/comunicacao" element={
+              <ProtectedRoute>
+                <AutoescolaComunicacao />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/provas" element={
+              <ProtectedRoute>
+                <AutoescolaProvas />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/crm" element={
+              <ProtectedRoute>
+                <AutoescolaCRM />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/perfil" element={
+              <ProtectedRoute>
+                <AutoescolaPerfil />
               </ProtectedRoute>
             } />
 
