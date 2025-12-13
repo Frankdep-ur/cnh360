@@ -29,10 +29,24 @@ export default function AutoescolaOnboarding() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [checkingExisting, setCheckingExisting] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [formData, setFormData] = useState({
+    cnpj: "",
+    razaoSocial: "",
+    nomeFantasia: "",
+    credencialDetran: "",
+    responsavel: "",
+    email: "",
+    whatsapp: "",
+    cidade: "Araçatuba",
+    estado: "SP",
+  });
+  const [credencialUploaded, setCredencialUploaded] = useState(false);
 
   // Check if user already has autoescola registration
   useEffect(() => {
@@ -58,6 +72,7 @@ export default function AutoescolaOnboarding() {
     checkExistingAutoescola();
   }, [user, navigate]);
 
+  // Loading state - AFTER all hooks are declared
   if (checkingExisting) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -65,18 +80,6 @@ export default function AutoescolaOnboarding() {
       </div>
     );
   }
-  const [formData, setFormData] = useState({
-    cnpj: "",
-    razaoSocial: "",
-    nomeFantasia: "",
-    credencialDetran: "",
-    responsavel: "",
-    email: "",
-    whatsapp: "",
-    cidade: "Araçatuba",
-    estado: "SP",
-  });
-  const [credencialUploaded, setCredencialUploaded] = useState(false);
 
   const formatCNPJ = (value: string) => {
     return value
@@ -161,7 +164,16 @@ export default function AutoescolaOnboarding() {
   };
 
   const handleSubmit = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Sessão expirada",
+        description: "Por favor, faça login novamente.",
+        variant: "destructive",
+      });
+      navigate("/auth?type=autoescola");
+      return;
+    }
+    
     if (!validateStep(3)) {
       toast({
         title: "Dados inválidos",
@@ -174,13 +186,18 @@ export default function AutoescolaOnboarding() {
     setLoading(true);
     try {
       // Inserir role de autoescola
-      await supabase.from("user_roles").insert({
+      const { error: roleError } = await supabase.from("user_roles").insert({
         user_id: user.id,
         role: "autoescola",
       });
 
+      if (roleError) {
+        console.error("Erro ao inserir role:", roleError);
+        throw new Error(roleError.message);
+      }
+
       // Criar registro de autoescola
-      await supabase.from("autoescolas").insert({
+      const { error: autoescolaError } = await supabase.from("autoescolas").insert({
         user_id: user.id,
         cnpj: formData.cnpj.replace(/\D/g, ""),
         razao_social: formData.razaoSocial.trim(),
@@ -192,17 +209,22 @@ export default function AutoescolaOnboarding() {
         estado: formData.estado,
       });
 
+      if (autoescolaError) {
+        console.error("Erro ao inserir autoescola:", autoescolaError);
+        throw new Error(autoescolaError.message);
+      }
+
       toast({
         title: "Cadastro concluído!",
         description: "Bem-vindo ao CNH 360 Autoescolas.",
       });
 
-      navigate("/autoescola");
-    } catch (error) {
+      navigate("/autoescola", { replace: true });
+    } catch (error: any) {
       console.error("Erro no cadastro:", error);
       toast({
         title: "Erro no cadastro",
-        description: "Tente novamente mais tarde.",
+        description: error?.message || "Tente novamente mais tarde.",
         variant: "destructive",
       });
     } finally {
