@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
+import { NovaAulaPopup } from "@/components/instrutor/NovaAulaPopup";
+import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +52,14 @@ export default function InstrutorDashboard() {
   const [aulasPendentes, setAulasPendentes] = useState<AulaPendente[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(false);
+  const [instrutorId, setInstrutorId] = useState<string | null>(null);
+
+  // Real-time notification system
+  const { novaAula, showPopup, dismissPopup, refetch } = useInstrutorNotifications(
+    instrutorId,
+    isOnline
+  );
 
   const instrutor = {
     nome: "Carlos Silva",
@@ -111,11 +122,15 @@ export default function InstrutorDashboard() {
         .from("instrutores")
         .select("id")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (instrutorError) {
         console.error("Error fetching instructor:", instrutorError);
         return;
+      }
+
+      if (instrutorData) {
+        setInstrutorId(instrutorData.id);
       }
 
       // Get pending/confirmed lessons
@@ -244,6 +259,16 @@ export default function InstrutorDashboard() {
     <div className="app-container pb-24">
       <ComplianceBanner />
       
+      {/* Nova Aula Popup */}
+      <NovaAulaPopup 
+        aula={novaAula} 
+        open={showPopup} 
+        onClose={() => {
+          dismissPopup();
+          fetchAulasPendentes();
+        }} 
+      />
+      
       <div className="px-4 py-6 page-enter space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -277,6 +302,9 @@ export default function InstrutorDashboard() {
             </Badge>
           </div>
         </div>
+
+        {/* Online Status Toggle */}
+        <OnlineStatusToggle isOnline={isOnline} onToggle={setIsOnline} />
 
         {/* Pending Lessons Alert */}
         {aulasPendentesCount > 0 && (
