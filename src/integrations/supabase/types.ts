@@ -364,7 +364,9 @@ export type Database = {
           ativo: boolean | null
           bio: string | null
           cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
+          foto: string | null
           id: string
+          nome: string | null
           nota_media: number | null
           preco_hora: number | null
           raio_atendimento_km: number | null
@@ -376,7 +378,9 @@ export type Database = {
           ativo?: boolean | null
           bio?: string | null
           cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          foto?: string | null
           id: string
+          nome?: string | null
           nota_media?: number | null
           preco_hora?: number | null
           raio_atendimento_km?: number | null
@@ -388,7 +392,9 @@ export type Database = {
           ativo?: boolean | null
           bio?: string | null
           cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
+          foto?: string | null
           id?: string
+          nome?: string | null
           nota_media?: number | null
           preco_hora?: number | null
           raio_atendimento_km?: number | null
