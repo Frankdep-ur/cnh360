@@ -52,8 +52,21 @@ export default function InstrutorDashboard() {
   const [aulasPendentes, setAulasPendentes] = useState<AulaPendente[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
+  
+  // Persist online status in localStorage
+  const [isOnline, setIsOnline] = useState(() => {
+    const saved = localStorage.getItem("instrutor_online_status");
+    console.log("[Dashboard] Estado online inicial do localStorage:", saved);
+    return saved === "true";
+  });
+
+  // Save online status to localStorage when it changes
+  const handleOnlineToggle = (online: boolean) => {
+    console.log("[Dashboard] Alterando status online para:", online);
+    setIsOnline(online);
+    localStorage.setItem("instrutor_online_status", String(online));
+  };
 
   // Real-time notification system
   const { novaAula, showPopup, dismissPopup, refetch } = useInstrutorNotifications(
@@ -304,7 +317,7 @@ export default function InstrutorDashboard() {
         </div>
 
         {/* Online Status Toggle */}
-        <OnlineStatusToggle isOnline={isOnline} onToggle={setIsOnline} />
+        <OnlineStatusToggle isOnline={isOnline} onToggle={handleOnlineToggle} />
 
         {/* Pending Lessons Alert */}
         {aulasPendentesCount > 0 && (

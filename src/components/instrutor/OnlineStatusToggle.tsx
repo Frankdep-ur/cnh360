@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Wifi, WifiOff } from "lucide-react";
-import { requestNotificationPermission } from "@/lib/notificationSound";
+import { Wifi, WifiOff, Volume2 } from "lucide-react";
+import { requestNotificationPermission, playNotificationSound } from "@/lib/notificationSound";
 import { toast } from "sonner";
 
 interface OnlineStatusToggleProps {
@@ -20,20 +20,31 @@ export function OnlineStatusToggle({ isOnline, onToggle }: OnlineStatusTogglePro
   }, []);
 
   const handleToggle = async (checked: boolean) => {
+    console.log("[OnlineToggle] Toggle alterado para:", checked);
+    
     if (checked) {
       // Request notification permission when going online
       const granted = await requestNotificationPermission();
+      console.log("[OnlineToggle] Permissão de notificação:", granted ? "concedida" : "negada");
+      
       if (granted) {
         setNotificationPermission("granted");
       } else if (notificationPermission !== "granted") {
         toast.info("Ative as notificações do navegador para receber alertas sonoros!");
       }
+      
+      // Test sound immediately when activating
+      console.log("[OnlineToggle] Tocando som de teste...");
+      playNotificationSound();
     }
+    
     onToggle(checked);
     
     if (checked) {
-      toast.success("Você está online! Receberá notificações de novas aulas.", {
+      toast.success("🔔 Sistema de notificações ATIVO! Som de teste tocado.", {
         icon: "🟢",
+        description: "Você receberá alertas sonoros quando alunos solicitarem aulas.",
+        duration: 5000,
       });
     } else {
       toast.info("Você está offline. Não receberá notificações.", {

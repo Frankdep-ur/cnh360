@@ -29,7 +29,12 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
 
   // Fetch pending lessons
   const fetchAulasPendentes = useCallback(async () => {
-    if (!instrutorId) return;
+    if (!instrutorId) {
+      console.log("[Notificações] Sem instrutorId, pulando fetch");
+      return;
+    }
+
+    console.log("[Notificações] Buscando aulas pendentes para instrutor:", instrutorId);
 
     const { data, error } = await supabase
       .from("aulas")
@@ -39,17 +44,23 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching pending lessons:", error);
+      console.error("[Notificações] Erro ao buscar aulas:", error);
       return;
     }
+
+    console.log("[Notificações] Aulas pendentes encontradas:", data?.length || 0);
 
     if (data) {
       // Check for new lessons
       const newLessons = data.filter(aula => !processedIds.current.has(aula.id));
       
-      if (newLessons.length > 0 && isOnline && processedIds.current.size > 0) {
+      console.log("[Notificações] Novas aulas não processadas:", newLessons.length);
+      console.log("[Notificações] IDs já processados:", Array.from(processedIds.current));
+      
+      if (newLessons.length > 0 && isOnline) {
         // New lesson arrived!
         const newest = newLessons[0];
+        console.log("[Notificações] 🚨 NOVA AULA DETECTADA!", newest.id);
         
         // Get student name
         const { data: alunoData } = await supabase
@@ -69,6 +80,8 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
         }
 
         const aulaComNome = { ...newest, aluno_nome: alunoNome };
+        
+        console.log("[Notificações] 🔔 Disparando notificações para:", alunoNome);
         
         // Trigger all notifications
         playNotificationSound();
@@ -92,7 +105,18 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
 
   // Setup realtime subscription
   useEffect(() => {
-    if (!instrutorId || !isOnline) return;
+    if (!instrutorId) {
+      console.log("[Notificações] Aguardando instrutorId...");
+      return;
+    }
+    
+    if (!isOnline) {
+      console.log("[Notificações] Instrutor OFFLINE - notificações desativadas");
+      return;
+    }
+
+    console.log("[Notificações] ✅ Instrutor ONLINE - ativando sistema de notificações");
+    console.log("[Notificações] InstrutorId:", instrutorId);
 
     // Initial fetch
     fetchAulasPendentes();
@@ -101,6 +125,7 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
     requestNotificationPermission();
 
     // Realtime subscription
+    console.log("[Notificações] Criando canal realtime...");
     const channel = supabase
       .channel(`aulas-instrutor-${instrutorId}`)
       .on(
@@ -112,7 +137,7 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
           filter: `instrutor_id=eq.${instrutorId}`,
         },
         async (payload) => {
-          console.log("New lesson received:", payload);
+          console.log("[Notificações] 🚨 REALTIME: Nova aula recebida!", payload);
           
           if (payload.new && payload.new.status === "pendente") {
             const newAula = payload.new as AulaPendente;
@@ -135,6 +160,8 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
             }
 
             const aulaComNome = { ...newAula, aluno_nome: alunoNome };
+
+            console.log("[Notificações] 🔔 Disparando notificações via REALTIME para:", alunoNome);
 
             // Trigger notifications
             playNotificationSound();
@@ -162,15 +189,23 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
           filter: `instrutor_id=eq.${instrutorId}`,
         },
         () => {
+          console.log("[Notificações] Aula atualizada, refazendo fetch...");
           fetchAulasPendentes();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[Notificações] Status do canal realtime:", status);
+      });
 
-    // Fallback polling every 5 seconds
-    pollingInterval.current = setInterval(fetchAulasPendentes, 5000);
+    // Fallback polling every 3 seconds (mais frequente)
+    console.log("[Notificações] Iniciando polling a cada 3 segundos...");
+    pollingInterval.current = setInterval(() => {
+      console.log("[Notificações] Polling check...");
+      fetchAulasPendentes();
+    }, 3000);
 
     return () => {
+      console.log("[Notificações] Limpando subscriptions...");
       supabase.removeChannel(channel);
       if (pollingInterval.current) {
         clearInterval(pollingInterval.current);
