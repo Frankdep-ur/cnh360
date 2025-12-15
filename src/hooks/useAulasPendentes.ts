@@ -131,6 +131,16 @@ export function useAulasPendentes() {
 
   async function aceitarAula(aulaId: string) {
     try {
+      // Get aula data first
+      const { data: aulaData, error: aulaFetchError } = await supabase
+        .from("aulas")
+        .select("aluno_id, data_hora, duracao_minutos, ponto_encontro, valor")
+        .eq("id", aulaId)
+        .single();
+
+      if (aulaFetchError) throw aulaFetchError;
+
+      // Update status
       const { error } = await supabase
         .from("aulas")
         .update({ status: "confirmada" })
@@ -138,9 +148,43 @@ export function useAulasPendentes() {
 
       if (error) throw error;
 
+      // Get aluno's user_id to send notification
+      const { data: alunoData } = await supabase
+        .from("alunos")
+        .select("user_id")
+        .eq("id", aulaData.aluno_id)
+        .single();
+
+      if (alunoData) {
+        // Get instructor name
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user!.id)
+          .single();
+
+        const instrutorNome = profileData?.full_name || "O instrutor";
+        const dataFormatada = new Date(aulaData.data_hora).toLocaleString("pt-BR", {
+          weekday: "short",
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        // Create notification for student
+        await supabase.from("notifications").insert({
+          user_id: alunoData.user_id,
+          title: "Aula confirmada! 🎉",
+          body: `${instrutorNome} aceitou sua aula de ${aulaData.duracao_minutos} minutos para ${dataFormatada}.`,
+          type: "aula_confirmada",
+          reference_id: aulaId,
+        });
+      }
+
       toast({
         title: "Aula aceita!",
-        description: "O aluno será notificado.",
+        description: "O aluno foi notificado.",
       });
 
       fetchAulasPendentes();
@@ -156,6 +200,16 @@ export function useAulasPendentes() {
 
   async function recusarAula(aulaId: string) {
     try {
+      // Get aula data first
+      const { data: aulaData, error: aulaFetchError } = await supabase
+        .from("aulas")
+        .select("aluno_id, data_hora")
+        .eq("id", aulaId)
+        .single();
+
+      if (aulaFetchError) throw aulaFetchError;
+
+      // Update status
       const { error } = await supabase
         .from("aulas")
         .update({ status: "cancelada" })
@@ -163,9 +217,43 @@ export function useAulasPendentes() {
 
       if (error) throw error;
 
+      // Get aluno's user_id to send notification
+      const { data: alunoData } = await supabase
+        .from("alunos")
+        .select("user_id")
+        .eq("id", aulaData.aluno_id)
+        .single();
+
+      if (alunoData) {
+        // Get instructor name
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user!.id)
+          .single();
+
+        const instrutorNome = profileData?.full_name || "O instrutor";
+        const dataFormatada = new Date(aulaData.data_hora).toLocaleString("pt-BR", {
+          weekday: "short",
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        // Create notification for student
+        await supabase.from("notifications").insert({
+          user_id: alunoData.user_id,
+          title: "Aula não confirmada",
+          body: `${instrutorNome} não pôde aceitar sua aula agendada para ${dataFormatada}. Busque outro instrutor disponível.`,
+          type: "aula_recusada",
+          reference_id: aulaId,
+        });
+      }
+
       toast({
         title: "Aula recusada",
-        description: "O aluno será notificado.",
+        description: "O aluno foi notificado.",
       });
 
       fetchAulasPendentes();

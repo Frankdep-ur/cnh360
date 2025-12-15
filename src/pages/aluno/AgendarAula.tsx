@@ -255,10 +255,11 @@ export default function AgendarAula() {
 
       toast({
         title: "Aula solicitada!",
-        description: "O instrutor receberá sua solicitação.",
+        description: "Aguardando confirmação do instrutor.",
       });
 
-      navigate("/aluno/aula-confirmada");
+      // Navigate to the waiting page with the lesson ID
+      navigate(`/aluno/aula-solicitada/${aulaData.id}`);
     } catch (err: any) {
       console.error("Error in createLesson:", err);
       toast({
