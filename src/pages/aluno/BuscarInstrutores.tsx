@@ -132,8 +132,8 @@ export default function BuscarInstrutores() {
 
           return {
             id: inst.id,
-            name: `Instrutor MEI`,
-            photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+            name: inst.nome || "Instrutor",
+            photo: inst.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
             rating: Number(inst.nota_media) || 5.0,
             reviews: inst.total_avaliacoes || 0,
             price: Number(inst.preco_hora) || 80,
