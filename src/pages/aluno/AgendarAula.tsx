@@ -172,43 +172,10 @@ export default function AgendarAula() {
         return;
       }
 
-      // Get the real instrutor_id (not from cache)
-      let realInstrutorId = instructor.id;
-      let instrutorEmail: string | null = null;
-      let instrutorUserId: string | null = null;
-
-      // If it's not a mock, get the real instructor data
-      if (!instructor.id.startsWith("mock-")) {
-        const { data: instrutorData, error: instrutorError } = await supabase
-          .from("instrutores")
-          .select("id, user_id")
-          .eq("id", instructor.id)
-          .single();
-
-        if (instrutorError || !instrutorData) {
-          console.error("Error fetching real instructor:", instrutorError);
-          toast({
-            title: "Erro",
-            description: "Instrutor não encontrado.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        realInstrutorId = instrutorData.id;
-        instrutorUserId = instrutorData.user_id;
-
-        // Get instructor's email from auth
-        // Note: We can't access auth.users directly, so we'll try to get from profiles
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", instrutorUserId)
-          .single();
-
-        // For demo, we'll use a placeholder email
-        instrutorEmail = null; // In production, get from user's email
-      }
+      // Use the instructor ID directly from cache - it's the same as instrutores.id
+      // No need to re-fetch from instrutores table (which has restrictive RLS)
+      const realInstrutorId = instructor.id;
+      const instrutorEmail: string | null = null;
 
       // Calculate scheduled date/time
       const scheduledDate = new Date();
