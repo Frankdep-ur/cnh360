@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { NotificationSettings } from "@/components/notifications/NotificationSettings";
+import { ProfilePhotoUpload } from "@/components/profile/ProfilePhotoUpload";
+import { validateRealName, isTestAccountName } from "@/lib/nameValidation";
 import { cn } from "@/lib/utils";
 
 interface ProfileData {
@@ -15,6 +17,7 @@ interface ProfileData {
   cpf: string;
   phone: string;
   avatar_url: string | null;
+  is_test_account: boolean;
 }
 
 interface AlunoData {
@@ -33,11 +36,13 @@ export default function AlunoPerfil() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData>({
     full_name: "",
     cpf: "",
     phone: "",
     avatar_url: null,
+    is_test_account: false,
   });
   const [alunoData, setAlunoData] = useState<AlunoData | null>(null);
 
@@ -49,7 +54,6 @@ export default function AlunoPerfil() {
 
   const fetchProfile = async () => {
     try {
-      // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
@@ -59,15 +63,16 @@ export default function AlunoPerfil() {
       if (profileError) throw profileError;
 
       if (profileData) {
+        const isTest = isTestAccountName(profileData.full_name);
         setProfile({
           full_name: profileData.full_name || "",
           cpf: profileData.cpf || "",
           phone: profileData.phone || "",
           avatar_url: profileData.avatar_url,
+          is_test_account: isTest,
         });
       }
 
-      // Fetch aluno data
       const { data: alunoResult, error: alunoError } = await supabase
         .from("alunos")
         .select("*")
@@ -111,7 +116,25 @@ export default function AlunoPerfil() {
       .replace(/(-\d{4})\d+?$/, "$1");
   };
 
+  const handleNameChange = (value: string) => {
+    setProfile({ ...profile, full_name: value });
+    const validation = validateRealName(value);
+    setNameError(validation.isValid ? null : validation.message || null);
+  };
+
   const handleSave = async () => {
+    // Validate name before saving
+    const validation = validateRealName(profile.full_name);
+    if (!validation.isValid) {
+      setNameError(validation.message || "Nome inválido");
+      toast({
+        variant: "destructive",
+        title: "Nome inválido",
+        description: validation.message,
+      });
+      return;
+    }
+
     setSaving(true);
     
     try {
@@ -125,6 +148,12 @@ export default function AlunoPerfil() {
         .eq("id", user!.id);
 
       if (error) throw error;
+
+      // Update test account status
+      setProfile(prev => ({
+        ...prev,
+        is_test_account: isTestAccountName(profile.full_name)
+      }));
 
       toast({
         title: "Perfil atualizado!",
@@ -141,6 +170,10 @@ export default function AlunoPerfil() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handlePhotoUploaded = (url: string) => {
+    setProfile(prev => ({ ...prev, avatar_url: url }));
   };
 
   const handleLogout = async () => {
@@ -169,7 +202,7 @@ export default function AlunoPerfil() {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="bg-primary text-primary-foreground px-6 pt-6 pb-16 safe-top">
+      <header className="bg-primary text-primary-foreground px-6 pt-6 pb-20 safe-top">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <button
@@ -185,27 +218,38 @@ export default function AlunoPerfil() {
       </header>
 
       {/* Profile Card */}
-      <div className="px-6 -mt-10">
+      <div className="px-6 -mt-14">
         <div className="max-w-md mx-auto">
           <div className="bg-card rounded-3xl shadow-elevated p-6">
-            {/* Avatar */}
+            {/* Photo Upload */}
             <div className="flex flex-col items-center mb-6">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                  {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-10 h-10 text-muted-foreground" />
-                  )}
-                </div>
-                <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-                  <Camera className="w-4 h-4" />
-                </button>
-              </div>
+              <ProfilePhotoUpload
+                userId={user!.id}
+                currentPhotoUrl={profile.avatar_url}
+                onPhotoUploaded={handlePhotoUploaded}
+                userType="aluno"
+                isTestAccount={profile.is_test_account}
+              />
+              
               <h2 className="mt-4 text-xl font-bold text-foreground">
                 {profile.full_name || "Usuário"}
               </h2>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
+              
+              {/* Test Account Badge */}
+              {profile.is_test_account && (
+                <div className="mt-2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
+                  <AlertTriangle className="w-3 h-3" />
+                  Conta de Teste
+                </div>
+              )}
+              
+              {/* Status Badge */}
+              {!profile.is_test_account && (
+                <div className="mt-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                  Aluno
+                </div>
+              )}
             </div>
 
             {/* Edit Toggle */}
@@ -222,7 +266,10 @@ export default function AlunoPerfil() {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setEditing(false)}
+                  onClick={() => {
+                    setEditing(false);
+                    setNameError(null);
+                  }}
                 >
                   Cancelar
                 </Button>
@@ -230,7 +277,7 @@ export default function AlunoPerfil() {
                   variant="hero"
                   className="flex-1"
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || !!nameError}
                 >
                   {saving ? "Salvando..." : "Salvar"}
                   <Save className="w-4 h-4 ml-2" />
@@ -242,17 +289,27 @@ export default function AlunoPerfil() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
-                  Nome completo
+                  Nome completo *
                 </label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     value={profile.full_name}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     disabled={!editing}
-                    className="h-12 pl-12 rounded-xl"
+                    placeholder="Seu nome real completo"
+                    className={cn(
+                      "h-12 pl-12 rounded-xl",
+                      nameError && editing && "border-destructive focus-visible:ring-destructive"
+                    )}
                   />
                 </div>
+                {nameError && editing && (
+                  <p className="mt-1.5 text-xs text-destructive flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {nameError}
+                  </p>
+                )}
               </div>
 
               <div>

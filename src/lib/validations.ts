@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateRealName } from "./nameValidation";
 
 // CPF validation with checksum
 export const validateCPF = (cpf: string): boolean => {
@@ -74,7 +75,11 @@ export const cnpjSchema = z.string()
 export const nameSchema = z.string()
   .min(3, "Nome deve ter pelo menos 3 caracteres")
   .max(100, "Nome muito longo")
-  .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "Nome deve conter apenas letras");
+  .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "Nome deve conter apenas letras")
+  .refine((val) => {
+    const result = validateRealName(val);
+    return result.isValid;
+  }, "Use seu nome real para credenciamento válido no DETRAN. Contas com nome fake serão bloqueadas.");
 
 export const emailSchema = z.string()
   .email("E-mail inválido")
