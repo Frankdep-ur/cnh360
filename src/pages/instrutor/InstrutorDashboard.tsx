@@ -82,7 +82,7 @@ export default function InstrutorDashboard() {
         .from('profiles')
         .select('full_name, avatar_url')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
         .then(({ data }) => setProfile(data));
     }
   }, [user]);

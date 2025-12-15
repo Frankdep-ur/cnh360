@@ -42,15 +42,15 @@ export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
   const { modo, config, isSP, diasRestantes } = useModoTransicao();
   const { user } = useAuth();
-  const [profile, setProfile] = useState<{ full_name: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
 
   useEffect(() => {
     if (user) {
       supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, avatar_url')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
         .then(({ data }) => setProfile(data));
     }
   }, [user]);
@@ -105,9 +105,22 @@ export default function AlunoDashboard() {
       )}>
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-primary-foreground/80 text-sm">Olá,</p>
-              <h1 className="text-xl font-bold">{profile?.full_name || 'Aluno'} 👋</h1>
+            <div className="flex items-center gap-3">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="Foto" 
+                  className="w-12 h-12 rounded-full object-cover border-2 border-primary-foreground/30"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-primary-foreground/20 flex items-center justify-center">
+                  <span className="text-lg font-bold">{profile?.full_name?.charAt(0) || 'A'}</span>
+                </div>
+              )}
+              <div>
+                <p className="text-primary-foreground/80 text-sm">Olá,</p>
+                <h1 className="text-xl font-bold">{profile?.full_name || 'Aluno'} 👋</h1>
+              </div>
             </div>
             <NotificationBell />
           </div>

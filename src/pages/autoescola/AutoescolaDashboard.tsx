@@ -18,15 +18,25 @@ export default function AutoescolaDashboard() {
   const [showContent, setShowContent] = useState(true);
   const { user } = useAuth();
   const [autoescolaData, setAutoescolaData] = useState<{ nome_fantasia: string | null; cidade: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ avatar_url: string | null } | null>(null);
 
   useEffect(() => {
     if (user) {
+      // Fetch autoescola data
       supabase
         .from('autoescolas')
         .select('nome_fantasia, cidade')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
         .then(({ data }) => setAutoescolaData(data));
+      
+      // Fetch profile for avatar
+      supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => setProfile(data));
     }
   }, [user]);
 
@@ -70,9 +80,17 @@ export default function AutoescolaDashboard() {
           {/* Top bar */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <Building2 className="w-6 h-6" />
-              </div>
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="Foto" 
+                  className="w-12 h-12 rounded-xl object-cover border-2 border-white/30"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Building2 className="w-6 h-6" />
+                </div>
+              )}
               <div>
                 <h1 className="font-bold">{autoescola.nome}</h1>
                 <p className="text-white/80 text-sm">{autoescola.cidade}</p>
