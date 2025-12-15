@@ -133,22 +133,8 @@ export function ProfilePhotoUpload({
     }
   };
 
-  // For test accounts, show generic avatar without upload option
-  if (isTestAccount) {
-    return (
-      <div className={cn("flex flex-col items-center", className)}>
-        <div className={cn(
-          "rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-dashed border-muted-foreground/30",
-          sizeClasses[size]
-        )}>
-          <User className={cn("text-muted-foreground", iconSizes[size])} />
-        </div>
-        <span className="mt-2 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-          Conta de Teste
-        </span>
-      </div>
-    );
-  }
+  // For test accounts, show label but still allow upload
+  const showTestAccountLabel = isTestAccount;
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
@@ -232,15 +218,28 @@ export function ProfilePhotoUpload({
       )}
 
       {hasRealPhoto && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mt-2 text-xs"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          Trocar foto
-        </Button>
+        <div className="flex flex-col items-center">
+          {showTestAccountLabel && (
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full mb-1">
+              Conta de Teste
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            Trocar foto
+          </Button>
+        </div>
+      )}
+
+      {!hasRealPhoto && showTestAccountLabel && (
+        <span className="mt-2 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+          Conta de Teste
+        </span>
       )}
     </div>
   );
