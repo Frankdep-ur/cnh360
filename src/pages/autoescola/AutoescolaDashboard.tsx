@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Building2, Users, BookOpen, DollarSign, UserCheck, 
@@ -10,15 +10,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutoescolaBottomNav } from "@/components/layout/AutoescolaBottomNav";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function AutoescolaDashboard() {
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(true);
+  const { user } = useAuth();
+  const [autoescolaData, setAutoescolaData] = useState<{ nome_fantasia: string | null; cidade: string | null } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('autoescolas')
+        .select('nome_fantasia, cidade')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data }) => setAutoescolaData(data));
+    }
+  }, [user]);
 
   // Mock data
   const autoescola = {
-    nome: "Autoescola Araçatuba",
-    cidade: "Araçatuba-SP",
+    nome: autoescolaData?.nome_fantasia || "Autoescola",
+    cidade: autoescolaData?.cidade || "Sua cidade",
     plano: "Gratuito",
     leadsHoje: 12,
     turmasAtivas: 3,
