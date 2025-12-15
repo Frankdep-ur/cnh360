@@ -553,6 +553,7 @@ export type Database = {
           estado: string | null
           full_name: string | null
           id: string
+          is_test_account: boolean | null
           modo_transicao: string | null
           phone: string | null
           updated_at: string
@@ -564,6 +565,7 @@ export type Database = {
           estado?: string | null
           full_name?: string | null
           id: string
+          is_test_account?: boolean | null
           modo_transicao?: string | null
           phone?: string | null
           updated_at?: string
@@ -575,6 +577,7 @@ export type Database = {
           estado?: string | null
           full_name?: string | null
           id?: string
+          is_test_account?: boolean | null
           modo_transicao?: string | null
           phone?: string | null
           updated_at?: string

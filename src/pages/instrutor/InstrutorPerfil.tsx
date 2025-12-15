@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,6 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationSettings } from "@/components/notifications/NotificationSettings";
+import { ProfilePhotoUpload } from "@/components/profile/ProfilePhotoUpload";
+import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
+import { validateRealName, isTestAccountName } from "@/lib/nameValidation";
 import { cn } from "@/lib/utils";
 
 interface ProfileData {
@@ -15,6 +18,7 @@ interface ProfileData {
   cpf: string;
   phone: string;
   avatar_url: string | null;
+  is_test_account: boolean;
 }
 
 interface InstrutorData {
@@ -40,11 +44,13 @@ export default function InstrutorPerfil() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData>({
     full_name: "",
     cpf: "",
     phone: "",
     avatar_url: null,
+    is_test_account: false,
   });
   const [instrutorData, setInstrutorData] = useState<InstrutorData | null>(null);
   const [veiculoData, setVeiculoData] = useState<VeiculoData | null>(null);
@@ -57,7 +63,6 @@ export default function InstrutorPerfil() {
 
   const fetchProfile = async () => {
     try {
-      // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
@@ -67,15 +72,16 @@ export default function InstrutorPerfil() {
       if (profileError) throw profileError;
 
       if (profileData) {
+        const isTest = isTestAccountName(profileData.full_name);
         setProfile({
           full_name: profileData.full_name || "",
           cpf: profileData.cpf || "",
           phone: profileData.phone || "",
           avatar_url: profileData.avatar_url,
+          is_test_account: isTest,
         });
       }
 
-      // Fetch instrutor data
       const { data: instrutorResult, error: instrutorError } = await supabase
         .from("instrutores")
         .select("*")
@@ -92,7 +98,6 @@ export default function InstrutorPerfil() {
           total_aulas: instrutorResult.total_aulas || 0,
         });
 
-        // Fetch veiculo data
         const { data: veiculoResult, error: veiculoError } = await supabase
           .from("veiculos")
           .select("*")
@@ -135,7 +140,24 @@ export default function InstrutorPerfil() {
       .replace(/(-\d{4})\d+?$/, "$1");
   };
 
+  const handleNameChange = (value: string) => {
+    setProfile({ ...profile, full_name: value });
+    const validation = validateRealName(value);
+    setNameError(validation.isValid ? null : validation.message || null);
+  };
+
   const handleSave = async () => {
+    const validation = validateRealName(profile.full_name);
+    if (!validation.isValid) {
+      setNameError(validation.message || "Nome inválido");
+      toast({
+        variant: "destructive",
+        title: "Nome inválido",
+        description: validation.message,
+      });
+      return;
+    }
+
     setSaving(true);
     
     try {
@@ -149,6 +171,11 @@ export default function InstrutorPerfil() {
         .eq("id", user!.id);
 
       if (error) throw error;
+
+      setProfile(prev => ({
+        ...prev,
+        is_test_account: isTestAccountName(profile.full_name)
+      }));
 
       toast({
         title: "Perfil atualizado!",
@@ -167,10 +194,20 @@ export default function InstrutorPerfil() {
     }
   };
 
+  const handlePhotoUploaded = (url: string) => {
+    setProfile(prev => ({ ...prev, avatar_url: url }));
+  };
+
   const handleLogout = async () => {
     await signOut();
     navigate("/");
   };
+
+  // Check if instructor is verified (has real name, photo, and credentials)
+  const isVerified = !profile.is_test_account && 
+    !!profile.avatar_url && 
+    !profile.avatar_url.includes("placeholder") &&
+    !!instrutorData?.credencial_detran;
 
   if (loading) {
     return (
@@ -183,7 +220,7 @@ export default function InstrutorPerfil() {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="bg-secondary text-secondary-foreground px-6 pt-6 pb-16 safe-top">
+      <header className="bg-secondary text-secondary-foreground px-6 pt-6 pb-20 safe-top">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <button
@@ -199,29 +236,44 @@ export default function InstrutorPerfil() {
       </header>
 
       {/* Profile Card */}
-      <div className="px-6 -mt-10">
+      <div className="px-6 -mt-14">
         <div className="max-w-md mx-auto">
           <div className="bg-card rounded-3xl shadow-elevated p-6">
-            {/* Avatar */}
+            {/* Photo Upload */}
             <div className="flex flex-col items-center mb-6">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                  {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-10 h-10 text-muted-foreground" />
-                  )}
-                </div>
-                <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center shadow-lg">
-                  <Camera className="w-4 h-4" />
-                </button>
-              </div>
+              <ProfilePhotoUpload
+                userId={user!.id}
+                currentPhotoUrl={profile.avatar_url}
+                onPhotoUploaded={handlePhotoUploaded}
+                userType="instrutor"
+                isTestAccount={profile.is_test_account}
+              />
+              
               <h2 className="mt-4 text-xl font-bold text-foreground">
                 {profile.full_name || "Instrutor"}
               </h2>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
+              
+              {/* Badges */}
+              <div className="flex items-center gap-2 mt-3">
+                {profile.is_test_account ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
+                    <AlertTriangle className="w-3 h-3" />
+                    Conta de Teste
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-3 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium">
+                      Instrutor MEI
+                    </div>
+                    <VerifiedBadge isVerified={isVerified} size="sm" />
+                  </>
+                )}
+              </div>
+
+              {/* Rating */}
               {instrutorData && (
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-3">
                   <span className="text-amber-500 text-lg">★</span>
                   <span className="font-semibold text-foreground">{instrutorData.nota_media.toFixed(1)}</span>
                   <span className="text-sm text-muted-foreground">({instrutorData.total_aulas} aulas)</span>
@@ -243,7 +295,10 @@ export default function InstrutorPerfil() {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setEditing(false)}
+                  onClick={() => {
+                    setEditing(false);
+                    setNameError(null);
+                  }}
                 >
                   Cancelar
                 </Button>
@@ -251,7 +306,7 @@ export default function InstrutorPerfil() {
                   variant="hero-secondary"
                   className="flex-1"
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || !!nameError}
                 >
                   {saving ? "Salvando..." : "Salvar"}
                   <Save className="w-4 h-4 ml-2" />
@@ -263,17 +318,27 @@ export default function InstrutorPerfil() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
-                  Nome completo
+                  Nome completo *
                 </label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     value={profile.full_name}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     disabled={!editing}
-                    className="h-12 pl-12 rounded-xl"
+                    placeholder="Seu nome real completo"
+                    className={cn(
+                      "h-12 pl-12 rounded-xl",
+                      nameError && editing && "border-destructive focus-visible:ring-destructive"
+                    )}
                   />
                 </div>
+                {nameError && editing && (
+                  <p className="mt-1.5 text-xs text-destructive flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {nameError}
+                  </p>
+                )}
               </div>
 
               <div>
