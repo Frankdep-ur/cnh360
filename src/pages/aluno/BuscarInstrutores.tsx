@@ -177,8 +177,9 @@ export default function BuscarInstrutores() {
     : filters;
 
   const filteredInstructors = instructors.filter((instructor) => {
-    // No modo atual, filtrar apenas instrutores de CFC (não MEI)
-    if (modo === "atual" && instructor.isMEI) return false;
+    // Para testes, mostrar todos os instrutores independente do modo
+    // TODO: Restaurar filtro de modo quando sair de testes
+    // if (modo === "atual" && instructor.isMEI) return false;
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
