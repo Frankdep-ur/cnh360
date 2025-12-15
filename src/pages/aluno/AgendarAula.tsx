@@ -111,8 +111,8 @@ export default function AgendarAula() {
       setInstructor({
         id: id!,
         user_id: id!, // Will get the real user_id when creating the lesson
-        name: "Instrutor MEI",
-        photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+        name: cacheData.nome || "Instrutor",
+        photo: cacheData.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
         price: Number(cacheData.preco_hora) || 80,
         car: carType,
         email: null,
