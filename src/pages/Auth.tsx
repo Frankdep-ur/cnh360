@@ -13,8 +13,9 @@ const emailSchema = z.string().email("Email inválido");
 const passwordSchema = z.string().min(6, "Senha deve ter no mínimo 6 caracteres");
 const nameSchema = z.string().min(2, "Nome deve ter no mínimo 2 caracteres");
 
-type UserType = "aluno" | "instrutor" | "autoescola";
+type UserType = "aluno" | "instrutor" | "autoescola" | null;
 type AuthMode = "login" | "signup";
+type Step = "select-type" | "form";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -22,8 +23,9 @@ export default function Auth() {
   const { toast } = useToast();
   const { user, signIn, signUp, loading: authLoading } = useAuth();
   
-  const [userType, setUserType] = useState<UserType>("aluno");
+  const [userType, setUserType] = useState<UserType>(null);
   const [mode, setMode] = useState<AuthMode>("login");
+  const [step, setStep] = useState<Step>("select-type");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -37,6 +39,7 @@ export default function Auth() {
     const type = params.get("type");
     if (type === "aluno" || type === "instrutor" || type === "autoescola") {
       setUserType(type);
+      setStep("form");
     }
   }, [location.search]);
 
@@ -67,7 +70,9 @@ export default function Auth() {
       }
       
       // No registration found, redirect to onboarding
-      navigate(`/onboarding/${userType}`, { replace: true });
+      if (userType) {
+        navigate(`/onboarding/${userType}`, { replace: true });
+      }
     };
     
     checkExistingRegistration();
@@ -95,6 +100,20 @@ export default function Auth() {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSelectType = (type: "aluno" | "instrutor" | "autoescola") => {
+    setUserType(type);
+    setStep("form");
+  };
+
+  const handleBack = () => {
+    if (step === "form") {
+      setStep("select-type");
+      setUserType(null);
+    } else {
+      navigate("/");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -169,13 +188,117 @@ export default function Auth() {
     );
   }
 
+  // Step 1: Select user type
+  if (step === "select-type") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <header className="px-6 pt-6 pb-4 safe-top">
+          <div className="max-w-md mx-auto flex items-center gap-4">
+            <button
+              onClick={() => navigate("/")}
+              className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-foreground">
+              {mode === "login" ? "Entrar" : "Criar conta"}
+            </h1>
+          </div>
+        </header>
+
+        <div className="flex-1 px-6 pb-8 flex flex-col justify-center">
+          <div className="max-w-md mx-auto w-full">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-foreground mb-2">
+                Selecione seu perfil
+              </h2>
+              <p className="text-muted-foreground">
+                Escolha como você quer usar o app
+              </p>
+            </div>
+
+            {/* User Type Cards */}
+            <div className="space-y-4">
+              <button
+                onClick={() => handleSelectType("aluno")}
+                className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-border hover:border-primary bg-card hover:bg-primary/5 transition-all"
+              >
+                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Car className="w-7 h-7 text-primary" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-foreground text-lg">Sou Aluno</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Quero aprender a dirigir e tirar minha CNH
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleSelectType("instrutor")}
+                className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-border hover:border-secondary bg-card hover:bg-secondary/5 transition-all"
+              >
+                <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center">
+                  <GraduationCap className="w-7 h-7 text-secondary" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-foreground text-lg">Sou Instrutor</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Quero dar aulas e gerenciar meus alunos
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleSelectType("autoescola")}
+                className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-border hover:border-emerald-500 bg-card hover:bg-emerald-500/5 transition-all"
+              >
+                <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <Building2 className="w-7 h-7 text-emerald-500" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-foreground text-lg">Sou Autoescola</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Quero gerenciar minha autoescola e alunos
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Toggle Mode */}
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {mode === "login" ? (
+                  <>
+                    Não tem conta?{" "}
+                    <span className="font-semibold text-primary">Criar agora</span>
+                  </>
+                ) : (
+                  <>
+                    Já tem conta?{" "}
+                    <span className="font-semibold text-primary">Entrar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 2: Auth form
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="px-6 pt-6 pb-4 safe-top">
         <div className="max-w-md mx-auto flex items-center gap-4">
           <button
-            onClick={() => navigate("/")}
+            onClick={handleBack}
             className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -188,76 +311,26 @@ export default function Auth() {
 
       <div className="flex-1 px-6 pb-8">
         <div className="max-w-md mx-auto">
-          {/* User Type Selector */}
-          <div className="grid grid-cols-3 gap-2 mb-8">
-            <button
-              onClick={() => setUserType("aluno")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
-                userType === "aluno"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center",
-                userType === "aluno" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              )}>
-                <Car className="w-5 h-5" />
-              </div>
-              <span className={cn(
-                "font-medium text-sm",
-                userType === "aluno" ? "text-primary" : "text-muted-foreground"
-              )}>
-                Aluno
-              </span>
-            </button>
+          {/* Selected Type Badge */}
+          <div className="flex justify-center mb-6">
+            <div className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full",
+              userType === "aluno" ? "bg-primary/10 text-primary" :
+              userType === "instrutor" ? "bg-secondary/10 text-secondary" :
+              "bg-emerald-500/10 text-emerald-500"
+            )}>
+              {userType === "aluno" && <Car className="w-4 h-4" />}
+              {userType === "instrutor" && <GraduationCap className="w-4 h-4" />}
+              {userType === "autoescola" && <Building2 className="w-4 h-4" />}
+              <span className="font-medium text-sm capitalize">{userType}</span>
+            </div>
+          </div>
 
-            <button
-              onClick={() => setUserType("instrutor")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
-                userType === "instrutor"
-                  ? "border-secondary bg-secondary/5"
-                  : "border-border hover:border-secondary/50"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center",
-                userType === "instrutor" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
-              )}>
-                <GraduationCap className="w-5 h-5" />
-              </div>
-              <span className={cn(
-                "font-medium text-sm",
-                userType === "instrutor" ? "text-secondary" : "text-muted-foreground"
-              )}>
-                Instrutor
-              </span>
-            </button>
-
-            <button
-              onClick={() => setUserType("autoescola")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all",
-                userType === "autoescola"
-                  ? "border-emerald-500 bg-emerald-500/5"
-                  : "border-border hover:border-emerald-500/50"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center",
-                userType === "autoescola" ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"
-              )}>
-                <Building2 className="w-5 h-5" />
-              </div>
-              <span className={cn(
-                "font-medium text-sm",
-                userType === "autoescola" ? "text-emerald-500" : "text-muted-foreground"
-              )}>
-                Autoescola
-              </span>
-            </button>
+          {/* Form Title */}
+          <div className="text-center mb-6">
+            <h2 className="text-xl font-bold text-foreground">
+              {mode === "signup" ? "Informe seus dados" : "Entre na sua conta"}
+            </h2>
           </div>
 
           {/* Auth Form */}
