@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, SlidersHorizontal, MapPin, X, Leaf, Building2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, SlidersHorizontal, MapPin, X, Leaf, Building2, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { IndicadorModo } from "@/components/transicao/IndicadorModo";
 import { useModoTransicao } from "@/contexts/ModoTransicaoContext";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 const filters = [
   { id: "disponivel", label: "Disponível agora" },
@@ -24,15 +25,32 @@ const filtersNovaLei = [
   { id: "carro_proprio", label: "Aceita carro próprio" },
 ];
 
-const instructors = [
+interface InstructorData {
+  id: string;
+  name: string;
+  photo: string;
+  rating: number;
+  reviews: number;
+  price: number;
+  distance: string;
+  carType: string;
+  available: boolean;
+  verified: boolean;
+  isMEI: boolean;
+  aceitaCarroProprio: boolean;
+  tags: string[];
+  email: string | null;
+}
+
+// Mock data fallback for demo
+const mockInstructors: InstructorData[] = [
   {
-    id: "1",
+    id: "mock-1",
     name: "Carlos Silva",
     photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
     rating: 4.9,
     reviews: 127,
     price: 80,
-    priceNovaLei: 60,
     distance: "1.2 km",
     carType: "VW Polo - Automático",
     available: true,
@@ -40,70 +58,23 @@ const instructors = [
     isMEI: true,
     aceitaCarroProprio: true,
     tags: ["Paciente", "Pontual", "Experiente"],
+    email: null,
   },
   {
-    id: "2",
+    id: "mock-2",
     name: "Ana Rodrigues",
     photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face",
     rating: 4.8,
     reviews: 89,
     price: 75,
-    priceNovaLei: 55,
     distance: "2.5 km",
     carType: "Fiat Argo - Manual",
     available: true,
     verified: true,
-    isMEI: false,
-    aceitaCarroProprio: false,
+    isMEI: true,
+    aceitaCarroProprio: true,
     tags: ["Instrutora mulher", "Calma", "Didática"],
-  },
-  {
-    id: "3",
-    name: "Roberto Almeida",
-    photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face",
-    rating: 4.7,
-    reviews: 203,
-    price: 70,
-    priceNovaLei: 50,
-    distance: "3.1 km",
-    carType: "Chevrolet Onix - Manual",
-    available: false,
-    verified: true,
-    isMEI: true,
-    aceitaCarroProprio: true,
-    tags: ["Veterano", "Aulas à noite"],
-  },
-  {
-    id: "4",
-    name: "Fernanda Costa",
-    photo: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face",
-    rating: 5.0,
-    reviews: 45,
-    price: 85,
-    priceNovaLei: 65,
-    distance: "0.8 km",
-    carType: "Toyota Yaris - Automático",
-    available: true,
-    verified: true,
-    isMEI: true,
-    aceitaCarroProprio: true,
-    tags: ["Instrutora mulher", "Fim de semana", "Ar condicionado"],
-  },
-  {
-    id: "5",
-    name: "Marcos Oliveira",
-    photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face",
-    rating: 4.6,
-    reviews: 78,
-    price: 65,
-    priceNovaLei: 45,
-    distance: "1.8 km",
-    carType: "Hyundai HB20 - Manual",
-    available: true,
-    verified: true,
-    isMEI: false,
-    aceitaCarroProprio: false,
-    tags: ["CFC Tradicional", "Experiente"],
+    email: null,
   },
 ];
 
@@ -111,7 +82,86 @@ export default function BuscarInstrutores() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [instructors, setInstructors] = useState<InstructorData[]>([]);
+  const [loading, setLoading] = useState(true);
   const { modo, config, isSP } = useModoTransicao();
+
+  useEffect(() => {
+    fetchInstructors();
+  }, []);
+
+  async function fetchInstructors() {
+    try {
+      setLoading(true);
+
+      // Fetch from public cache
+      const { data: cacheData, error: cacheError } = await supabase
+        .from("instrutores_publico_cache")
+        .select("*")
+        .eq("ativo", true);
+
+      if (cacheError) {
+        console.error("Error fetching instructors:", cacheError);
+        // Use mock data as fallback
+        setInstructors(mockInstructors);
+        return;
+      }
+
+      if (!cacheData || cacheData.length === 0) {
+        console.log("No instructors found in cache, using mock data");
+        setInstructors(mockInstructors);
+        return;
+      }
+
+      // Transform data to UI format
+      const formattedInstructors: InstructorData[] = await Promise.all(
+        cacheData.map(async (inst) => {
+          // Get vehicle info
+          const { data: veiculoData } = await supabase.rpc(
+            "get_vehicle_display_info",
+            { p_instrutor_id: inst.id }
+          );
+
+          const veiculo = veiculoData && veiculoData.length > 0
+            ? veiculoData[0]
+            : null;
+
+          const carType = veiculo
+            ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
+            : "Veículo não informado";
+
+          return {
+            id: inst.id,
+            name: `Instrutor MEI`,
+            photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+            rating: Number(inst.nota_media) || 5.0,
+            reviews: inst.total_avaliacoes || 0,
+            price: Number(inst.preco_hora) || 80,
+            distance: `${inst.raio_atendimento_km || 10} km`,
+            carType,
+            available: true,
+            verified: true,
+            isMEI: true,
+            aceitaCarroProprio: true,
+            tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
+            email: null,
+          };
+        })
+      );
+
+      // Combine real data with mock if needed for demo
+      const combinedInstructors = formattedInstructors.length > 0 
+        ? formattedInstructors 
+        : mockInstructors;
+      
+      setInstructors(combinedInstructors);
+    } catch (err) {
+      console.error("Error in fetchInstructors:", err);
+      setInstructors(mockInstructors);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const toggleFilter = (filterId: string) => {
     setActiveFilters((prev) =>
@@ -304,33 +354,40 @@ export default function BuscarInstrutores() {
       {/* Results */}
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto">
-          <p className="text-sm text-muted-foreground mb-4">
-            {filteredInstructors.length} instrutor{filteredInstructors.length !== 1 ? "es" : ""} encontrado{filteredInstructors.length !== 1 ? "s" : ""}
-            {modo === "nova_lei" && " • inclui MEIs"}
-          </p>
-
-          <div className="space-y-4">
-            {filteredInstructors.map((instructor) => (
-              <InstructorCard 
-                key={instructor.id} 
-                {...instructor}
-                price={modo === "nova_lei" ? instructor.priceNovaLei : instructor.price}
-                showMEIBadge={modo === "nova_lei" && instructor.isMEI}
-                showCarroProprio={modo === "nova_lei" && instructor.aceitaCarroProprio}
-              />
-            ))}
-          </div>
-
-          {filteredInstructors.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-semibold text-foreground mb-2">Nenhum instrutor encontrado</h3>
-              <p className="text-sm text-muted-foreground">
-                Tente ajustar os filtros ou buscar por outro termo
-              </p>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                {filteredInstructors.length} instrutor{filteredInstructors.length !== 1 ? "es" : ""} encontrado{filteredInstructors.length !== 1 ? "s" : ""}
+                {modo === "nova_lei" && " • inclui MEIs"}
+              </p>
+
+              <div className="space-y-4">
+                {filteredInstructors.map((instructor) => (
+                  <InstructorCard 
+                    key={instructor.id} 
+                    {...instructor}
+                    showMEIBadge={modo === "nova_lei" && instructor.isMEI}
+                    showCarroProprio={modo === "nova_lei" && instructor.aceitaCarroProprio}
+                  />
+                ))}
+              </div>
+
+              {filteredInstructors.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-2">Nenhum instrutor encontrado</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Tente ajustar os filtros ou buscar por outro termo
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

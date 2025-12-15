@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.lesson-reminders]
 verify_jwt = false
+
+[functions.send-lesson-notification]
+verify_jwt = false

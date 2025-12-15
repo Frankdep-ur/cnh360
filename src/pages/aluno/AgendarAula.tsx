@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -8,18 +8,15 @@ import {
   CreditCard, 
   Check,
   ChevronRight,
-  Wallet
+  Wallet,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-
-const instructor = {
-  name: "Carlos Silva",
-  photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
-  price: 80,
-  car: "VW Polo 2023 - Automático",
-};
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const paymentMethods = [
   { id: "pix", label: "PIX", icon: "💰", discount: 5 },
@@ -27,18 +24,103 @@ const paymentMethods = [
   { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150 },
 ];
 
+interface InstructorData {
+  id: string;
+  user_id: string;
+  name: string;
+  photo: string;
+  price: number;
+  car: string;
+  email: string | null;
+}
+
 export default function AgendarAula() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const day = searchParams.get("day") || "Seg";
   const time = searchParams.get("time") || "14:00";
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const [step, setStep] = useState(1);
   const [duration, setDuration] = useState(1);
   const [useOwnCar, setUseOwnCar] = useState(false);
   const [meetingPoint, setMeetingPoint] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [instructor, setInstructor] = useState<InstructorData>({
+    id: "",
+    user_id: "",
+    name: "Instrutor",
+    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+    price: 80,
+    car: "Veículo não informado",
+    email: null,
+  });
+
+  useEffect(() => {
+    if (id) {
+      fetchInstructorData();
+    }
+  }, [id]);
+
+  async function fetchInstructorData() {
+    try {
+      // Check if it's a mock ID
+      if (id?.startsWith("mock-")) {
+        // Use mock data
+        setInstructor({
+          id: id,
+          user_id: "mock-user",
+          name: "Carlos Silva",
+          photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+          price: 80,
+          car: "VW Polo 2023 - Automático",
+          email: null,
+        });
+        return;
+      }
+
+      // Get instructor from cache
+      const { data: cacheData, error: cacheError } = await supabase
+        .from("instrutores_publico_cache")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (cacheError) {
+        console.error("Error fetching instructor:", cacheError);
+        return;
+      }
+
+      // Get vehicle info
+      const { data: veiculoData } = await supabase.rpc(
+        "get_vehicle_display_info",
+        { p_instrutor_id: id }
+      );
+
+      const veiculo = veiculoData && veiculoData.length > 0
+        ? veiculoData[0]
+        : null;
+
+      const carType = veiculo
+        ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
+        : "Veículo não informado";
+
+      setInstructor({
+        id: id!,
+        user_id: id!, // Will get the real user_id when creating the lesson
+        name: "Instrutor MEI",
+        photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+        price: Number(cacheData.preco_hora) || 80,
+        car: carType,
+        email: null,
+      });
+    } catch (err) {
+      console.error("Error in fetchInstructorData:", err);
+    }
+  }
 
   const basePrice = instructor.price * duration;
   const carDiscount = useOwnCar ? basePrice * 0.15 : 0;
@@ -51,13 +133,176 @@ export default function AgendarAula() {
     return false;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 2) {
       setStep(step + 1);
     } else {
-      navigate("/aluno/aula-confirmada");
+      await createLesson();
     }
   };
+
+  async function createLesson() {
+    if (!user) {
+      toast({
+        title: "Login necessário",
+        description: "Faça login para agendar uma aula.",
+        variant: "destructive",
+      });
+      navigate("/auth?type=aluno");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get aluno_id for this user
+      const { data: alunoData, error: alunoError } = await supabase
+        .from("alunos")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (alunoError) {
+        console.error("Error fetching aluno:", alunoError);
+        toast({
+          title: "Erro",
+          description: "Complete seu cadastro de aluno primeiro.",
+          variant: "destructive",
+        });
+        navigate("/onboarding/aluno");
+        return;
+      }
+
+      // Get the real instrutor_id (not from cache)
+      let realInstrutorId = instructor.id;
+      let instrutorEmail: string | null = null;
+      let instrutorUserId: string | null = null;
+
+      // If it's not a mock, get the real instructor data
+      if (!instructor.id.startsWith("mock-")) {
+        const { data: instrutorData, error: instrutorError } = await supabase
+          .from("instrutores")
+          .select("id, user_id")
+          .eq("id", instructor.id)
+          .single();
+
+        if (instrutorError || !instrutorData) {
+          console.error("Error fetching real instructor:", instrutorError);
+          toast({
+            title: "Erro",
+            description: "Instrutor não encontrado.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        realInstrutorId = instrutorData.id;
+        instrutorUserId = instrutorData.user_id;
+
+        // Get instructor's email from auth
+        // Note: We can't access auth.users directly, so we'll try to get from profiles
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", instrutorUserId)
+          .single();
+
+        // For demo, we'll use a placeholder email
+        instrutorEmail = null; // In production, get from user's email
+      }
+
+      // Calculate scheduled date/time
+      const scheduledDate = new Date();
+      const [hours, minutes] = time.split(":").map(Number);
+      scheduledDate.setHours(hours, minutes, 0, 0);
+      
+      // Add day offset based on selected day
+      const daysMap: { [key: string]: number } = {
+        "Dom": 0, "Seg": 1, "Ter": 2, "Qua": 3, "Qui": 4, "Sex": 5, "Sáb": 6
+      };
+      const targetDay = daysMap[day] ?? 1;
+      const currentDay = scheduledDate.getDay();
+      const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
+      scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
+
+      // Create the lesson
+      const { data: aulaData, error: aulaError } = await supabase
+        .from("aulas")
+        .insert({
+          aluno_id: alunoData.id,
+          instrutor_id: realInstrutorId,
+          data_hora: scheduledDate.toISOString(),
+          duracao_minutos: duration * 60,
+          ponto_encontro: meetingPoint,
+          valor: totalPrice,
+          usa_carro_aluno: useOwnCar,
+          status: "pendente",
+        })
+        .select()
+        .single();
+
+      if (aulaError) {
+        console.error("Error creating lesson:", aulaError);
+        throw aulaError;
+      }
+
+      console.log("Lesson created:", aulaData);
+
+      // Get student name for notification
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+
+      const alunoNome = profileData?.full_name || "Aluno";
+
+      // Send notification to instructor via Edge Function
+      try {
+        const { data: notifData, error: notifError } = await supabase.functions.invoke(
+          "send-lesson-notification",
+          {
+            body: {
+              aula_id: aulaData.id,
+              aluno_nome: alunoNome,
+              instrutor_id: realInstrutorId,
+              instrutor_email: instrutorEmail,
+              instrutor_nome: instructor.name,
+              data_hora: scheduledDate.toISOString(),
+              duracao_minutos: duration * 60,
+              ponto_encontro: meetingPoint,
+              valor: totalPrice,
+              usa_carro_aluno: useOwnCar,
+            },
+          }
+        );
+
+        if (notifError) {
+          console.error("Error sending notification:", notifError);
+        } else {
+          console.log("Notification sent:", notifData);
+        }
+      } catch (notifErr) {
+        console.error("Error invoking notification function:", notifErr);
+        // Don't fail the whole operation if notification fails
+      }
+
+      toast({
+        title: "Aula solicitada!",
+        description: "O instrutor receberá sua solicitação.",
+      });
+
+      navigate("/aluno/aula-confirmada");
+    } catch (err: any) {
+      console.error("Error in createLesson:", err);
+      toast({
+        title: "Erro ao agendar aula",
+        description: err.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -277,10 +522,16 @@ export default function AgendarAula() {
             variant="hero"
             size="xl"
             className="w-full"
-            disabled={!canProceed()}
+            disabled={!canProceed() || loading}
             onClick={handleNext}
           >
-            {step === 2 ? `Pagar R$ ${totalPrice.toFixed(2)}` : "Continuar"}
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : step === 2 ? (
+              `Solicitar Aula - R$ ${totalPrice.toFixed(2)}`
+            ) : (
+              "Continuar"
+            )}
           </Button>
         </div>
       </div>
