@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   ChevronRight, 
@@ -16,6 +16,8 @@ import {
   Leaf,
   Building2
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -39,6 +41,19 @@ const nextLesson = {
 export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
   const { modo, config, isSP, diasRestantes } = useModoTransicao();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<{ full_name: string | null } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    }
+  }, [user]);
   
   // Valores baseados no modo
   const requiredHours = config.horasPraticasMinimas;
@@ -92,7 +107,7 @@ export default function AlunoDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-primary-foreground/80 text-sm">Olá,</p>
-              <h1 className="text-xl font-bold">Maria Santos 👋</h1>
+              <h1 className="text-xl font-bold">{profile?.full_name || 'Aluno'} 👋</h1>
             </div>
             <NotificationBell />
           </div>

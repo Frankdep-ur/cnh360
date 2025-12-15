@@ -74,9 +74,22 @@ export default function InstrutorDashboard() {
     isOnline
   );
 
+  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('full_name, avatar_url')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    }
+  }, [user]);
+
   const instrutor = {
-    nome: "Carlos Silva",
-    foto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    nome: profile?.full_name || "Instrutor",
+    foto: profile?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
     nota: 4.9,
     totalAvaliacoes: 127,
     aulasCompletadas: 89,
