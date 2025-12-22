@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface GeolocationState {
   latitude: number | null;
@@ -13,20 +14,24 @@ interface UseGeolocationReturn extends GeolocationState {
   clearLocation: () => void;
 }
 
-// Mock geocoding - in production would use Google Maps Geocoding API
-const mockReverseGeocode = async (lat: number, lng: number): Promise<string> => {
-  // Simulating Araçatuba addresses
-  const addresses = [
-    "Rua São Paulo, 1234 - Centro, Araçatuba - SP",
-    "Av. Brasil, 567 - Vila Industrial, Araçatuba - SP",
-    "Rua Marechal Deodoro, 890 - Jardim Sumaré, Araçatuba - SP",
-    "Av. dos Bandeirantes, 321 - Centro, Araçatuba - SP",
-    "Rua Floriano Peixoto, 456 - Vila Mendonça, Araçatuba - SP",
-  ];
-  
-  // Return a pseudo-random address based on coordinates
-  const index = Math.floor((lat + lng) * 1000) % addresses.length;
-  return addresses[Math.abs(index)];
+// Real reverse geocoding using Google Maps API via Edge Function
+const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('geocode-address', {
+      body: { latitude: lat, longitude: lng }
+    });
+
+    if (error) {
+      console.error('Geocode error:', error);
+      throw error;
+    }
+
+    return data.address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  } catch (err) {
+    console.error('Geocoding failed, using coordinates:', err);
+    // Fallback to coordinates if API fails
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  }
 };
 
 export function useGeolocation(): UseGeolocationReturn {
@@ -52,7 +57,7 @@ export function useGeolocation(): UseGeolocationReturn {
           const { latitude, longitude } = position.coords;
           
           try {
-            const address = await mockReverseGeocode(latitude, longitude);
+            const address = await reverseGeocode(latitude, longitude);
             
             setState({
               latitude,

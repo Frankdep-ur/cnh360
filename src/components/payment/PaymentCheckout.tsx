@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { CreditCard, QrCode, Check, Loader2, Shield, Clock } from 'lucide-react';
+import { CreditCard, QrCode, Check, Loader2, Shield, Clock, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PaymentCheckoutProps {
   open: boolean;
@@ -13,11 +14,13 @@ interface PaymentCheckoutProps {
   amount: number;
   duration: number;
   instructorName: string;
+  instructorId?: string;
+  aulaId?: string;
   lessonDate: string;
 }
 
 type PaymentMethod = 'pix' | 'card';
-type PaymentStatus = 'idle' | 'processing' | 'success';
+type PaymentStatus = 'idle' | 'processing' | 'redirecting' | 'success';
 
 export function PaymentCheckout({
   open,
@@ -26,6 +29,8 @@ export function PaymentCheckout({
   amount,
   duration,
   instructorName,
+  instructorId,
+  aulaId,
   lessonDate,
 }: PaymentCheckoutProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('pix');
@@ -34,19 +39,47 @@ export function PaymentCheckout({
   const handlePayment = async () => {
     setStatus('processing');
     
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setStatus('success');
-    toast.success('Pagamento confirmado!', {
-      description: `R$ ${amount.toFixed(2)} - ${selectedMethod === 'pix' ? 'PIX' : 'Cartão'}`,
-    });
-    
-    setTimeout(() => {
-      onPaymentComplete?.(selectedMethod);
-      onClose();
+    try {
+      const { data, error } = await supabase.functions.invoke('create-lesson-payment', {
+        body: {
+          amount,
+          duration,
+          instructorName,
+          instructorId,
+          aulaId,
+          paymentMethod: selectedMethod,
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        setStatus('redirecting');
+        toast.success('Redirecionando para pagamento...', {
+          description: 'Você será levado ao checkout seguro do Stripe',
+        });
+        
+        // Open Stripe checkout in new tab
+        window.open(data.url, '_blank');
+        
+        // Reset and close after a delay
+        setTimeout(() => {
+          onPaymentComplete?.(selectedMethod);
+          onClose();
+          setStatus('idle');
+        }, 2000);
+      } else {
+        throw new Error('URL de pagamento não retornada');
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast.error('Erro ao processar pagamento', {
+        description: 'Tente novamente ou escolha outro método',
+      });
       setStatus('idle');
-    }, 1500);
+    }
   };
 
   const pixDiscount = amount * 0.05;
@@ -101,11 +134,13 @@ export function PaymentCheckout({
             
             <button
               onClick={() => setSelectedMethod('pix')}
+              disabled={status !== 'idle'}
               className={cn(
                 "w-full p-4 rounded-xl border-2 transition-all text-left",
                 selectedMethod === 'pix'
                   ? "border-[#4CAF50] bg-[#4CAF50]/5"
-                  : "border-border hover:border-muted-foreground/50"
+                  : "border-border hover:border-muted-foreground/50",
+                status !== 'idle' && "opacity-50 cursor-not-allowed"
               )}
             >
               <div className="flex items-center justify-between">
@@ -129,11 +164,13 @@ export function PaymentCheckout({
 
             <button
               onClick={() => setSelectedMethod('card')}
+              disabled={status !== 'idle'}
               className={cn(
                 "w-full p-4 rounded-xl border-2 transition-all text-left",
                 selectedMethod === 'card'
                   ? "border-primary bg-primary/5"
-                  : "border-border hover:border-muted-foreground/50"
+                  : "border-border hover:border-muted-foreground/50",
+                status !== 'idle' && "opacity-50 cursor-not-allowed"
               )}
             >
               <div className="flex items-center justify-between">
@@ -156,23 +193,15 @@ export function PaymentCheckout({
             </button>
           </div>
 
-          {/* PIX QR Code (shown when PIX selected) */}
-          {selectedMethod === 'pix' && (
-            <Card className="p-4 bg-muted/50">
-              <div className="flex flex-col items-center">
-                <div className="w-32 h-32 bg-white rounded-lg p-2 mb-3">
-                  {/* Mock QR Code */}
-                  <div className="w-full h-full bg-gradient-to-br from-foreground/5 to-foreground/20 rounded flex items-center justify-center">
-                    <QrCode className="w-16 h-16 text-foreground/30" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span>Válido por 10 minutos</span>
-                </div>
-              </div>
-            </Card>
-          )}
+          {/* Info about Stripe checkout */}
+          <Card className="p-4 bg-muted/50">
+            <div className="flex items-center gap-3">
+              <ExternalLink className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Você será redirecionado para o checkout seguro do Stripe para concluir o pagamento
+              </p>
+            </div>
+          </Card>
 
           {/* Price Summary */}
           <div className="space-y-2 pt-2 border-t border-border">
@@ -195,13 +224,18 @@ export function PaymentCheckout({
           {/* Pay Button */}
           <Button
             onClick={handlePayment}
-            disabled={status === 'processing'}
+            disabled={status !== 'idle'}
             className="w-full bg-[#4CAF50] hover:bg-[#45a049] text-white h-12 text-lg"
           >
             {status === 'processing' ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 Processando...
+              </>
+            ) : status === 'redirecting' ? (
+              <>
+                <ExternalLink className="w-5 h-5 mr-2" />
+                Abrindo checkout...
               </>
             ) : (
               <>
