@@ -14,7 +14,9 @@ import {
   Timer,
   FileText,
   Leaf,
-  Building2
+  Building2,
+  CreditCard,
+  Navigation
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,7 +28,11 @@ import { ContadorTransicao } from "@/components/transicao/ContadorTransicao";
 import { IndicadorModo } from "@/components/transicao/IndicadorModo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useModoTransicao } from "@/contexts/ModoTransicaoContext";
+import { LocationShareButton } from "@/components/maps/LocationShareButton";
+import { RouteMapCard } from "@/components/maps/RouteMapCard";
+import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const nextLesson = {
   instructor: "Carlos Silva",
@@ -43,6 +49,10 @@ export default function AlunoDashboard() {
   const { modo, config, isSP, diasRestantes } = useModoTransicao();
   const { user } = useAuth();
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const [locationShared, setLocationShared] = useState(false);
+  const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -357,10 +367,10 @@ export default function AlunoDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
               <div className="flex items-center gap-1">
                 <MapPin className="w-4 h-4" />
-                <span>{nextLesson.location}</span>
+                <span>{sharedLocation?.address || nextLesson.location}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
@@ -368,26 +378,91 @@ export default function AlunoDashboard() {
               </div>
             </div>
 
-            <div className="mt-4 flex gap-3">
-              <Button variant="outline" className="flex-1">
-                Reagendar
-              </Button>
-              <Link to="/aluno/validacao-aula" className="flex-1">
-                <Button 
-                  className={cn(
-                    "w-full",
-                    modo === "nova_lei" 
-                      ? "bg-primary hover:bg-primary/90" 
-                      : "bg-secondary hover:bg-secondary/90"
-                  )}
-                >
-                  Iniciar Aula
-                </Button>
-              </Link>
+            {/* Location Share Section */}
+            {!locationShared ? (
+              <LocationShareButton
+                className="w-full mb-3"
+                onLocationShared={(loc) => {
+                  setLocationShared(true);
+                  setSharedLocation(loc);
+                  toast.success("Localização enviada ao instrutor!");
+                }}
+              />
+            ) : (
+              <RouteMapCard
+                originAddress={sharedLocation?.address || "Sua localização"}
+                destinationAddress={nextLesson.location}
+                distance="3.2 km"
+                eta="8 min"
+                showNavButton={false}
+                className="mb-3"
+              />
+            )}
+
+            {/* Payment and Action Buttons */}
+            <div className="flex gap-3">
+              {!isPaid ? (
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => {
+                      toast.info("Reagendamento solicitado", {
+                        description: "Reembolso de 80% será processado via PIX"
+                      });
+                    }}
+                  >
+                    Reagendar
+                  </Button>
+                  <Button 
+                    onClick={() => setShowPayment(true)}
+                    className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Pagar R$100
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" className="flex-1">
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Ver Rota
+                  </Button>
+                  <Link to="/aluno/validacao-aula" className="flex-1">
+                    <Button 
+                      className={cn(
+                        "w-full",
+                        modo === "nova_lei" 
+                          ? "bg-primary hover:bg-primary/90" 
+                          : "bg-secondary hover:bg-secondary/90"
+                      )}
+                    >
+                      Iniciar Aula
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
+            
+            {isPaid && (
+              <div className="mt-3 p-2 bg-[#4CAF50]/10 rounded-lg text-center">
+                <p className="text-sm text-[#4CAF50] font-medium">✓ Pagamento confirmado</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Payment Checkout Modal */}
+      <PaymentCheckout
+        open={showPayment}
+        onClose={() => setShowPayment(false)}
+        onPaymentComplete={() => setIsPaid(true)}
+        amount={100}
+        duration={60}
+        instructorName={nextLesson.instructor}
+        lessonDate={`${nextLesson.date} às ${nextLesson.time}`}
+      />
 
       {/* Quick Actions */}
       <div className="px-6 mt-6">
