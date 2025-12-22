@@ -482,7 +482,7 @@ export type Database = {
           created_at: string
           external_id: string | null
           id: string
-          instrutor_id: string
+          instrutor_id: string | null
           metodo: Database["public"]["Enums"]["metodo_pagamento"]
           pago_em: string | null
           status: Database["public"]["Enums"]["status_pagamento"]
@@ -497,7 +497,7 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           id?: string
-          instrutor_id: string
+          instrutor_id?: string | null
           metodo: Database["public"]["Enums"]["metodo_pagamento"]
           pago_em?: string | null
           status?: Database["public"]["Enums"]["status_pagamento"]
@@ -512,7 +512,7 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           id?: string
-          instrutor_id?: string
+          instrutor_id?: string | null
           metodo?: Database["public"]["Enums"]["metodo_pagamento"]
           pago_em?: string | null
           status?: Database["public"]["Enums"]["status_pagamento"]

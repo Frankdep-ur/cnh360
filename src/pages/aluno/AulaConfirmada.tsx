@@ -1,18 +1,155 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, Calendar, Clock, MapPin, MessageCircle, Share2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Check, Calendar, Clock, MapPin, MessageCircle, Share2, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
+
+interface LessonData {
+  dataHora: string;
+  duracao: number;
+  pontoEncontro: string | null;
+  instrutorNome: string;
+  instrutorFoto: string | null;
+}
+
+interface PaymentVerification {
+  status: 'paid' | 'unpaid' | 'processing';
+  amount: number;
+  paymentMethod: 'pix' | 'card';
+  lesson?: LessonData;
+  alreadyProcessed?: boolean;
+}
+
+type VerificationState = 'loading' | 'success' | 'error' | 'not_found';
 
 export default function AulaConfirmada() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showContent, setShowContent] = useState(false);
+  const [verificationState, setVerificationState] = useState<VerificationState>('loading');
+  const [paymentData, setPaymentData] = useState<PaymentVerification | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  const sessionId = searchParams.get('session_id');
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!sessionId) {
+      setVerificationState('not_found');
+      setErrorMessage("Nenhuma sessão de pagamento encontrada.");
+      return;
+    }
 
+    verifyPayment(sessionId);
+  }, [sessionId]);
+
+  const verifyPayment = async (sid: string) => {
+    try {
+      setVerificationState('loading');
+      
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { sessionId: sid }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao verificar pagamento');
+      }
+
+      if (data.status === 'paid') {
+        setPaymentData(data as PaymentVerification);
+        setVerificationState('success');
+        setTimeout(() => setShowContent(true), 100);
+        
+        if (data.alreadyProcessed) {
+          toast.info("Este pagamento já foi processado anteriormente.");
+        }
+      } else {
+        setVerificationState('error');
+        setErrorMessage("O pagamento ainda não foi confirmado. Por favor, tente novamente.");
+      }
+    } catch (err) {
+      console.error('Error verifying payment:', err);
+      setVerificationState('error');
+      setErrorMessage(err instanceof Error ? err.message : 'Erro ao verificar pagamento');
+    }
+  };
+
+  const formatPaymentMethod = (method: string) => {
+    return method === 'pix' ? 'PIX' : 'Cartão de Crédito';
+  };
+
+  const formatLessonDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
+  };
+
+  const formatLessonTime = (dateStr: string, duration: number) => {
+    const date = new Date(dateStr);
+    const endDate = new Date(date.getTime() + duration * 60000);
+    const startTime = format(date, "HH:mm");
+    const endTime = format(endDate, "HH:mm");
+    const hours = Math.floor(duration / 60);
+    const minutes = duration % 60;
+    const durationStr = hours > 0 
+      ? minutes > 0 ? `${hours}h${minutes}min` : `${hours} hora${hours > 1 ? 's' : ''}`
+      : `${minutes} minutos`;
+    return `${startTime} - ${endTime} (${durationStr})`;
+  };
+
+  // Loading state
+  if (verificationState === 'loading') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">Verificando pagamento...</h2>
+          <p className="text-muted-foreground">Por favor, aguarde enquanto confirmamos seu pagamento.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error or not found state
+  if (verificationState === 'error' || verificationState === 'not_found') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
+        <div className="max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-destructive" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {verificationState === 'not_found' ? 'Sessão não encontrada' : 'Erro na verificação'}
+          </h1>
+          <p className="text-muted-foreground mb-8">{errorMessage}</p>
+          <div className="space-y-3">
+            {sessionId && (
+              <Button 
+                variant="default" 
+                size="lg" 
+                className="w-full"
+                onClick={() => verifyPayment(sessionId)}
+              >
+                Tentar novamente
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="w-full"
+              onClick={() => navigate("/aluno")}
+            >
+              Voltar ao início
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Success state
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
       <div className={cn(
@@ -29,7 +166,7 @@ export default function AulaConfirmada() {
 
         {/* Message */}
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Aula agendada!
+          Pagamento confirmado!
         </h1>
         <p className="text-muted-foreground mb-8">
           Sua aula prática foi confirmada com sucesso
@@ -40,53 +177,73 @@ export default function AulaConfirmada() {
           "bg-card rounded-3xl p-6 shadow-elevated mb-8 text-left transition-all duration-500 delay-200",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}>
-          <div className="flex items-center gap-4 mb-6">
-            <img
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
-              alt="Carlos Silva"
-              className="w-14 h-14 rounded-xl object-cover"
-            />
+          {paymentData?.lesson && (
+            <>
+              <div className="flex items-center gap-4 mb-6">
+                <img
+                  src={paymentData.lesson.instrutorFoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"}
+                  alt={paymentData.lesson.instrutorNome}
+                  className="w-14 h-14 rounded-xl object-cover"
+                />
+                <div>
+                  <h3 className="font-semibold text-foreground">{paymentData.lesson.instrutorNome}</h3>
+                  <p className="text-sm text-muted-foreground">Instrutor de direção</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data</p>
+                    <p className="font-medium text-foreground capitalize">
+                      {formatLessonDate(paymentData.lesson.dataHora)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Horário</p>
+                    <p className="font-medium text-foreground">
+                      {formatLessonTime(paymentData.lesson.dataHora, paymentData.lesson.duracao)}
+                    </p>
+                  </div>
+                </div>
+
+                {paymentData.lesson.pontoEncontro && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Local</p>
+                      <p className="font-medium text-foreground">{paymentData.lesson.pontoEncontro}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className={cn(
+            "pt-6 border-t border-border flex items-center justify-between",
+            paymentData?.lesson ? "mt-6" : ""
+          )}>
             <div>
-              <h3 className="font-semibold text-foreground">Carlos Silva</h3>
-              <p className="text-sm text-muted-foreground">VW Polo - Automático</p>
+              <span className="text-muted-foreground block text-sm">Total pago</span>
+              <span className="text-xs text-muted-foreground">
+                via {formatPaymentMethod(paymentData?.paymentMethod || 'card')}
+              </span>
             </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Data</p>
-                <p className="font-medium text-foreground">Segunda-feira, 15 de Janeiro</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Horário</p>
-                <p className="font-medium text-foreground">14:00 - 15:00 (1 hora)</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Local</p>
-                <p className="font-medium text-foreground">Av. Brasil, 1234</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-border flex items-center justify-between">
-            <span className="text-muted-foreground">Total pago</span>
-            <span className="text-2xl font-bold text-primary">R$ 76,00</span>
+            <span className="text-2xl font-bold text-primary">
+              R$ {paymentData?.amount?.toFixed(2).replace('.', ',')}
+            </span>
           </div>
         </div>
 

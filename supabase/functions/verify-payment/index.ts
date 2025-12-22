@@ -40,14 +40,81 @@ serve(async (req) => {
       expand: ['payment_intent'],
     });
 
+    const paymentIntentId = typeof session.payment_intent === 'string' 
+      ? session.payment_intent 
+      : session.payment_intent?.id;
+
     logStep("Session retrieved", { 
       status: session.payment_status,
-      paymentIntent: session.payment_intent 
+      paymentIntentId 
     });
 
     if (session.payment_status === 'paid') {
       const metadata = session.metadata || {};
       
+      // Check for idempotency - if payment already exists, return existing data
+      if (paymentIntentId) {
+        const { data: existingPayment } = await supabaseClient
+          .from('pagamentos')
+          .select('*')
+          .eq('external_id', paymentIntentId)
+          .maybeSingle();
+
+        if (existingPayment) {
+          logStep("Payment already exists, returning cached data", { 
+            paymentId: existingPayment.id 
+          });
+          
+          // Fetch additional lesson info if exists
+          let lessonData = null;
+          if (existingPayment.aula_id) {
+            const { data: aula } = await supabaseClient
+              .from('aulas')
+              .select(`
+                *,
+                instrutor:instrutores(
+                  id,
+                  user_id,
+                  preco_hora
+                )
+              `)
+              .eq('id', existingPayment.aula_id)
+              .maybeSingle();
+            
+            if (aula) {
+              // Get instructor profile
+              const { data: instrutorProfile } = await supabaseClient
+                .from('profiles')
+                .select('full_name, avatar_url')
+                .eq('id', aula.instrutor?.user_id)
+                .maybeSingle();
+              
+              lessonData = {
+                dataHora: aula.data_hora,
+                duracao: aula.duracao_minutos,
+                pontoEncontro: aula.ponto_encontro,
+                instrutorNome: instrutorProfile?.full_name || 'Instrutor',
+                instrutorFoto: instrutorProfile?.avatar_url,
+              };
+            }
+          }
+
+          return new Response(
+            JSON.stringify({ 
+              status: 'paid',
+              amount: existingPayment.valor_bruto,
+              paymentMethod: existingPayment.metodo,
+              alreadyProcessed: true,
+              lesson: lessonData,
+            }),
+            { 
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200 
+            }
+          );
+        }
+      }
+
       // Update aula status if aula_id exists
       if (metadata.aula_id) {
         const { error: aulaError } = await supabaseClient
@@ -63,27 +130,84 @@ serve(async (req) => {
       }
 
       // Insert payment record
+      const paymentData = {
+        aula_id: metadata.aula_id || null,
+        aluno_id: metadata.user_id,
+        instrutor_id: metadata.instrutor_id || null,
+        valor_bruto: session.amount_total ? session.amount_total / 100 : 0,
+        taxa_plataforma: metadata.taxa_plataforma ? parseInt(metadata.taxa_plataforma) / 100 : 0,
+        valor_instrutor: metadata.valor_instrutor ? parseInt(metadata.valor_instrutor) / 100 : 0,
+        metodo: metadata.payment_method === 'pix' ? 'pix' : 'cartao_credito',
+        status: 'aprovado',
+        external_id: paymentIntentId,
+        pago_em: new Date().toISOString(),
+      };
+
       const { error: paymentError } = await supabaseClient
         .from('pagamentos')
-        .insert({
-          aula_id: metadata.aula_id || null,
-          aluno_id: metadata.user_id,
-          instrutor_id: metadata.instrutor_id || null,
-          valor_bruto: session.amount_total ? session.amount_total / 100 : 0,
-          taxa_plataforma: metadata.taxa_plataforma ? parseInt(metadata.taxa_plataforma) / 100 : 0,
-          valor_instrutor: metadata.valor_instrutor ? parseInt(metadata.valor_instrutor) / 100 : 0,
-          metodo: metadata.payment_method === 'pix' ? 'pix' : 'cartao_credito',
-          status: 'aprovado',
-          external_id: typeof session.payment_intent === 'string' 
-            ? session.payment_intent 
-            : session.payment_intent?.id,
-          pago_em: new Date().toISOString(),
-        });
+        .insert(paymentData);
 
       if (paymentError) {
+        // Check if it's a unique constraint violation (duplicate)
+        if (paymentError.code === '23505') {
+          logStep("Duplicate payment detected, fetching existing", { paymentIntentId });
+          const { data: existingPayment } = await supabaseClient
+            .from('pagamentos')
+            .select('*')
+            .eq('external_id', paymentIntentId)
+            .maybeSingle();
+
+          if (existingPayment) {
+            return new Response(
+              JSON.stringify({ 
+                status: 'paid',
+                amount: existingPayment.valor_bruto,
+                paymentMethod: existingPayment.metodo,
+                alreadyProcessed: true,
+              }),
+              { 
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+                status: 200 
+              }
+            );
+          }
+        }
         logStep("Error inserting payment", { error: paymentError.message });
       } else {
         logStep("Payment record created");
+      }
+
+      // Fetch lesson info for response
+      let lessonData = null;
+      if (metadata.aula_id) {
+        const { data: aula } = await supabaseClient
+          .from('aulas')
+          .select(`
+            *,
+            instrutor:instrutores(
+              id,
+              user_id,
+              preco_hora
+            )
+          `)
+          .eq('id', metadata.aula_id)
+          .maybeSingle();
+        
+        if (aula) {
+          const { data: instrutorProfile } = await supabaseClient
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', aula.instrutor?.user_id)
+            .maybeSingle();
+          
+          lessonData = {
+            dataHora: aula.data_hora,
+            duracao: aula.duracao_minutos,
+            pontoEncontro: aula.ponto_encontro,
+            instrutorNome: instrutorProfile?.full_name || 'Instrutor',
+            instrutorFoto: instrutorProfile?.avatar_url,
+          };
+        }
       }
 
       return new Response(
@@ -91,6 +215,7 @@ serve(async (req) => {
           status: 'paid',
           amount: session.amount_total ? session.amount_total / 100 : 0,
           paymentMethod: metadata.payment_method,
+          lesson: lessonData,
         }),
         { 
           headers: { ...corsHeaders, "Content-Type": "application/json" },
