@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
+import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,18 +17,37 @@ import {
   Calendar,
   Download,
   Filter,
-  ChevronRight
+  ChevronRight,
+  QrCode,
+  Banknote,
+  Car
 } from "lucide-react";
 
 export default function InstrutorGanhos() {
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+
   const saldo = {
     disponivel: 1037,
     pendente: 480,
     totalMes: 4850,
     taxaPaga: 1358,
-    isPremium: false,
-    taxaAtual: 28,
+    taxaAtual: isPremium ? 18 : 28,
   };
+
+  const proximaAula = {
+    aluno: "Milena Costa",
+    data: "Hoje",
+    hora: "14:00",
+    valor: 100,
+    liquido: isPremium ? 82 : 72,
+  };
+
+  const historicoPixRecebido = [
+    { id: 1, valor: 500, data: "10/12/2025", banco: "Nubank", status: "concluido" },
+    { id: 2, valor: 800, data: "05/12/2025", banco: "Nubank", status: "concluido" },
+    { id: 3, valor: 650, data: "28/11/2025", banco: "Nubank", status: "concluido" },
+  ];
 
   const transacoes = [
     {
@@ -77,8 +98,8 @@ export default function InstrutorGanhos() {
     aulasRealizadas: 89,
     horasTotais: 89,
     ganhoBruto: 6208,
-    taxaTotal: 1358,
-    ganhoLiquido: 4850,
+    taxaTotal: isPremium ? Math.round(6208 * 0.18) : 1358,
+    ganhoLiquido: isPremium ? Math.round(6208 * 0.82) : 4850,
   };
 
   return (
@@ -128,7 +149,7 @@ export default function InstrutorGanhos() {
           </Card>
         </div>
 
-        {!saldo.isPremium && (
+        {!isPremium && (
           <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-xl bg-amber-500/20">
@@ -142,7 +163,11 @@ export default function InstrutorGanhos() {
                 <p className="text-sm text-muted-foreground mt-1">
                   Com Premium (18%), economia de <span className="font-semibold text-primary">R${Math.round(saldo.taxaPaga * 0.36)}</span>!
                 </p>
-                <Button size="sm" className="mt-3 bg-amber-500 hover:bg-amber-600 text-white">
+                <Button 
+                  size="sm" 
+                  className="mt-3 bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={() => setShowPremiumModal(true)}
+                >
                   <Crown className="w-4 h-4 mr-1" />
                   Ativar Premium R$89/mês
                 </Button>
@@ -261,7 +286,66 @@ export default function InstrutorGanhos() {
             ))}
           </TabsContent>
         </Tabs>
+
+        {/* Próxima Aula - Previsão de Ganho */}
+        <Card className="p-4 shadow-card bg-gradient-to-r from-[#4CAF50]/5 to-primary/5 border-[#4CAF50]/20">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-[#4CAF50]/20">
+              <Car className="w-5 h-5 text-[#4CAF50]" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">Próxima Aula</p>
+              <p className="text-xs text-muted-foreground">{proximaAula.data} às {proximaAula.hora}</p>
+            </div>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-background/50 rounded-lg">
+            <div>
+              <p className="text-sm text-muted-foreground">Aluno: {proximaAula.aluno}</p>
+              <p className="text-sm text-muted-foreground">Valor: R$ {proximaAula.valor}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Você recebe</p>
+              <p className="text-xl font-bold text-[#4CAF50]">R$ {proximaAula.liquido}</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Histórico Pix Recebidos */}
+        <Card className="p-4 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-[#4CAF50]" />
+              Histórico Pix Recebidos
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {historicoPixRecebido.map((pix) => (
+              <div key={pix.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="p-2 rounded-full bg-[#4CAF50]/10">
+                  <Banknote className="w-4 h-4 text-[#4CAF50]" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-foreground text-sm">R$ {pix.valor}</p>
+                  <p className="text-xs text-muted-foreground">{pix.data} • {pix.banco}</p>
+                </div>
+                <Badge className="bg-[#4CAF50]/10 text-[#4CAF50] border-0">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Recebido
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
+
+      {/* Premium Modal */}
+      <PremiumActivationModal
+        open={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        onActivate={() => setIsPremium(true)}
+        currentTax={28}
+        taxPaidThisMonth={saldo.taxaPaga}
+      />
 
       <InstructorBottomNav />
     </div>
