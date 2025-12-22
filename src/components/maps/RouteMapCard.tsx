@@ -1,11 +1,15 @@
-import { MapPin, Navigation, Clock, Car } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MapPin, Navigation, Clock, Car, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useRoute } from '@/hooks/useRoute';
 
 interface RouteMapCardProps {
   originAddress: string;
   destinationAddress: string;
+  originCoords?: { lat: number; lng: number };
+  destinationCoords?: { lat: number; lng: number };
   distance?: string;
   eta?: string;
   showNavButton?: boolean;
@@ -16,15 +20,38 @@ interface RouteMapCardProps {
 export function RouteMapCard({
   originAddress,
   destinationAddress,
-  distance = "3.2 km",
-  eta = "8 min",
+  originCoords,
+  destinationCoords,
+  distance: initialDistance,
+  eta: initialEta,
   showNavButton = true,
   onNavigate,
   className,
 }: RouteMapCardProps) {
-  // Mock map image - in production would use Google Maps Embed API
-  const mapImageUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+4CAF50(${-50.4386},${-21.2085}),pin-s+f44336(${-50.4286},${-21.1985})/auto/400x200@2x?access_token=pk.placeholder`;
-  
+  const { route, loading, calculateRoute } = useRoute();
+  const [distance, setDistance] = useState(initialDistance || "Calculando...");
+  const [eta, setEta] = useState(initialEta || "...");
+
+  useEffect(() => {
+    // Calculate route if we have coordinates
+    if (originCoords && destinationCoords) {
+      calculateRoute(originCoords, destinationCoords).then((result) => {
+        if (result) {
+          setDistance(result.distance.text);
+          setEta(`${result.eta_minutes} min`);
+        }
+      });
+    } else if (originAddress && destinationAddress) {
+      // Use addresses directly
+      calculateRoute(originAddress, destinationAddress).then((result) => {
+        if (result) {
+          setDistance(result.distance.text);
+          setEta(`${result.eta_minutes} min`);
+        }
+      });
+    }
+  }, [originCoords, destinationCoords, originAddress, destinationAddress, calculateRoute]);
+
   const handleNavigate = () => {
     // Open Google Maps with directions
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`;
@@ -38,6 +65,11 @@ export function RouteMapCard({
       <div className="relative h-40 bg-gradient-to-br from-primary/5 to-secondary/5">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-full h-full">
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
             {/* Simulated map with route line */}
             <svg className="w-full h-full" viewBox="0 0 400 160">
               {/* Background grid pattern */}

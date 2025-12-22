@@ -8,3 +8,15 @@ verify_jwt = false
 
 [functions.send-lesson-notification]
 verify_jwt = false
+
+[functions.geocode-address]
+verify_jwt = false
+
+[functions.calculate-route]
+verify_jwt = false
+
+[functions.create-lesson-payment]
+verify_jwt = true
+
+[functions.verify-payment]
+verify_jwt = false
