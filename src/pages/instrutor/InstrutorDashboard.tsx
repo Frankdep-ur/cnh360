@@ -4,6 +4,7 @@ import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
 import { NovaAulaPopupEnhanced } from "@/components/instrutor/NovaAulaPopupEnhanced";
+import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -53,6 +54,8 @@ export default function InstrutorDashboard() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
   
   // Persist online status in localStorage
   const [isOnline, setIsOnline] = useState(() => {
@@ -352,7 +355,7 @@ export default function InstrutorDashboard() {
         )}
 
         {/* Premium Upsell */}
-        {!instrutor.isPremium && (
+        {!isPremium && (
           <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -364,7 +367,11 @@ export default function InstrutorDashboard() {
                   <p className="text-xs text-muted-foreground">Taxa de {instrutor.taxaAtual}% → 18% | R$89/mês</p>
                 </div>
               </div>
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white">
+              <Button 
+                size="sm" 
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={() => setShowPremiumModal(true)}
+              >
                 Ativar
               </Button>
             </div>
@@ -627,6 +634,15 @@ export default function InstrutorDashboard() {
           </p>
         </Card>
       </div>
+
+      {/* Premium Activation Modal */}
+      <PremiumActivationModal
+        open={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        onActivate={() => setIsPremium(true)}
+        currentTax={28}
+        taxPaidThisMonth={1358}
+      />
 
       <InstructorBottomNav />
     </div>
