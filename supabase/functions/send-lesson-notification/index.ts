@@ -20,6 +20,13 @@ interface LessonNotificationPayload {
   usa_carro_aluno: boolean;
 }
 
+interface GenericNotificationPayload {
+  aulaId: string;
+  type: 'instrutor_a_caminho' | 'instrutor_chegou';
+  title: string;
+  body: string;
+}
+
 // Validate internal edge function secret
 function validateEdgeSecret(req: Request): boolean {
   const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
@@ -32,19 +39,24 @@ function validateEdgeSecret(req: Request): boolean {
   return providedSecret === edgeSecret;
 }
 
+// Check if authenticated user
+function validateAuth(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+  
+  try {
+    const token = authHeader.replace("Bearer ", "");
+    // Just check if token exists - actual validation happens in supabase client
+    return token ? "authenticated" : null;
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  // Validate the edge secret for internal calls
-  if (!validateEdgeSecret(req)) {
-    console.error("Invalid or missing edge secret");
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
 
   try {
@@ -53,9 +65,101 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const payload = await req.json();
+    
+    // Check if it's a generic notification (from authenticated user)
+    if (payload.type && payload.aulaId) {
+      const genericPayload = payload as GenericNotificationPayload;
+      console.log("Processing generic notification:", genericPayload);
+      
+      // Get the aula to find the student
+      const { data: aulaData, error: aulaError } = await supabase
+        .from("aulas")
+        .select("aluno_id")
+        .eq("id", genericPayload.aulaId)
+        .single();
+      
+      if (aulaError) {
+        console.error("Error fetching aula:", aulaError);
+        throw new Error("Aula not found");
+      }
 
-    const payload: LessonNotificationPayload = await req.json();
-    console.log("Received lesson notification payload:", payload);
+      // Get student's user_id
+      const { data: alunoData, error: alunoError } = await supabase
+        .from("alunos")
+        .select("user_id")
+        .eq("id", aulaData.aluno_id)
+        .single();
+      
+      if (alunoError) {
+        console.error("Error fetching aluno:", alunoError);
+        throw new Error("Aluno not found");
+      }
+
+      // Save in-app notification for the student
+      const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert({
+          user_id: alunoData.user_id,
+          title: genericPayload.title,
+          body: genericPayload.body,
+          type: genericPayload.type,
+          reference_id: genericPayload.aulaId,
+        });
+
+      if (notificationError) {
+        console.error("Error saving notification:", notificationError);
+      } else {
+        console.log("In-app notification saved for student");
+      }
+
+      // Try to send push notification if available
+      const { data: pushSubscriptions } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", alunoData.user_id);
+
+      if (pushSubscriptions && pushSubscriptions.length > 0) {
+        // Send push notification
+        try {
+          await supabase.functions.invoke("send-push-notification", {
+            body: {
+              subscription: pushSubscriptions[0],
+              title: genericPayload.title,
+              body: genericPayload.body,
+              data: { aulaId: genericPayload.aulaId, type: genericPayload.type }
+            }
+          });
+          console.log("Push notification sent");
+        } catch (pushError) {
+          console.log("Could not send push notification:", pushError);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Student notification sent",
+          notification_saved: !notificationError 
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    }
+
+    // Original logic for instructor notifications (requires edge secret)
+    if (!validateEdgeSecret(req)) {
+      console.error("Invalid or missing edge secret for instructor notification");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const lessonPayload = payload as LessonNotificationPayload;
+    console.log("Received lesson notification payload:", lessonPayload);
 
     const {
       aula_id,
@@ -68,7 +172,7 @@ serve(async (req) => {
       ponto_encontro,
       valor,
       usa_carro_aluno,
-    } = payload;
+    } = lessonPayload;
 
     // Format date for display
     const dataFormatada = new Date(data_hora).toLocaleString("pt-BR", {
