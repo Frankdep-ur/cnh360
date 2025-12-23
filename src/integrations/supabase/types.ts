@@ -70,8 +70,12 @@ export type Database = {
           data_hora: string
           duracao_minutos: number
           id: string
+          instrutor_a_caminho: boolean | null
+          instrutor_chegou: boolean | null
           instrutor_id: string
+          latitude_aluno: number | null
           latitude_encontro: number | null
+          longitude_aluno: number | null
           longitude_encontro: number | null
           observacoes: string | null
           ponto_encontro: string | null
@@ -89,8 +93,12 @@ export type Database = {
           data_hora: string
           duracao_minutos?: number
           id?: string
+          instrutor_a_caminho?: boolean | null
+          instrutor_chegou?: boolean | null
           instrutor_id: string
+          latitude_aluno?: number | null
           latitude_encontro?: number | null
+          longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
           ponto_encontro?: string | null
@@ -108,8 +116,12 @@ export type Database = {
           data_hora?: string
           duracao_minutos?: number
           id?: string
+          instrutor_a_caminho?: boolean | null
+          instrutor_chegou?: boolean | null
           instrutor_id?: string
+          latitude_aluno?: number | null
           latitude_encontro?: number | null
+          longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
           ponto_encontro?: string | null
@@ -403,6 +415,53 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      localizacao_tempo_real: {
+        Row: {
+          accuracy: number | null
+          aula_id: string | null
+          created_at: string
+          heading: number | null
+          id: string
+          latitude: number
+          longitude: number
+          speed: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number | null
+          aula_id?: string | null
+          created_at?: string
+          heading?: number | null
+          id?: string
+          latitude: number
+          longitude: number
+          speed?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accuracy?: number | null
+          aula_id?: string | null
+          created_at?: string
+          heading?: number | null
+          id?: string
+          latitude?: number
+          longitude?: number
+          speed?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "localizacao_tempo_real_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       logs_renach: {
         Row: {
