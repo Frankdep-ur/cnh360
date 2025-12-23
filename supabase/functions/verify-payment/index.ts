@@ -115,6 +115,29 @@ serve(async (req) => {
         }
       }
 
+      // Fetch aluno_id from alunos table using user_id
+      let alunoId: string | null = null;
+      if (metadata.user_id) {
+        const { data: alunoData, error: alunoError } = await supabaseClient
+          .from('alunos')
+          .select('id')
+          .eq('user_id', metadata.user_id)
+          .maybeSingle();
+
+        if (alunoError) {
+          logStep("Error fetching aluno", { error: alunoError.message });
+        } else if (alunoData) {
+          alunoId = alunoData.id;
+          logStep("Found aluno_id", { alunoId });
+        } else {
+          logStep("No aluno found for user_id", { userId: metadata.user_id });
+        }
+      }
+
+      if (!alunoId) {
+        throw new Error("Could not find aluno for user_id: " + metadata.user_id);
+      }
+
       // Update aula status if aula_id exists
       if (metadata.aula_id) {
         const { error: aulaError } = await supabaseClient
@@ -132,7 +155,7 @@ serve(async (req) => {
       // Insert payment record
       const paymentData = {
         aula_id: metadata.aula_id || null,
-        aluno_id: metadata.user_id,
+        aluno_id: alunoId,
         instrutor_id: metadata.instrutor_id || null,
         valor_bruto: session.amount_total ? session.amount_total / 100 : 0,
         taxa_plataforma: metadata.taxa_plataforma ? parseInt(metadata.taxa_plataforma) / 100 : 0,
