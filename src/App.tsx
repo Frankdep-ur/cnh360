@@ -36,6 +36,10 @@ import InstrutorPerfil from "./pages/instrutor/InstrutorPerfil";
 import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
 import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
 import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
+import InstrutorACaminho from "./pages/instrutor/InstrutorACaminho";
+
+// Aluno tracking
+import RastrearInstrutor from "./pages/aluno/RastrearInstrutor";
 
 // Autoescola Pages
 import AutoescolaDashboard from "./pages/autoescola/AutoescolaDashboard";
@@ -145,6 +149,11 @@ const App = () => (
                 <SimuladoTeorico />
               </ProtectedRoute>
             } />
+            <Route path="/aluno/rastrear/:aulaId" element={
+              <ProtectedRoute>
+                <RastrearInstrutor />
+              </ProtectedRoute>
+            } />
 
             {/* Instrutor - Protected */}
             <Route path="/instrutor" element={
@@ -165,6 +174,11 @@ const App = () => (
             <Route path="/instrutor/validar-aula" element={
               <ProtectedRoute>
                 <ValidarAulaInstrutor />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/a-caminho/:aulaId" element={
+              <ProtectedRoute>
+                <InstrutorACaminho />
               </ProtectedRoute>
             } />
             <Route path="/instrutor/perfil" element={

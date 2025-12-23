@@ -15,6 +15,8 @@ export interface AulaPendente {
   duracao_minutos: number;
   valor: number;
   ponto_encontro: string | null;
+  latitude_encontro: number | null;
+  longitude_encontro: number | null;
   status: string;
   created_at: string;
   aluno_nome?: string;

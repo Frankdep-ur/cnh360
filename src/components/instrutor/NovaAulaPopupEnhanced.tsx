@@ -6,8 +6,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Card } from "@/components/ui/card";
 import { AulaPendente } from "@/hooks/useInstrutorNotifications";
 import { useAulasPendentes } from "@/hooks/useAulasPendentes";
+import { useRoute } from "@/hooks/useRoute";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 interface NovaAulaPopupEnhancedProps {
   aula: AulaPendente | null;
@@ -16,7 +20,50 @@ interface NovaAulaPopupEnhancedProps {
 }
 
 export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnhancedProps) {
+  const navigate = useNavigate();
   const { aceitarAula, recusarAula, loading } = useAulasPendentes();
+  const { getCurrentLocation, latitude, longitude } = useGeolocation();
+  const { route, calculateRoute, loading: routeLoading } = useRoute();
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+
+  // Calculate route when popup opens
+  useEffect(() => {
+    if (open && aula) {
+      calculateRealRoute();
+    }
+  }, [open, aula]);
+
+  const calculateRealRoute = async () => {
+    if (!aula) return;
+    
+    setCalculatingRoute(true);
+    try {
+      // Get instructor's current location
+      const location = await getCurrentLocation();
+      
+      if (location) {
+        // Determine destination - use stored coordinates or address
+        let destination: { lat: number; lng: number } | string;
+        
+        if (aula.latitude_encontro && aula.longitude_encontro) {
+          destination = { lat: aula.latitude_encontro, lng: aula.longitude_encontro };
+        } else if (aula.ponto_encontro) {
+          destination = aula.ponto_encontro;
+        } else {
+          destination = "Araçatuba, SP";
+        }
+        
+        await calculateRoute(
+          { lat: location.latitude, lng: location.longitude },
+          destination
+        );
+      }
+    } catch (err) {
+      console.error("Error calculating route:", err);
+    } finally {
+      setCalculatingRoute(false);
+    }
+  };
 
   if (!aula) return null;
 
@@ -24,15 +71,17 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
     locale: ptBR,
   });
 
-  // Mock ETA and distance based on location
-  const eta = Math.floor(Math.random() * 10) + 5; // 5-15 min
-  const distance = (Math.random() * 3 + 1).toFixed(1); // 1-4 km
+  // Use real ETA/distance if available, otherwise show calculating
+  const eta = route?.eta_minutes || null;
+  const distance = route?.distance?.text || null;
 
   const handleAceitar = async () => {
     try {
       await aceitarAula(aula.id);
-      toast.success("Aula aceita! O aluno será notificado.");
+      toast.success("Aula aceita! Iniciando navegação...");
       onClose();
+      // Navigate to tracking page
+      navigate(`/instrutor/a-caminho/${aula.id}`);
     } catch (error) {
       toast.error("Erro ao aceitar aula");
     }
@@ -49,7 +98,12 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
   };
 
   const handleNavigate = () => {
-    const destination = aula.ponto_encontro || "Araçatuba, SP";
+    let destination = aula.ponto_encontro || "Araçatuba, SP";
+    
+    if (aula.latitude_encontro && aula.longitude_encontro) {
+      destination = `${aula.latitude_encontro},${aula.longitude_encontro}`;
+    }
+    
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
     window.open(url, '_blank');
   };
@@ -112,11 +166,23 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
               <div className="absolute top-2 right-2 flex gap-2">
                 <div className="bg-background/95 backdrop-blur-sm rounded-lg px-2 py-1 text-sm font-bold flex items-center gap-1">
                   <Clock className="w-3 h-3 text-[#4CAF50]" />
-                  {eta} min
+                  {calculatingRoute || routeLoading ? (
+                    <span className="animate-pulse">...</span>
+                  ) : eta ? (
+                    `${eta} min`
+                  ) : (
+                    "--"
+                  )}
                 </div>
                 <div className="bg-background/95 backdrop-blur-sm rounded-lg px-2 py-1 text-sm font-bold flex items-center gap-1">
                   <Car className="w-3 h-3 text-primary" />
-                  {distance} km
+                  {calculatingRoute || routeLoading ? (
+                    <span className="animate-pulse">...</span>
+                  ) : distance ? (
+                    distance
+                  ) : (
+                    "--"
+                  )}
                 </div>
               </div>
             </div>
