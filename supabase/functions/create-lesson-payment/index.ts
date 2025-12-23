@@ -85,10 +85,23 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://cnh360.lovable.app";
 
+    // Determine payment method types based on selection
+    // Apple Pay and Google Pay are automatically enabled via 'card' type
+    let paymentMethodTypes: ('card' | 'pix')[];
+    if (paymentMethod === 'pix') {
+      paymentMethodTypes = ['pix'];
+    } else {
+      // For card, apple_pay, or google_pay - all use 'card' type
+      // Stripe automatically shows Apple Pay/Google Pay when available on user's device
+      paymentMethodTypes = ['card'];
+    }
+
+    logStep("Payment method types configured", { paymentMethod, paymentMethodTypes });
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: paymentMethod === 'pix' ? ['pix'] : ['card'],
+      payment_method_types: paymentMethodTypes,
       line_items: [
         {
           price_data: {
