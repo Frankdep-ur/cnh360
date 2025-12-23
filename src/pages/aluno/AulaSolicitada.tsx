@@ -4,11 +4,11 @@ import {
   Clock, 
   MapPin, 
   Car, 
-  MessageCircle,
   ArrowLeft,
   CheckCircle2,
   XCircle,
-  Loader2
+  Loader2,
+  Navigation
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,8 @@ interface AulaData {
   instrutor_id: string;
   instrutor_nome?: string;
   instrutor_foto?: string;
+  instrutor_a_caminho?: boolean;
+  instrutor_chegou?: boolean;
 }
 
 export default function AulaSolicitada() {
@@ -39,7 +41,8 @@ export default function AulaSolicitada() {
   useEffect(() => {
     if (aulaId && user) {
       fetchAula();
-      setupRealtimeSubscription();
+      const cleanup = setupRealtimeSubscription();
+      return cleanup;
     }
 
     const timer = setTimeout(() => setShowContent(true), 100);
@@ -71,6 +74,7 @@ export default function AulaSolicitada() {
         instrutor_nome: instrutorCache?.nome || "Instrutor",
         instrutor_foto: instrutorCache?.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
       });
+      setShowContent(true);
     } catch (err) {
       console.error("Error in fetchAula:", err);
     } finally {
@@ -91,16 +95,14 @@ export default function AulaSolicitada() {
         },
         (payload) => {
           console.log("Aula updated:", payload);
-          const newStatus = payload.new.status;
+          const newData = payload.new;
           
-          setAula(prev => prev ? { ...prev, status: newStatus } : null);
-
-          // If confirmed, redirect to confirmation page after a delay
-          if (newStatus === "confirmada") {
-            setTimeout(() => {
-              navigate(`/aluno/aula-confirmada/${aulaId}`);
-            }, 2000);
-          }
+          setAula(prev => prev ? { 
+            ...prev, 
+            status: newData.status,
+            instrutor_a_caminho: newData.instrutor_a_caminho,
+            instrutor_chegou: newData.instrutor_chegou
+          } : null);
         }
       )
       .subscribe();
@@ -147,6 +149,8 @@ export default function AulaSolicitada() {
   const isPending = aula.status === "pendente";
   const isConfirmed = aula.status === "confirmada";
   const isCancelled = aula.status === "cancelada";
+  const instrutorACaminho = aula.instrutor_a_caminho === true;
+  const instrutorChegou = aula.instrutor_chegou === true;
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,7 +189,38 @@ export default function AulaSolicitada() {
               </>
             )}
 
-            {isConfirmed && (
+            {isConfirmed && instrutorChegou && (
+              <>
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-[#4CAF50]/10 flex items-center justify-center animate-scale-in">
+                  <CheckCircle2 className="w-12 h-12 text-[#4CAF50]" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  Instrutor chegou! 🎉
+                </h1>
+                <p className="text-muted-foreground">
+                  O instrutor está no local de encontro
+                </p>
+              </>
+            )}
+
+            {isConfirmed && instrutorACaminho && !instrutorChegou && (
+              <>
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <div className="relative">
+                    <Car className="w-10 h-10 text-blue-500" />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full animate-ping" />
+                  </div>
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  Instrutor a caminho! 🚗
+                </h1>
+                <p className="text-muted-foreground">
+                  Acompanhe a localização em tempo real
+                </p>
+              </>
+            )}
+
+            {isConfirmed && !instrutorACaminho && !instrutorChegou && (
               <>
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center animate-scale-in">
                   <CheckCircle2 className="w-12 h-12 text-primary" />
@@ -194,7 +229,7 @@ export default function AulaSolicitada() {
                   Aula confirmada! 🎉
                 </h1>
                 <p className="text-muted-foreground">
-                  O instrutor aceitou sua aula
+                  Aguardando instrutor iniciar o trajeto
                 </p>
               </>
             )}
@@ -238,7 +273,18 @@ export default function AulaSolicitada() {
                   Pendente
                 </div>
               )}
-              {isConfirmed && (
+              {isConfirmed && instrutorACaminho && !instrutorChegou && (
+                <div className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-sm font-medium flex items-center gap-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                  A caminho
+                </div>
+              )}
+              {isConfirmed && instrutorChegou && (
+                <div className="px-3 py-1 rounded-full bg-[#4CAF50]/10 text-[#4CAF50] text-sm font-medium">
+                  Chegou
+                </div>
+              )}
+              {isConfirmed && !instrutorACaminho && !instrutorChegou && (
                 <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
                   Confirmado
                 </div>
@@ -308,10 +354,39 @@ export default function AulaSolicitada() {
               showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
             )}
           >
+            {/* Track instructor button - only show when instructor is on the way */}
+            {isConfirmed && instrutorACaminho && !instrutorChegou && (
+              <Button
+                variant="hero"
+                size="xl"
+                className="w-full"
+                onClick={() => navigate(`/aluno/rastrear/${aulaId}`)}
+              >
+                <Navigation className="w-5 h-5 mr-2" />
+                Rastrear instrutor em tempo real
+              </Button>
+            )}
+
             {isPending && (
               <div className="bg-muted/50 rounded-xl p-4 text-center">
                 <p className="text-sm text-muted-foreground">
                   Você será notificado assim que o instrutor responder
+                </p>
+              </div>
+            )}
+
+            {isConfirmed && !instrutorACaminho && !instrutorChegou && (
+              <div className="bg-muted/50 rounded-xl p-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  O instrutor ainda não iniciou o trajeto. Você poderá rastrear quando ele sair.
+                </p>
+              </div>
+            )}
+
+            {isConfirmed && instrutorChegou && (
+              <div className="bg-[#4CAF50]/10 rounded-xl p-4 text-center">
+                <p className="text-sm text-[#4CAF50] font-medium">
+                  O instrutor está te esperando no local combinado!
                 </p>
               </div>
             )}

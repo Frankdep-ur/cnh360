@@ -118,11 +118,25 @@ export default function InstrutorACaminho() {
         aluno_foto: alunoFoto,
       });
 
-      // Mark instructor as "a caminho"
+      // Mark instructor as "a caminho" and notify the student
       await supabase
         .from("aulas")
         .update({ instrutor_a_caminho: true })
         .eq("id", aulaId);
+
+      // Send push notification to student
+      try {
+        await supabase.functions.invoke('send-lesson-notification', {
+          body: {
+            aulaId: aulaId,
+            type: 'instrutor_a_caminho',
+            title: 'Instrutor a caminho! 🚗',
+            body: `O instrutor está indo até você. Acompanhe em tempo real!`
+          }
+        });
+      } catch (notifErr) {
+        console.log("Could not send notification:", notifErr);
+      }
 
     } catch (err) {
       console.error("Error fetching aula:", err);
