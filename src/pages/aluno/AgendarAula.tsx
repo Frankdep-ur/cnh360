@@ -172,17 +172,13 @@ export default function AgendarAula() {
         return;
       }
 
-      // Use the instructor ID directly from cache - it's the same as instrutores.id
-      // No need to re-fetch from instrutores table (which has restrictive RLS)
       const realInstrutorId = instructor.id;
-      const instrutorEmail: string | null = null;
 
       // Calculate scheduled date/time
       const scheduledDate = new Date();
       const [hours, minutes] = time.split(":").map(Number);
       scheduledDate.setHours(hours, minutes, 0, 0);
       
-      // Add day offset based on selected day
       const daysMap: { [key: string]: number } = {
         "Dom": 0, "Seg": 1, "Ter": 2, "Qua": 3, "Qui": 4, "Sex": 5, "Sáb": 6
       };
@@ -191,7 +187,7 @@ export default function AgendarAula() {
       const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
       scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
 
-      // Create the lesson
+      // Create the lesson with pending status
       const { data: aulaData, error: aulaError } = await supabase
         .from("aulas")
         .insert({
@@ -214,51 +210,42 @@ export default function AgendarAula() {
 
       console.log("Lesson created:", aulaData);
 
-      // Get student name for notification
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .single();
-
-      const alunoNome = profileData?.full_name || "Aluno";
-
-      // Send notification to instructor via Edge Function
-      try {
-        const { data: notifData, error: notifError } = await supabase.functions.invoke(
-          "send-lesson-notification",
+      // For PIX or Credit Card, redirect to Stripe
+      if (selectedPayment === "pix" || selectedPayment === "credit") {
+        const stripePaymentMethod = selectedPayment === "pix" ? "pix" : "card";
+        
+        const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
+          "create-lesson-payment",
           {
             body: {
-              aula_id: aulaData.id,
-              aluno_nome: alunoNome,
-              instrutor_id: realInstrutorId,
-              instrutor_email: instrutorEmail,
-              instrutor_nome: instructor.name,
-              data_hora: scheduledDate.toISOString(),
-              duracao_minutos: duration * 60,
-              ponto_encontro: meetingPoint,
-              valor: totalPrice,
-              usa_carro_aluno: useOwnCar,
+              amount: totalPrice,
+              duration: duration * 60,
+              instructorName: instructor.name,
+              instructorId: realInstrutorId,
+              aulaId: aulaData.id,
+              paymentMethod: stripePaymentMethod,
             },
           }
         );
 
-        if (notifError) {
-          console.error("Error sending notification:", notifError);
-        } else {
-          console.log("Notification sent:", notifData);
+        if (paymentError) {
+          console.error("Error creating payment:", paymentError);
+          throw new Error("Erro ao criar pagamento");
         }
-      } catch (notifErr) {
-        console.error("Error invoking notification function:", notifErr);
-        // Don't fail the whole operation if notification fails
+
+        if (paymentData?.url) {
+          // Redirect to Stripe Checkout
+          window.location.href = paymentData.url;
+          return;
+        }
       }
 
+      // For wallet balance (or fallback), just navigate to waiting page
       toast({
         title: "Aula solicitada!",
         description: "Aguardando confirmação do instrutor.",
       });
 
-      // Navigate to the waiting page with the lesson ID
       navigate(`/aluno/aula-solicitada/${aulaData.id}`);
     } catch (err: any) {
       console.error("Error in createLesson:", err);
