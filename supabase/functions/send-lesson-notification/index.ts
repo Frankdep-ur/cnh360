@@ -4,7 +4,7 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-edge-secret",
 };
 
 interface LessonNotificationPayload {
@@ -20,10 +20,31 @@ interface LessonNotificationPayload {
   usa_carro_aluno: boolean;
 }
 
+// Validate internal edge function secret
+function validateEdgeSecret(req: Request): boolean {
+  const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
+  if (!edgeSecret) {
+    console.warn("EDGE_FUNCTION_SECRET not configured");
+    return false;
+  }
+  
+  const providedSecret = req.headers.get("x-edge-secret");
+  return providedSecret === edgeSecret;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate the edge secret for internal calls
+  if (!validateEdgeSecret(req)) {
+    console.error("Invalid or missing edge secret");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

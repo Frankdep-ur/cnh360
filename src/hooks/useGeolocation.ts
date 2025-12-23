@@ -17,8 +17,19 @@ interface UseGeolocationReturn extends GeolocationState {
 // Real reverse geocoding using Google Maps API via Edge Function
 const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
   try {
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      console.warn('No auth session, falling back to coordinates');
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+
     const { data, error } = await supabase.functions.invoke('geocode-address', {
-      body: { latitude: lat, longitude: lng }
+      body: { latitude: lat, longitude: lng },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
     });
 
     if (error) {
