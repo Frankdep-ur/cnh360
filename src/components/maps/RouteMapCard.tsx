@@ -42,6 +42,16 @@ export function RouteMapCard({
       setMapLoading(true);
       setMapError(false);
 
+      // Get current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        console.warn('No auth session for map generation');
+        setMapError(true);
+        setMapLoading(false);
+        return;
+      }
+
       // Build the static map URL using edge function to keep API key secure
       const { data, error } = await supabase.functions.invoke('generate-static-map', {
         body: {
@@ -54,6 +64,9 @@ export function RouteMapCard({
           width: 600,
           height: 300,
         },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
       if (error) throw error;

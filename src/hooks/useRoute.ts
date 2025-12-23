@@ -37,8 +37,18 @@ export function useRoute(): UseRouteReturn {
     setError(null);
 
     try {
+      // Get current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Usuário não autenticado');
+      }
+
       const { data, error: fnError } = await supabase.functions.invoke('calculate-route', {
-        body: { origin, destination }
+        body: { origin, destination },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
       if (fnError) {
