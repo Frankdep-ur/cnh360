@@ -4,20 +4,19 @@ import {
   MapPin, 
   Clock, 
   Phone, 
-  MessageCircle,
   ArrowLeft,
   Loader2,
   Car,
-  Navigation,
   Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscribeToLocation } from "@/hooks/useRealtimeLocation";
-import { useRoute } from "@/hooks/useRoute";
+import { RealtimeMap } from "@/components/maps/RealtimeMap";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -41,9 +40,10 @@ export default function RastrearInstrutor() {
   const [aula, setAula] = useState<AulaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [instrutorUserId, setInstrutorUserId] = useState<string | null>(null);
+  const [eta, setEta] = useState<string>("--");
+  const [distance, setDistance] = useState<string>("--");
   
   const { location: instrutorLocation, loading: locationLoading } = useSubscribeToLocation(aulaId || null, instrutorUserId || undefined);
-  const { route, calculateRoute, loading: routeLoading } = useRoute();
 
   useEffect(() => {
     if (aulaId && user) {
@@ -52,30 +52,20 @@ export default function RastrearInstrutor() {
     }
   }, [aulaId, user]);
 
-  // Calculate route when instructor location updates
-  useEffect(() => {
-    if (instrutorLocation && aula) {
-      const destination = aula.latitude_encontro && aula.longitude_encontro
-        ? { lat: aula.latitude_encontro, lng: aula.longitude_encontro }
-        : aula.ponto_encontro || '';
-      
-      if (destination) {
-        calculateRoute(
-          { lat: instrutorLocation.latitude, lng: instrutorLocation.longitude },
-          destination
-        );
-      }
-    }
-  }, [instrutorLocation, aula]);
-
   // Notify when instructor is close
   useEffect(() => {
-    if (route && route.eta_minutes <= 2 && aula && !aula.instrutor_chegou) {
+    const etaMinutes = parseInt(eta);
+    if (!isNaN(etaMinutes) && etaMinutes <= 2 && aula && !aula.instrutor_chegou) {
       toast.info("🚗 Instrutor está quase chegando!", {
         duration: 5000,
       });
     }
-  }, [route?.eta_minutes]);
+  }, [eta, aula]);
+
+  const handleRouteCalculated = (dist: string, dur: string) => {
+    setDistance(dist);
+    setEta(dur);
+  };
 
   async function fetchAula() {
     try {
@@ -154,12 +144,16 @@ export default function RastrearInstrutor() {
 
   // Calculate progress based on ETA
   const getProgress = () => {
-    if (!route) return 0;
-    // Assume max ETA is 30 min, calculate inverse progress
+    const etaMinutes = parseInt(eta);
+    if (isNaN(etaMinutes)) return 0;
     const maxEta = 30;
-    const progress = Math.max(0, Math.min(100, ((maxEta - route.eta_minutes) / maxEta) * 100));
+    const progress = Math.max(0, Math.min(100, ((maxEta - etaMinutes) / maxEta) * 100));
     return progress;
   };
+
+  const destinationCoords = aula && aula.latitude_encontro && aula.longitude_encontro
+    ? { latitude: aula.latitude_encontro, longitude: aula.longitude_encontro }
+    : null;
 
   if (loading) {
     return (
@@ -226,73 +220,45 @@ export default function RastrearInstrutor() {
             </Card>
           ) : isInstructorOnTheWay ? (
             <>
-              {/* Map with live tracking */}
+              {/* Interactive Map with live tracking */}
               <Card className="overflow-hidden">
-                <div className="relative h-56 bg-gradient-to-br from-primary/5 to-secondary/5">
-                  <svg className="w-full h-full" viewBox="0 0 400 224">
-                    <defs>
-                      <pattern id="grid-track" width="20" height="20" patternUnits="userSpaceOnUse">
-                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.3" className="text-muted-foreground/20" />
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid-track)" />
-                    
-                    {/* Route line */}
-                    <path
-                      d="M 80 180 Q 200 100 320 50"
-                      fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      strokeDasharray="10 5"
-                    />
-                    
-                    {/* Instructor car (animated) */}
-                    <g className="animate-pulse">
-                      <circle cx="80" cy="180" r="25" fill="hsl(var(--primary))" opacity="0.2" />
-                      <circle cx="80" cy="180" r="15" fill="hsl(var(--primary))" />
-                      <text x="80" y="185" textAnchor="middle" fontSize="16" fill="white">🚗</text>
-                    </g>
-                    
-                    {/* Your position (student) */}
-                    <g>
-                      <circle cx="320" cy="50" r="12" fill="#4CAF50" />
-                      <circle cx="320" cy="50" r="6" fill="white" />
-                    </g>
-                    
-                    {/* Label */}
-                    <text x="320" y="80" textAnchor="middle" fontSize="10" fill="currentColor" className="text-muted-foreground">Você</text>
-                  </svg>
+                <div className="relative h-64">
+                  <RealtimeMap
+                    instructorLocation={instrutorLocation ? {
+                      latitude: instrutorLocation.latitude,
+                      longitude: instrutorLocation.longitude,
+                    } : null}
+                    destinationLocation={destinationCoords}
+                    showRoute={!!instrutorLocation && !!destinationCoords}
+                    onRouteCalculated={handleRouteCalculated}
+                    className="h-full w-full"
+                  />
                   
-                  {/* ETA and Distance */}
-                  <div className="absolute top-3 left-3 right-3 flex justify-between">
+                  {/* ETA and Distance Overlay */}
+                  <div className="absolute top-3 left-3 right-3 flex justify-between pointer-events-none">
                     <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-primary" />
                         <div>
                           <p className="text-xs text-muted-foreground">Chegada em</p>
-                          <p className="font-bold text-lg">
-                            {route ? `${route.eta_minutes} min` : "Calculando..."}
-                          </p>
+                          <p className="font-bold text-lg">{eta}</p>
                         </div>
                       </div>
                     </div>
                     
-                    {route && (
-                      <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
-                        <div className="flex items-center gap-2">
-                          <Car className="w-4 h-4 text-muted-foreground" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Distância</p>
-                            <p className="font-bold text-lg">{route.distance.text}</p>
-                          </div>
+                    <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <Car className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Distância</p>
+                          <p className="font-bold text-lg">{distance}</p>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
 
-                  {(locationLoading || routeLoading) && (
-                    <div className="absolute bottom-3 left-3">
+                  {locationLoading && (
+                    <div className="absolute bottom-3 left-3 pointer-events-none">
                       <div className="bg-background/95 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin text-primary" />
                         <span className="text-xs text-muted-foreground">Atualizando...</span>

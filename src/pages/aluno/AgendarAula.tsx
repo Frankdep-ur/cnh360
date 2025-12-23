@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -9,7 +9,8 @@ import {
   Check,
   ChevronRight,
   Wallet,
-  Loader2
+  Loader2,
+  Crosshair
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
 const paymentMethods = [
   { id: "pix", label: "PIX", icon: "💰", discount: 5 },

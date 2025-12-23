@@ -5,7 +5,6 @@ import {
   MapPin, 
   Clock, 
   Phone, 
-  MessageCircle,
   CheckCircle2,
   ArrowLeft,
   Loader2,
@@ -13,10 +12,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRealtimeLocation } from "@/hooks/useRealtimeLocation";
-import { useRoute } from "@/hooks/useRoute";
+import { RealtimeMap } from "@/components/maps/RealtimeMap";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -40,9 +40,15 @@ export default function InstrutorACaminho() {
   const [aula, setAula] = useState<AulaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [arriving, setArriving] = useState(false);
+  const [eta, setEta] = useState<string>("--");
+  const [distance, setDistance] = useState<string>("--");
   
   const { currentLocation, isTracking, startTracking, stopTracking, error: locationError } = useRealtimeLocation();
-  const { route, calculateRoute, loading: routeLoading } = useRoute();
+
+  const handleRouteCalculated = (dist: string, dur: string) => {
+    setDistance(dist);
+    setEta(dur);
+  };
 
   useEffect(() => {
     if (aulaId && user) {
@@ -60,24 +66,6 @@ export default function InstrutorACaminho() {
       stopTracking();
     };
   }, [aulaId]);
-
-  // Calculate route when we have both locations
-  useEffect(() => {
-    if (currentLocation && aula) {
-      const destination = aula.latitude_aluno && aula.longitude_aluno
-        ? { lat: aula.latitude_aluno, lng: aula.longitude_aluno }
-        : aula.latitude_encontro && aula.longitude_encontro
-          ? { lat: aula.latitude_encontro, lng: aula.longitude_encontro }
-          : aula.ponto_encontro || '';
-      
-      if (destination) {
-        calculateRoute(
-          { lat: currentLocation.latitude, lng: currentLocation.longitude },
-          destination
-        );
-      }
-    }
-  }, [currentLocation, aula]);
 
   async function fetchAula() {
     try {
@@ -194,14 +182,11 @@ export default function InstrutorACaminho() {
     );
   }
 
-  if (!aula) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-        <p className="text-muted-foreground mb-4">Aula não encontrada</p>
-        <Button onClick={() => navigate("/instrutor")}>Voltar</Button>
-      </div>
-    );
-  }
+  const destinationCoords = aula && (aula.latitude_aluno && aula.longitude_aluno
+    ? { latitude: aula.latitude_aluno, longitude: aula.longitude_aluno }
+    : aula.latitude_encontro && aula.longitude_encontro
+      ? { latitude: aula.latitude_encontro, longitude: aula.longitude_encontro }
+      : null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -229,61 +214,31 @@ export default function InstrutorACaminho() {
 
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto space-y-6">
-          {/* Map Preview */}
+          {/* Interactive Map */}
           <Card className="overflow-hidden">
-            <div className="relative h-48 bg-gradient-to-br from-primary/5 to-secondary/5">
-              <svg className="w-full h-full" viewBox="0 0 400 192">
-                <defs>
-                  <pattern id="grid-route" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.3" className="text-muted-foreground/20" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid-route)" />
-                
-                {/* Route line */}
-                <path
-                  d="M 50 150 Q 150 80 350 40"
-                  fill="none"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray="10 5"
-                  className="animate-pulse"
-                />
-                
-                {/* Your position (instructor) */}
-                <g transform="translate(50, 150)">
-                  <circle r="20" fill="hsl(var(--primary))" opacity="0.2" className="animate-ping" />
-                  <circle r="12" fill="hsl(var(--primary))" />
-                  <text x="0" y="4" textAnchor="middle" fontSize="14" fill="white">🚗</text>
-                </g>
-                
-                {/* Student position */}
-                <g transform="translate(350, 40)">
-                  <circle r="12" fill="#f44336" />
-                  <circle r="6" fill="white" />
-                </g>
-              </svg>
+            <div className="relative h-56">
+              <RealtimeMap
+                instructorLocation={currentLocation ? {
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude,
+                } : null}
+                destinationLocation={destinationCoords}
+                showRoute={!!currentLocation && !!destinationCoords}
+                onRouteCalculated={handleRouteCalculated}
+                className="h-full w-full"
+              />
               
               {/* ETA Badge */}
-              {route && (
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-lg flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-primary" />
-                    <span className="font-bold text-sm">{route.eta_minutes} min</span>
-                  </div>
-                  <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-lg flex items-center gap-1.5">
-                    <Car className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-bold text-sm">{route.distance.text}</span>
-                  </div>
+              <div className="absolute top-3 right-3 flex gap-2 pointer-events-none">
+                <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-lg flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span className="font-bold text-sm">{eta}</span>
                 </div>
-              )}
-              
-              {routeLoading && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <div className="bg-background/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-lg flex items-center gap-1.5">
+                  <Car className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-bold text-sm">{distance}</span>
                 </div>
-              )}
+              </div>
             </div>
           </Card>
 
