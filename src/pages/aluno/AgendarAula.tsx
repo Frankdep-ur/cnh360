@@ -21,6 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 const paymentMethods = [
   { id: "pix", label: "PIX", icon: "💰", discount: 5 },
   { id: "credit", label: "Cartão de Crédito", icon: "💳", discount: 0 },
+  { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0 },
+  { id: "google_pay", label: "Google Pay", icon: "📱", discount: 0 },
   { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150 },
 ];
 
@@ -210,8 +212,8 @@ export default function AgendarAula() {
 
       console.log("Lesson created:", aulaData);
 
-      // For PIX or Credit Card, redirect to Stripe
-      if (selectedPayment === "pix" || selectedPayment === "credit") {
+      // For PIX, Credit Card, Apple Pay, or Google Pay, redirect to Stripe
+      if (selectedPayment === "pix" || selectedPayment === "credit" || selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
         const stripePaymentMethod = selectedPayment === "pix" ? "pix" : "card";
         
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
