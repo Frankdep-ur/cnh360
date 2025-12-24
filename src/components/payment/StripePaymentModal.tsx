@@ -26,35 +26,63 @@ function PaymentForm({ amount, onSuccess, onError, instructorName }: PaymentForm
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  console.log("[PaymentForm] Mounted, stripe ready:", !!stripe, "elements ready:", !!elements);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[PaymentForm] Submit clicked");
 
     if (!stripe || !elements) {
+      console.error("[PaymentForm] Stripe or elements not loaded");
+      setMessage("Carregando sistema de pagamento...");
       return;
     }
 
     setIsProcessing(true);
     setMessage(null);
 
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.href, // Not used since we handle redirect manually
-      },
-      redirect: "if_required",
-    });
+    try {
+      console.log("[PaymentForm] Calling stripe.confirmPayment...");
+      
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/aluno/aula-confirmada`,
+        },
+        redirect: "if_required",
+      });
 
-    if (error) {
-      setMessage(error.message || "Ocorreu um erro no pagamento.");
-      onError(error.message || "Erro no pagamento");
-      setIsProcessing(false);
-    } else if (paymentIntent && paymentIntent.status === "requires_capture") {
-      // Payment authorized successfully!
-      onSuccess();
-    } else if (paymentIntent) {
-      // Other status
-      setMessage(`Status do pagamento: ${paymentIntent.status}`);
+      console.log("[PaymentForm] confirmPayment result:", { error, paymentIntent });
+
+      if (error) {
+        console.error("[PaymentForm] Payment error:", error);
+        const errorMsg = error.message || "Ocorreu um erro no pagamento.";
+        setMessage(errorMsg);
+        onError(errorMsg);
+        setIsProcessing(false);
+      } else if (paymentIntent) {
+        console.log("[PaymentForm] PaymentIntent status:", paymentIntent.status);
+        
+        if (paymentIntent.status === "requires_capture") {
+          // Payment authorized successfully (manual capture)
+          console.log("[PaymentForm] Payment authorized successfully!");
+          onSuccess();
+        } else if (paymentIntent.status === "succeeded") {
+          // Payment completed (if capture_method was automatic)
+          console.log("[PaymentForm] Payment succeeded!");
+          onSuccess();
+        } else {
+          setMessage(`Status: ${paymentIntent.status}. Aguarde ou tente novamente.`);
+          setIsProcessing(false);
+        }
+      }
+    } catch (err: any) {
+      console.error("[PaymentForm] Exception:", err);
+      const errorMsg = err.message || "Erro inesperado no pagamento";
+      setMessage(errorMsg);
+      onError(errorMsg);
       setIsProcessing(false);
     }
   };
@@ -62,8 +90,20 @@ function PaymentForm({ amount, onSuccess, onError, instructorName }: PaymentForm
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement 
+        onReady={() => {
+          console.log("[PaymentElement] Ready");
+          setIsReady(true);
+        }}
+        onChange={(e) => {
+          console.log("[PaymentElement] Changed:", e.complete ? "complete" : "incomplete");
+        }}
         options={{
           layout: "tabs",
+          wallets: {
+            applePay: "auto",
+            googlePay: "auto",
+          },
+          paymentMethodOrder: ["apple_pay", "google_pay", "card"],
         }}
       />
       
@@ -79,12 +119,17 @@ function PaymentForm({ amount, onSuccess, onError, instructorName }: PaymentForm
         variant="hero"
         size="xl"
         className="w-full"
-        disabled={!stripe || isProcessing}
+        disabled={!stripe || !isReady || isProcessing}
       >
         {isProcessing ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
             Processando...
+          </>
+        ) : !isReady ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Carregando...
           </>
         ) : (
           `Autorizar R$ ${amount.toFixed(2)}`
@@ -93,7 +138,7 @@ function PaymentForm({ amount, onSuccess, onError, instructorName }: PaymentForm
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
         <Shield className="w-4 h-4" />
-        <span>Pagamento seguro via Stripe</span>
+        <span>Pagamento seguro via Stripe • Apple Pay • Google Pay</span>
       </div>
     </form>
   );
@@ -121,12 +166,14 @@ export function StripePaymentModal({
 
   useEffect(() => {
     if (open) {
+      console.log("[StripePaymentModal] Opened with clientSecret:", clientSecret ? "present" : "missing");
       setPaymentStatus("idle");
       setErrorMessage(null);
     }
-  }, [open]);
+  }, [open, clientSecret]);
 
   const handleSuccess = () => {
+    console.log("[StripePaymentModal] Payment success!");
     setPaymentStatus("success");
     setTimeout(() => {
       onSuccess();
@@ -134,11 +181,13 @@ export function StripePaymentModal({
   };
 
   const handleError = (error: string) => {
+    console.error("[StripePaymentModal] Payment error:", error);
     setPaymentStatus("error");
     setErrorMessage(error);
   };
 
   if (!clientSecret) {
+    console.warn("[StripePaymentModal] No clientSecret provided");
     return null;
   }
 
@@ -158,7 +207,7 @@ export function StripePaymentModal({
               <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-lg">Pagamento Autorizado!</h3>
+              <h3 className="font-semibold text-lg">Pagamento Processado!</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 Seu cartão foi pré-autorizado. O valor só será cobrado quando o instrutor aceitar a aula.
               </p>
