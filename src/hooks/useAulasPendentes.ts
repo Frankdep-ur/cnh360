@@ -15,6 +15,7 @@ export interface AulaPendente {
   usa_carro_aluno: boolean;
   status: string;
   created_at: string;
+  payment_intent_id: string | null;
 }
 
 export function useAulasPendentes() {
@@ -80,7 +81,8 @@ export function useAulasPendentes() {
           valor,
           usa_carro_aluno,
           status,
-          created_at
+          created_at,
+          payment_intent_id
         `)
         .eq("instrutor_id", instrutorData.id)
         .in("status", ["pendente", "confirmada"])
@@ -134,11 +136,33 @@ export function useAulasPendentes() {
       // Get aula data first
       const { data: aulaData, error: aulaFetchError } = await supabase
         .from("aulas")
-        .select("aluno_id, data_hora, duracao_minutos, ponto_encontro, valor")
+        .select("aluno_id, data_hora, duracao_minutos, ponto_encontro, valor, payment_intent_id")
         .eq("id", aulaId)
         .single();
 
       if (aulaFetchError) throw aulaFetchError;
+
+      // If there's a payment_intent_id, capture the payment
+      if (aulaData.payment_intent_id) {
+        toast({
+          title: "Processando pagamento...",
+          description: "Capturando o pagamento do aluno.",
+        });
+
+        const { data: captureData, error: captureError } = await supabase.functions.invoke(
+          "capture-payment",
+          {
+            body: { aulaId },
+          }
+        );
+
+        if (captureError) {
+          console.error("Error capturing payment:", captureError);
+          throw new Error("Erro ao capturar pagamento. Tente novamente.");
+        }
+
+        console.log("Payment captured:", captureData);
+      }
 
       // Update status
       const { error } = await supabase
@@ -176,7 +200,7 @@ export function useAulasPendentes() {
         await supabase.from("notifications").insert({
           user_id: alunoData.user_id,
           title: "Aula confirmada! 🎉",
-          body: `${instrutorNome} aceitou sua aula de ${aulaData.duracao_minutos} minutos para ${dataFormatada}.`,
+          body: `${instrutorNome} aceitou sua aula de ${aulaData.duracao_minutos} minutos para ${dataFormatada}. O pagamento foi confirmado.`,
           type: "aula_confirmada",
           reference_id: aulaId,
         });
@@ -184,7 +208,9 @@ export function useAulasPendentes() {
 
       toast({
         title: "Aula aceita!",
-        description: "O aluno foi notificado.",
+        description: aulaData.payment_intent_id 
+          ? "Pagamento capturado. O aluno foi notificado." 
+          : "O aluno foi notificado.",
       });
 
       fetchAulasPendentes();
@@ -203,11 +229,33 @@ export function useAulasPendentes() {
       // Get aula data first
       const { data: aulaData, error: aulaFetchError } = await supabase
         .from("aulas")
-        .select("aluno_id, data_hora")
+        .select("aluno_id, data_hora, payment_intent_id")
         .eq("id", aulaId)
         .single();
 
       if (aulaFetchError) throw aulaFetchError;
+
+      // If there's a payment_intent_id, cancel the payment (release hold)
+      if (aulaData.payment_intent_id) {
+        toast({
+          title: "Liberando pagamento...",
+          description: "Cancelando a autorização do cartão do aluno.",
+        });
+
+        const { data: cancelData, error: cancelError } = await supabase.functions.invoke(
+          "cancel-payment",
+          {
+            body: { aulaId, reason: "instructor_declined" },
+          }
+        );
+
+        if (cancelError) {
+          console.error("Error canceling payment:", cancelError);
+          // Don't throw - we still want to cancel the lesson
+        } else {
+          console.log("Payment cancelled:", cancelData);
+        }
+      }
 
       // Update status
       const { error } = await supabase
@@ -245,7 +293,9 @@ export function useAulasPendentes() {
         await supabase.from("notifications").insert({
           user_id: alunoData.user_id,
           title: "Aula não confirmada",
-          body: `${instrutorNome} não pôde aceitar sua aula agendada para ${dataFormatada}. Busque outro instrutor disponível.`,
+          body: aulaData.payment_intent_id
+            ? `${instrutorNome} não pôde aceitar sua aula para ${dataFormatada}. O valor foi liberado no seu cartão.`
+            : `${instrutorNome} não pôde aceitar sua aula agendada para ${dataFormatada}. Busque outro instrutor disponível.`,
           type: "aula_recusada",
           reference_id: aulaId,
         });
@@ -253,7 +303,9 @@ export function useAulasPendentes() {
 
       toast({
         title: "Aula recusada",
-        description: "O aluno foi notificado.",
+        description: aulaData.payment_intent_id 
+          ? "O hold foi liberado e o aluno foi notificado." 
+          : "O aluno foi notificado.",
       });
 
       fetchAulasPendentes();

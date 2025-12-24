@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.generate-static-map]
 verify_jwt = true
+
+[functions.capture-payment]
+verify_jwt = true
+
+[functions.cancel-payment]
+verify_jwt = true

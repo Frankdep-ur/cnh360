@@ -1,16 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, 
   MapPin, 
   Clock, 
   Car, 
-  CreditCard, 
   Check,
   ChevronRight,
-  Wallet,
   Loader2,
-  Crosshair
+  Shield,
+  CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +17,12 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useGeolocation } from "@/hooks/useGeolocation";
+import { StripePaymentModal } from "@/components/payment/StripePaymentModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const paymentMethods = [
-  { id: "pix", label: "PIX", icon: "💰", discount: 5 },
-  { id: "credit", label: "Cartão de Crédito", icon: "💳", discount: 0 },
-  { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0 },
-  { id: "google_pay", label: "Google Pay", icon: "📱", discount: 0 },
+  { id: "credit", label: "Cartão de Crédito/Débito", icon: "💳", discount: 0 },
+  { id: "pix", label: "PIX", icon: "💰", discount: 5, disabled: true, note: "Em breve" },
   { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150 },
 ];
 
@@ -51,7 +49,7 @@ export default function AgendarAula() {
   const [duration, setDuration] = useState(1);
   const [useOwnCar, setUseOwnCar] = useState(false);
   const [meetingPoint, setMeetingPoint] = useState("");
-  const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<string | null>("credit");
   const [loading, setLoading] = useState(false);
   const [instructor, setInstructor] = useState<InstructorData>({
     id: "",
@@ -63,6 +61,11 @@ export default function AgendarAula() {
     email: null,
   });
 
+  // Stripe payment state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [createdAulaId, setCreatedAulaId] = useState<string | null>(null);
+
   useEffect(() => {
     if (id) {
       fetchInstructorData();
@@ -71,9 +74,7 @@ export default function AgendarAula() {
 
   async function fetchInstructorData() {
     try {
-      // Check if it's a mock ID
       if (id?.startsWith("mock-")) {
-        // Use mock data
         setInstructor({
           id: id,
           user_id: "mock-user",
@@ -86,7 +87,6 @@ export default function AgendarAula() {
         return;
       }
 
-      // Get instructor from cache
       const { data: cacheData, error: cacheError } = await supabase
         .from("instrutores_publico_cache")
         .select("*")
@@ -98,7 +98,6 @@ export default function AgendarAula() {
         return;
       }
 
-      // Get vehicle info
       const { data: veiculoData } = await supabase.rpc(
         "get_vehicle_display_info",
         { p_instrutor_id: id }
@@ -114,7 +113,7 @@ export default function AgendarAula() {
 
       setInstructor({
         id: id!,
-        user_id: id!, // Will get the real user_id when creating the lesson
+        user_id: id!,
         name: cacheData.nome || "Instrutor",
         photo: cacheData.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
         price: Number(cacheData.preco_hora) || 80,
@@ -158,7 +157,6 @@ export default function AgendarAula() {
 
     setLoading(true);
     try {
-      // Get aluno_id for this user
       const { data: alunoData, error: alunoError } = await supabase
         .from("alunos")
         .select("id")
@@ -206,7 +204,6 @@ export default function AgendarAula() {
         studentLng = position.coords.longitude;
       } catch (geoErr) {
         console.log("Could not get location:", geoErr);
-        // Continue without location - it's optional
       }
 
       // Create the lesson with pending status
@@ -233,11 +230,10 @@ export default function AgendarAula() {
       }
 
       console.log("Lesson created:", aulaData);
+      setCreatedAulaId(aulaData.id);
 
-      // For PIX, Credit Card, Apple Pay, or Google Pay, redirect to Stripe
-      if (selectedPayment === "pix" || selectedPayment === "credit" || selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
-        const stripePaymentMethod = selectedPayment === "pix" ? "pix" : "card";
-        
+      // For card payments, create PaymentIntent with manual capture
+      if (selectedPayment === "credit") {
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
           "create-lesson-payment",
           {
@@ -247,7 +243,7 @@ export default function AgendarAula() {
               instructorName: instructor.name,
               instructorId: realInstrutorId,
               aulaId: aulaData.id,
-              paymentMethod: stripePaymentMethod,
+              paymentMethod: "card",
             },
           }
         );
@@ -257,14 +253,15 @@ export default function AgendarAula() {
           throw new Error("Erro ao criar pagamento");
         }
 
-        if (paymentData?.url) {
-          // Redirect to Stripe Checkout
-          window.location.href = paymentData.url;
+        if (paymentData?.clientSecret) {
+          setClientSecret(paymentData.clientSecret);
+          setShowPaymentModal(true);
+          setLoading(false);
           return;
         }
       }
 
-      // For wallet balance (or fallback), just navigate to waiting page
+      // For wallet balance, just navigate to waiting page
       toast({
         title: "Aula solicitada!",
         description: "Aguardando confirmação do instrutor.",
@@ -282,6 +279,17 @@ export default function AgendarAula() {
       setLoading(false);
     }
   }
+
+  const handlePaymentSuccess = () => {
+    toast({
+      title: "Pagamento autorizado!",
+      description: "Seu cartão foi pré-autorizado. Aguardando confirmação do instrutor.",
+    });
+    setShowPaymentModal(false);
+    if (createdAulaId) {
+      navigate(`/aluno/aula-solicitada/${createdAulaId}`);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -434,6 +442,14 @@ export default function AgendarAula() {
                 </p>
               </div>
 
+              {/* Security Notice */}
+              <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                <Shield className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                  <strong>Pagamento protegido:</strong> O valor só é cobrado após o instrutor aceitar a aula. Se recusar, o hold é liberado automaticamente.
+                </AlertDescription>
+              </Alert>
+
               {/* Summary */}
               <div className="bg-muted/50 rounded-2xl p-4 space-y-3">
                 <div className="flex justify-between">
@@ -463,12 +479,15 @@ export default function AgendarAula() {
                 {paymentMethods.map((method) => (
                   <button
                     key={method.id}
-                    onClick={() => setSelectedPayment(method.id)}
+                    onClick={() => !method.disabled && setSelectedPayment(method.id)}
+                    disabled={method.disabled}
                     className={cn(
                       "w-full p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
-                      selectedPayment === method.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
+                      method.disabled 
+                        ? "opacity-50 cursor-not-allowed border-border"
+                        : selectedPayment === method.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
                     )}
                   >
                     <span className="text-2xl">{method.icon}</span>
@@ -480,6 +499,11 @@ export default function AgendarAula() {
                             {method.discount}% OFF
                           </span>
                         )}
+                        {method.note && (
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                            {method.note}
+                          </span>
+                        )}
                       </div>
                       {method.balance !== undefined && (
                         <p className="text-sm text-muted-foreground">Saldo: R$ {method.balance.toFixed(2)}</p>
@@ -489,6 +513,14 @@ export default function AgendarAula() {
                   </button>
                 ))}
               </div>
+
+              {/* Card info */}
+              {selectedPayment === "credit" && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
+                  <CreditCard className="w-4 h-4" />
+                  <span>Aceitamos Visa, Mastercard, Elo, Amex e mais</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -514,6 +546,16 @@ export default function AgendarAula() {
           </Button>
         </div>
       </div>
+
+      {/* Stripe Payment Modal */}
+      <StripePaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        clientSecret={clientSecret}
+        amount={totalPrice}
+        instructorName={instructor.name}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }
