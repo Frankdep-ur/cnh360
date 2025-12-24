@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 interface LessonData {
+  aulaId: string;
   dataHora: string;
   duracao: number;
   pontoEncontro: string | null;
@@ -252,13 +253,49 @@ export default function AulaConfirmada() {
           "space-y-3 transition-all duration-500 delay-400",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}>
-          <Button variant="hero" size="xl" className="w-full">
+          <Button 
+            variant="hero" 
+            size="xl" 
+            className="w-full"
+            onClick={() => {
+              if (paymentData?.lesson?.aulaId) {
+                navigate(`/aluno/aula/${paymentData.lesson.aulaId}`);
+              } else {
+                toast.info("Chat não disponível no momento");
+              }
+            }}
+          >
             <MessageCircle className="w-5 h-5" />
             Enviar mensagem ao instrutor
           </Button>
 
           <div className="flex gap-3">
-            <Button variant="outline" size="lg" className="flex-1">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="flex-1"
+              onClick={async () => {
+                const lesson = paymentData?.lesson;
+                const shareData = {
+                  title: "🚗 Minha aula de direção - CNH 360",
+                  text: `Aula marcada com ${lesson?.instrutorNome || 'instrutor'} - ${lesson?.dataHora ? formatLessonDate(lesson.dataHora) : 'Em breve'}${lesson?.pontoEncontro ? ` em ${lesson.pontoEncontro}` : ''}`,
+                  url: window.location.href
+                };
+
+                try {
+                  if (navigator.share) {
+                    await navigator.share(shareData);
+                  } else {
+                    await navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
+                    toast.success("Informações copiadas para a área de transferência!");
+                  }
+                } catch (err) {
+                  if ((err as Error).name !== 'AbortError') {
+                    toast.error("Erro ao compartilhar");
+                  }
+                }
+              }}
+            >
               <Share2 className="w-5 h-5" />
               Compartilhar
             </Button>
