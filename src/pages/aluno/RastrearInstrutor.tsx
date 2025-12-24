@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscribeToLocation } from "@/hooks/useRealtimeLocation";
 import { RealtimeMap } from "@/components/maps/RealtimeMap";
+import { TripChat } from "@/components/maps/TripChat";
+import { useProximityAlert } from "@/hooks/useProximityAlert";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ interface AulaData {
   ponto_encontro: string | null;
   latitude_encontro: number | null;
   longitude_encontro: number | null;
+  latitude_aluno: number | null;
+  longitude_aluno: number | null;
   instrutor_id: string;
   instrutor_nome?: string;
   instrutor_foto?: string;
@@ -44,6 +48,18 @@ export default function RastrearInstrutor() {
   const [distance, setDistance] = useState<string>("--");
   
   const { location: instrutorLocation, loading: locationLoading } = useSubscribeToLocation(aulaId || null, instrutorUserId || undefined);
+
+  // Student location from aula data
+  const studentLocation = aula && aula.latitude_aluno && aula.longitude_aluno
+    ? { latitude: aula.latitude_aluno, longitude: aula.longitude_aluno }
+    : null;
+
+  // Proximity alert when instructor is within 500m
+  const { distance: proximityDistance, isNearby } = useProximityAlert(
+    instrutorLocation,
+    studentLocation,
+    { thresholdMeters: 500 }
+  );
 
   useEffect(() => {
     if (aulaId && user) {
@@ -153,7 +169,7 @@ export default function RastrearInstrutor() {
 
   const destinationCoords = aula && aula.latitude_encontro && aula.longitude_encontro
     ? { latitude: aula.latitude_encontro, longitude: aula.longitude_encontro }
-    : null;
+    : studentLocation; // Fall back to student location if no meeting point coords
 
   if (loading) {
     return (
@@ -342,6 +358,11 @@ export default function RastrearInstrutor() {
           </Button>
         </div>
       </div>
+
+      {/* Trip Chat */}
+      {aulaId && isInstructorOnTheWay && (
+        <TripChat aulaId={aulaId} />
+      )}
     </div>
   );
 }

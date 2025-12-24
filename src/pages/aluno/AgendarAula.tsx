@@ -191,6 +191,24 @@ export default function AgendarAula() {
       const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
       scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
 
+      // Get student's current location
+      let studentLat: number | null = null;
+      let studentLng: number | null = null;
+      
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        });
+        studentLat = position.coords.latitude;
+        studentLng = position.coords.longitude;
+      } catch (geoErr) {
+        console.log("Could not get location:", geoErr);
+        // Continue without location - it's optional
+      }
+
       // Create the lesson with pending status
       const { data: aulaData, error: aulaError } = await supabase
         .from("aulas")
@@ -203,6 +221,8 @@ export default function AgendarAula() {
           valor: totalPrice,
           usa_carro_aluno: useOwnCar,
           status: "pendente",
+          latitude_aluno: studentLat,
+          longitude_aluno: studentLng,
         })
         .select()
         .single();

@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRealtimeLocation } from "@/hooks/useRealtimeLocation";
 import { RealtimeMap } from "@/components/maps/RealtimeMap";
+import { TripChat } from "@/components/maps/TripChat";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -304,6 +305,11 @@ export default function InstrutorACaminho() {
           </div>
         </div>
       </div>
+
+      {/* Trip Chat */}
+      {aulaId && (
+        <TripChat aulaId={aulaId} />
+      )}
     </div>
   );
 }
