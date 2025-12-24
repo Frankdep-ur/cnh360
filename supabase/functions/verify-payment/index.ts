@@ -89,13 +89,14 @@ serve(async (req) => {
                 .eq('id', aula.instrutor?.user_id)
                 .maybeSingle();
               
-              lessonData = {
-                dataHora: aula.data_hora,
-                duracao: aula.duracao_minutos,
-                pontoEncontro: aula.ponto_encontro,
-                instrutorNome: instrutorProfile?.full_name || 'Instrutor',
-                instrutorFoto: instrutorProfile?.avatar_url,
-              };
+          lessonData = {
+            aulaId: aula.id,
+            dataHora: aula.data_hora,
+            duracao: aula.duracao_minutos,
+            pontoEncontro: aula.ponto_encontro,
+            instrutorNome: instrutorProfile?.full_name || 'Instrutor',
+            instrutorFoto: instrutorProfile?.avatar_url,
+          };
             }
           }
 
@@ -224,6 +225,7 @@ serve(async (req) => {
             .maybeSingle();
           
           lessonData = {
+            aulaId: aula.id,
             dataHora: aula.data_hora,
             duracao: aula.duracao_minutos,
             pontoEncontro: aula.ponto_encontro,
