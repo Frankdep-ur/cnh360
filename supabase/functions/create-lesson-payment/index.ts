@@ -86,14 +86,13 @@ serve(async (req) => {
     logStep("Amount calculated", { amountInCents, finalAmount, taxaPlataforma, valorInstrutor });
 
     // Create PaymentIntent with manual capture (authorization only)
+    // Enable Apple Pay and Google Pay via payment_method_types
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalAmount,
       currency: 'brl',
       customer: customerId,
       capture_method: 'manual', // IMPORTANT: Only authorize, don't capture
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ['card', 'link'], // Enable card and Link (Apple Pay/Google Pay work via card)
       metadata: {
         user_id: user.id,
         instrutor_id: instructorId || '',
