@@ -26,7 +26,7 @@ serve(async (req) => {
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
     // Get authenticated user
@@ -51,10 +51,10 @@ serve(async (req) => {
       paymentMethod 
     } = await req.json();
 
-    if (!amount || !instructorName) {
-      throw new Error("Amount and instructorName are required");
+    if (!amount || !instructorName || !aulaId) {
+      throw new Error("Amount, instructorName and aulaId are required");
     }
-    logStep("Payment details received", { amount, duration, instructorName, paymentMethod });
+    logStep("Payment details received", { amount, duration, instructorName, aulaId, paymentMethod });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -83,64 +83,54 @@ serve(async (req) => {
       ? Math.round(amountInCents * 0.95) // 5% discount
       : amountInCents;
 
-    const origin = req.headers.get("origin") || "https://cnh360.lovable.app";
+    logStep("Amount calculated", { amountInCents, finalAmount, taxaPlataforma, valorInstrutor });
 
-    // Determine payment method types based on selection
-    // Apple Pay and Google Pay are automatically enabled via 'card' type
-    let paymentMethodTypes: ('card' | 'pix')[];
-    if (paymentMethod === 'pix') {
-      paymentMethodTypes = ['pix'];
-    } else {
-      // For card, apple_pay, or google_pay - all use 'card' type
-      // Stripe automatically shows Apple Pay/Google Pay when available on user's device
-      paymentMethodTypes = ['card'];
-    }
-
-    logStep("Payment method types configured", { paymentMethod, paymentMethodTypes });
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    // Create PaymentIntent with manual capture (authorization only)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: finalAmount,
+      currency: 'brl',
       customer: customerId,
-      payment_method_types: paymentMethodTypes,
-      line_items: [
-        {
-          price_data: {
-            currency: 'brl',
-            product_data: {
-              name: `Aula de Direção - ${duration}min`,
-              description: `Instrutor: ${instructorName}`,
-            },
-            unit_amount: finalAmount,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${origin}/aluno/aula-confirmada?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/aluno/dashboard`,
+      capture_method: 'manual', // IMPORTANT: Only authorize, don't capture
+      automatic_payment_methods: {
+        enabled: true,
+      },
       metadata: {
         user_id: user.id,
         instrutor_id: instructorId || '',
-        aula_id: aulaId || '',
+        aula_id: aulaId,
         valor_instrutor: valorInstrutor.toString(),
         taxa_plataforma: taxaPlataforma.toString(),
         payment_method: paymentMethod,
+        instructor_name: instructorName,
+        duration_minutes: duration?.toString() || '',
       },
-      payment_intent_data: {
-        metadata: {
-          user_id: user.id,
-          instrutor_id: instructorId || '',
-          aula_id: aulaId || '',
-        },
-      },
+      description: `Aula de Direção - ${duration || 60}min com ${instructorName}`,
     });
 
-    logStep("Checkout session created", { sessionId: session.id, url: session.url });
+    logStep("PaymentIntent created with manual capture", { 
+      paymentIntentId: paymentIntent.id, 
+      status: paymentIntent.status,
+      captureMethod: paymentIntent.capture_method
+    });
+
+    // Update the aula with the payment_intent_id
+    const { error: updateError } = await supabaseClient
+      .from("aulas")
+      .update({ payment_intent_id: paymentIntent.id })
+      .eq("id", aulaId);
+
+    if (updateError) {
+      logStep("Error updating aula with payment_intent_id", { error: updateError });
+      // Don't throw - we still want to return the client secret
+    } else {
+      logStep("Aula updated with payment_intent_id");
+    }
 
     return new Response(
       JSON.stringify({ 
-        url: session.url, 
-        sessionId: session.id 
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: finalAmount,
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
