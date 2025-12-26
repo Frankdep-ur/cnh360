@@ -20,6 +20,33 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    // Validate JWT authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      logStep("Unauthorized: No authorization header");
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      logStep("Unauthorized: Invalid token", { error: authError?.message });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    logStep("User authenticated", { userId: user.id });
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
@@ -39,6 +66,19 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['payment_intent'],
     });
+
+    // Verify ownership - user must own this payment session
+    const sessionUserId = session.metadata?.user_id;
+    if (sessionUserId && sessionUserId !== user.id) {
+      logStep("Forbidden: User does not own this payment session", { 
+        sessionUserId, 
+        requestingUserId: user.id 
+      });
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Not your payment session' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const paymentIntentId = typeof session.payment_intent === 'string' 
       ? session.payment_intent 
