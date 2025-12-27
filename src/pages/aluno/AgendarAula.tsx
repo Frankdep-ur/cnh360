@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Loader2,
   Shield,
-  CreditCard
+  CreditCard,
+  Smartphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +20,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { StripePaymentModal } from "@/components/payment/StripePaymentModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import { WalletPaymentButtons } from "@/components/payment/WalletPaymentButtons";
+
+// Initialize Stripe
+const stripePromise = loadStripe("pk_test_51RVxwm2MzPduPRmkVHxV5VK5C5jFJDcGvxpH6pvbWmkBDPwT5FT4FBL3hYO5RpRiCmGNlxUcxG7F9yc0rZyM2TRZ00XaIZlDaF");
 
 const paymentMethods = [
+  { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0, isWallet: true },
+  { id: "google_pay", label: "Google Pay", icon: "🔴", discount: 0, isWallet: true },
   { id: "credit", label: "Cartão de Crédito/Débito", icon: "💳", discount: 0 },
   { id: "pix", label: "PIX", icon: "💰", discount: 5, disabled: true, note: "Em breve" },
   { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150 },
@@ -35,6 +44,176 @@ interface InstructorData {
   car: string;
   email: string | null;
 }
+
+// Payment Step Content Component (inside Elements provider)
+interface PaymentStepContentProps {
+  duration: number;
+  basePrice: number;
+  carDiscount: number;
+  paymentDiscount: number;
+  totalPrice: number;
+  selectedPayment: string | null;
+  setSelectedPayment: (id: string) => void;
+  walletClientSecret: string | null;
+  onWalletPaymentSuccess: () => void;
+  onWalletAvailabilityChange: (available: boolean, type: 'applePay' | 'googlePay' | null) => void;
+  walletAvailable: { applePay: boolean; googlePay: boolean };
+}
+
+function PaymentStepContent({
+  duration,
+  basePrice,
+  carDiscount,
+  paymentDiscount,
+  totalPrice,
+  selectedPayment,
+  setSelectedPayment,
+  walletClientSecret,
+  onWalletPaymentSuccess,
+  onWalletAvailabilityChange,
+  walletAvailable,
+}: PaymentStepContentProps) {
+  // Filter payment methods based on wallet availability
+  const availableMethods = paymentMethods.filter(method => {
+    if (method.id === 'apple_pay') return walletAvailable.applePay;
+    if (method.id === 'google_pay') return walletAvailable.googlePay;
+    return true;
+  });
+
+  const handleWalletPayment = (event: any) => {
+    console.log("[PaymentStep] Wallet payment completed:", event);
+    onWalletPaymentSuccess();
+  };
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground mb-2">
+          Pagamento
+        </h1>
+        <p className="text-muted-foreground">
+          Escolha a forma de pagamento
+        </p>
+      </div>
+
+      {/* Security Notice */}
+      <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+        <Shield className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+          <strong>Pagamento protegido:</strong> O valor só é cobrado após o instrutor aceitar a aula. Se recusar, o hold é liberado automaticamente.
+        </AlertDescription>
+      </Alert>
+
+      {/* Summary */}
+      <div className="bg-muted/50 rounded-2xl p-4 space-y-3">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Aula ({duration}h)</span>
+          <span className="font-medium">R$ {basePrice.toFixed(2)}</span>
+        </div>
+        {carDiscount > 0 && (
+          <div className="flex justify-between text-primary">
+            <span>Desconto (carro próprio)</span>
+            <span>-R$ {carDiscount.toFixed(2)}</span>
+          </div>
+        )}
+        {paymentDiscount > 0 && (
+          <div className="flex justify-between text-primary">
+            <span>Desconto PIX (5%)</span>
+            <span>-R$ {paymentDiscount.toFixed(2)}</span>
+          </div>
+        )}
+        <div className="border-t border-border pt-3 flex justify-between">
+          <span className="font-semibold text-foreground">Total</span>
+          <span className="text-2xl font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* Native Wallet Button (Apple Pay / Google Pay) */}
+      {(walletAvailable.applePay || walletAvailable.googlePay) && walletClientSecret && (
+        <div className="space-y-2">
+          <WalletPaymentButtons
+            amount={totalPrice}
+            label="Aula de Direção"
+            onPaymentMethod={handleWalletPayment}
+            onAvailabilityChange={onWalletAvailabilityChange}
+            clientSecret={walletClientSecret}
+          />
+        </div>
+      )}
+
+      {/* Payment Methods */}
+      <div className="space-y-3">
+        {availableMethods.map((method) => {
+          // Skip wallet methods in list if they have native button above
+          const isWalletMethod = method.id === 'apple_pay' || method.id === 'google_pay';
+          
+          return (
+            <button
+              key={method.id}
+              onClick={() => !method.disabled && setSelectedPayment(method.id)}
+              disabled={method.disabled}
+              className={cn(
+                "w-full p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
+                method.disabled 
+                  ? "opacity-50 cursor-not-allowed border-border"
+                  : selectedPayment === method.id
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+              )}
+            >
+              <span className="text-2xl">{method.icon}</span>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground">{method.label}</h3>
+                  {method.discount > 0 && (
+                    <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                      {method.discount}% OFF
+                    </span>
+                  )}
+                  {method.note && (
+                    <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                      {method.note}
+                    </span>
+                  )}
+                  {isWalletMethod && (
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
+                      Disponível
+                    </span>
+                  )}
+                </div>
+                {method.balance !== undefined && (
+                  <p className="text-sm text-muted-foreground">Saldo: R$ {method.balance.toFixed(2)}</p>
+                )}
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Card info */}
+      {selectedPayment === "credit" && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
+          <CreditCard className="w-4 h-4" />
+          <span>Aceitamos Visa, Mastercard, Elo, Amex e mais</span>
+        </div>
+      )}
+
+      {/* Hidden wallet availability check (only when no client secret yet) */}
+      {!walletClientSecret && (
+        <div className="hidden">
+          <WalletPaymentButtons
+            amount={totalPrice}
+            label="Aula de Direção"
+            onPaymentMethod={() => {}}
+            onAvailabilityChange={onWalletAvailabilityChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function AgendarAula() {
   const navigate = useNavigate();
@@ -65,6 +244,14 @@ export default function AgendarAula() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [createdAulaId, setCreatedAulaId] = useState<string | null>(null);
+  
+  // Wallet availability state
+  const [walletAvailable, setWalletAvailable] = useState<{
+    applePay: boolean;
+    googlePay: boolean;
+  }>({ applePay: false, googlePay: false });
+  const [walletClientSecret, setWalletClientSecret] = useState<string | null>(null);
+  const [isPreparingWallet, setIsPreparingWallet] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -232,8 +419,8 @@ export default function AgendarAula() {
       console.log("Lesson created:", aulaData);
       setCreatedAulaId(aulaData.id);
 
-      // For card payments, create PaymentIntent with manual capture
-      if (selectedPayment === "credit") {
+      // For card payments (including Apple Pay/Google Pay), create PaymentIntent with manual capture
+      if (selectedPayment === "credit" || selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
           "create-lesson-payment",
           {
@@ -243,7 +430,7 @@ export default function AgendarAula() {
               instructorName: instructor.name,
               instructorId: realInstrutorId,
               aulaId: aulaData.id,
-              paymentMethod: "card",
+              paymentMethod: selectedPayment === "credit" ? "card" : selectedPayment,
             },
           }
         );
@@ -254,6 +441,20 @@ export default function AgendarAula() {
         }
 
         if (paymentData?.clientSecret) {
+          // For Apple Pay/Google Pay, set wallet client secret for inline payment
+          if (selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
+            setWalletClientSecret(paymentData.clientSecret);
+            setIsPreparingWallet(false);
+            // The WalletPaymentButtons component will handle the payment
+            toast({
+              title: "Pronto para pagar!",
+              description: "Toque no botão de pagamento para confirmar.",
+            });
+            setLoading(false);
+            return;
+          }
+          
+          // For regular credit card, show modal
           setClientSecret(paymentData.clientSecret);
           setShowPaymentModal(true);
           setLoading(false);
@@ -432,96 +633,27 @@ export default function AgendarAula() {
 
           {/* Step 2: Payment */}
           {step === 2 && (
-            <div className="animate-fade-in space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold text-foreground mb-2">
-                  Pagamento
-                </h1>
-                <p className="text-muted-foreground">
-                  Escolha a forma de pagamento
-                </p>
-              </div>
-
-              {/* Security Notice */}
-              <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-                <Shield className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                  <strong>Pagamento protegido:</strong> O valor só é cobrado após o instrutor aceitar a aula. Se recusar, o hold é liberado automaticamente.
-                </AlertDescription>
-              </Alert>
-
-              {/* Summary */}
-              <div className="bg-muted/50 rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Aula ({duration}h)</span>
-                  <span className="font-medium">R$ {basePrice.toFixed(2)}</span>
-                </div>
-                {carDiscount > 0 && (
-                  <div className="flex justify-between text-primary">
-                    <span>Desconto (carro próprio)</span>
-                    <span>-R$ {carDiscount.toFixed(2)}</span>
-                  </div>
-                )}
-                {paymentDiscount > 0 && (
-                  <div className="flex justify-between text-primary">
-                    <span>Desconto PIX (5%)</span>
-                    <span>-R$ {paymentDiscount.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="border-t border-border pt-3 flex justify-between">
-                  <span className="font-semibold text-foreground">Total</span>
-                  <span className="text-2xl font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Payment Methods */}
-              <div className="space-y-3">
-                {paymentMethods.map((method) => (
-                  <button
-                    key={method.id}
-                    onClick={() => !method.disabled && setSelectedPayment(method.id)}
-                    disabled={method.disabled}
-                    className={cn(
-                      "w-full p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
-                      method.disabled 
-                        ? "opacity-50 cursor-not-allowed border-border"
-                        : selectedPayment === method.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-2xl">{method.icon}</span>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground">{method.label}</h3>
-                        {method.discount > 0 && (
-                          <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                            {method.discount}% OFF
-                          </span>
-                        )}
-                        {method.note && (
-                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                            {method.note}
-                          </span>
-                        )}
-                      </div>
-                      {method.balance !== undefined && (
-                        <p className="text-sm text-muted-foreground">Saldo: R$ {method.balance.toFixed(2)}</p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  </button>
-                ))}
-              </div>
-
-              {/* Card info */}
-              {selectedPayment === "credit" && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
-                  <CreditCard className="w-4 h-4" />
-                  <span>Aceitamos Visa, Mastercard, Elo, Amex e mais</span>
-                </div>
-              )}
-            </div>
+            <Elements stripe={stripePromise}>
+              <PaymentStepContent
+                duration={duration}
+                basePrice={basePrice}
+                carDiscount={carDiscount}
+                paymentDiscount={paymentDiscount}
+                totalPrice={totalPrice}
+                selectedPayment={selectedPayment}
+                setSelectedPayment={setSelectedPayment}
+                walletClientSecret={walletClientSecret}
+                onWalletPaymentSuccess={handlePaymentSuccess}
+                onWalletAvailabilityChange={(available, type) => {
+                  if (type === 'applePay') {
+                    setWalletAvailable(prev => ({ ...prev, applePay: available }));
+                  } else if (type === 'googlePay') {
+                    setWalletAvailable(prev => ({ ...prev, googlePay: available }));
+                  }
+                }}
+                walletAvailable={walletAvailable}
+              />
+            </Elements>
           )}
         </div>
       </div>
