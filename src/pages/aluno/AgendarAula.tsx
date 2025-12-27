@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { StripePaymentModal } from "@/components/payment/StripePaymentModal";
+import { PixPaymentModal } from "@/components/payment/PixPaymentModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
@@ -31,8 +32,8 @@ const paymentMethods = [
   { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0, isWallet: true },
   { id: "google_pay", label: "Google Pay", icon: "🔴", discount: 0, isWallet: true },
   { id: "credit", label: "Cartão de Crédito/Débito", icon: "💳", discount: 0 },
-  { id: "pix", label: "PIX", icon: "💰", discount: 5, disabled: true, note: "Em breve" },
-  { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150 },
+  { id: "pix", label: "PIX", icon: "💰", discount: 5, disabled: false },
+  { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150, disabled: true, note: "Em breve" },
 ];
 
 interface InstructorData {
@@ -244,6 +245,9 @@ export default function AgendarAula() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [createdAulaId, setCreatedAulaId] = useState<string | null>(null);
+  
+  // PIX payment state
+  const [showPixModal, setShowPixModal] = useState(false);
   
   // Wallet availability state
   const [walletAvailable, setWalletAvailable] = useState<{
@@ -460,6 +464,13 @@ export default function AgendarAula() {
           setLoading(false);
           return;
         }
+      }
+
+      // For PIX payments, show PIX modal
+      if (selectedPayment === "pix") {
+        setShowPixModal(true);
+        setLoading(false);
+        return;
       }
 
       // For wallet balance, just navigate to waiting page
@@ -688,6 +699,19 @@ export default function AgendarAula() {
         instructorName={instructor.name}
         onSuccess={handlePaymentSuccess}
       />
+
+      {/* PIX Payment Modal */}
+      {createdAulaId && (
+        <PixPaymentModal
+          open={showPixModal}
+          onClose={() => setShowPixModal(false)}
+          amount={Math.round(totalPrice * 0.95 * 100)} // Convert to cents with discount
+          originalAmount={Math.round(totalPrice * 100)} // Original in cents
+          instructorName={instructor.name}
+          aulaId={createdAulaId}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 }
