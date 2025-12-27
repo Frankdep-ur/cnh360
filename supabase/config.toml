@@ -18,6 +18,9 @@ verify_jwt = true
 [functions.create-lesson-payment]
 verify_jwt = true
 
+[functions.create-pix-payment]
+verify_jwt = true
+
 [functions.verify-payment]
 verify_jwt = false
 
@@ -28,4 +31,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.cancel-payment]
+verify_jwt = true
+
+[functions.get-mapbox-token]
 verify_jwt = true

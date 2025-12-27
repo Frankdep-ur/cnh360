@@ -1,0 +1,182 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const logStep = (step: string, details?: any) => {
+  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
+  console.log(`[CREATE-PIX-PAYMENT] ${step}${detailsStr}`);
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    logStep("Function started");
+
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
+    logStep("Stripe key verified");
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    // Get authenticated user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("No authorization header provided");
+    
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    
+    const user = userData.user;
+    if (!user?.email) throw new Error("User not authenticated or email not available");
+    logStep("User authenticated", { userId: user.id, email: user.email });
+
+    // Get payment details from request
+    const { 
+      amount, 
+      duration, 
+      instructorName, 
+      instructorId,
+      aulaId,
+    } = await req.json();
+
+    if (!amount || !instructorName || !aulaId) {
+      throw new Error("Amount, instructorName and aulaId are required");
+    }
+    logStep("Payment details received", { amount, duration, instructorName, aulaId });
+
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+
+    // Check if customer exists
+    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    let customerId;
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+      logStep("Existing customer found", { customerId });
+    } else {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: user.id }
+      });
+      customerId = customer.id;
+      logStep("New customer created", { customerId });
+    }
+
+    // Calculate amounts with 5% PIX discount
+    const originalAmountInCents = Math.round(amount * 100);
+    const discountedAmountInCents = Math.round(originalAmountInCents * 0.95); // 5% discount
+    const taxaPlataforma = Math.round(discountedAmountInCents * 0.20); // 20% platform fee
+    const valorInstrutor = discountedAmountInCents - taxaPlataforma;
+
+    logStep("Amount calculated with PIX discount", { 
+      originalAmountInCents, 
+      discountedAmountInCents, 
+      discountPercentage: 5,
+      taxaPlataforma, 
+      valorInstrutor 
+    });
+
+    // Create PaymentIntent with PIX as payment method
+    // PIX payments are immediate (no manual capture option)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: discountedAmountInCents,
+      currency: 'brl',
+      customer: customerId,
+      payment_method_types: ['pix'],
+      metadata: {
+        user_id: user.id,
+        instrutor_id: instructorId || '',
+        aula_id: aulaId,
+        valor_instrutor: valorInstrutor.toString(),
+        taxa_plataforma: taxaPlataforma.toString(),
+        payment_method: 'pix',
+        instructor_name: instructorName,
+        duration_minutes: duration?.toString() || '',
+        original_amount: originalAmountInCents.toString(),
+        discount_applied: '5',
+      },
+      description: `Aula de Direção - ${duration || 60}min com ${instructorName} (PIX)`,
+    });
+
+    logStep("PIX PaymentIntent created", { 
+      paymentIntentId: paymentIntent.id, 
+      status: paymentIntent.status,
+    });
+
+    // Update the aula with the payment_intent_id
+    const { error: updateError } = await supabaseClient
+      .from("aulas")
+      .update({ payment_intent_id: paymentIntent.id })
+      .eq("id", aulaId);
+
+    if (updateError) {
+      logStep("Error updating aula with payment_intent_id", { error: updateError });
+    } else {
+      logStep("Aula updated with payment_intent_id");
+    }
+
+    // Get the PIX QR code data from the PaymentIntent
+    // We need to confirm the payment intent first to generate the PIX code
+    const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntent.id, {
+      payment_method_data: {
+        type: 'pix',
+      },
+      return_url: `${req.headers.get("origin")}/aluno/aula-solicitada/${aulaId}`,
+    });
+
+    logStep("PaymentIntent confirmed for PIX", { 
+      status: confirmedPaymentIntent.status,
+      nextAction: confirmedPaymentIntent.next_action?.type
+    });
+
+    // Extract PIX data
+    const pixAction = confirmedPaymentIntent.next_action?.pix_display_qr_code;
+    
+    if (!pixAction) {
+      throw new Error("Failed to generate PIX QR Code");
+    }
+
+    logStep("PIX QR Code generated successfully");
+
+    return new Response(
+      JSON.stringify({ 
+        paymentIntentId: paymentIntent.id,
+        clientSecret: confirmedPaymentIntent.client_secret,
+        amount: discountedAmountInCents,
+        originalAmount: originalAmountInCents,
+        discount: originalAmountInCents - discountedAmountInCents,
+        pix: {
+          qrCode: pixAction.data, // Base64 QR Code image or raw data
+          expiresAt: pixAction.expires_at,
+          hostedInstructionsUrl: pixAction.hosted_instructions_url,
+          imageUrlPng: pixAction.image_url_png,
+          imageUrlSvg: pixAction.image_url_svg,
+        }
+      }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200 
+      }
+    );
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logStep("ERROR", { message: errorMessage });
+    return new Response(
+      JSON.stringify({ error: errorMessage }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500 
+      }
+    );
+  }
+});
