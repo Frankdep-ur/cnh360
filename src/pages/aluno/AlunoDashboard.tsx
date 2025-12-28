@@ -6,15 +6,12 @@ import {
   Car, 
   ClipboardCheck, 
   Trophy,
-  Calendar,
   Clock,
   MapPin,
   Star,
   Shield,
   Timer,
   FileText,
-  Leaf,
-  Building2,
   CreditCard,
   Navigation
 } from "lucide-react";
@@ -24,10 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
-import { ContadorTransicao } from "@/components/transicao/ContadorTransicao";
-import { IndicadorModo } from "@/components/transicao/IndicadorModo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { useModoTransicao } from "@/contexts/ModoTransicaoContext";
 import { LocationShareButton } from "@/components/maps/LocationShareButton";
 import { RouteMapCard } from "@/components/maps/RouteMapCard";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
@@ -46,7 +40,6 @@ const nextLesson = {
 
 export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
-  const { modo, config, isSP, diasRestantes } = useModoTransicao();
   const { user } = useAuth();
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
@@ -65,22 +58,20 @@ export default function AlunoDashboard() {
     }
   }, [user]);
   
-  // Valores baseados no modo
-  const requiredHours = config.horasPraticasMinimas;
+  const requiredHours = 20;
   const practicalHours = 1;
-  const totalProgress = modo === "nova_lei" ? 75 : 62;
+  const totalProgress = 62;
 
-  // Steps adaptados ao modo
   const steps = [
     { id: 1, name: "Exame Médico/Psico", icon: FileText, status: "completed", progress: 100 },
     { 
       id: 2, 
-      name: modo === "nova_lei" ? "Curso Teórico 100% EAD" : "Curso Teórico 45h", 
+      name: "Curso Teórico 45h", 
       icon: BookOpen, 
       status: "completed", 
       progress: 100, 
       link: "/aluno/curso-teorico",
-      detail: modo === "nova_lei" ? "Sem carga horária fixa" : "45 horas presenciais"
+      detail: "45 horas presenciais"
     },
     { id: 3, name: "Exame Teórico", icon: ClipboardCheck, status: "completed", progress: 100 },
     { 
@@ -89,7 +80,7 @@ export default function AlunoDashboard() {
       icon: Car, 
       status: "current", 
       progress: Math.round((practicalHours / requiredHours) * 100), 
-      detail: `${practicalHours}h de ${requiredHours}h ${modo === "nova_lei" ? "mínimas" : "obrigatórias"}`, 
+      detail: `${practicalHours}h de ${requiredHours}h obrigatórias`, 
       link: "/aluno/buscar" 
     },
     { 
@@ -98,8 +89,7 @@ export default function AlunoDashboard() {
       icon: Trophy, 
       status: "locked", 
       progress: 0, 
-      link: "/aluno/exame-pratico",
-      detail: modo === "nova_lei" ? "2ª tentativa grátis" : undefined
+      link: "/aluno/exame-pratico"
     },
   ];
 
@@ -109,10 +99,7 @@ export default function AlunoDashboard() {
       <ComplianceBanner variant="full" dismissible />
 
       {/* Header */}
-      <header className={cn(
-        "text-primary-foreground px-6 pt-6 pb-20",
-        modo === "nova_lei" ? "gradient-nova-lei" : modo === "atual" ? "gradient-modo-atual" : "gradient-hero"
-      )}>
+      <header className="gradient-hero text-primary-foreground px-6 pt-6 pb-20">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -135,23 +122,6 @@ export default function AlunoDashboard() {
             <NotificationBell />
           </div>
 
-          {/* Indicador do Modo de Transição */}
-          {isSP && modo && (
-            <div className="flex items-center justify-between mb-4 bg-primary-foreground/10 backdrop-blur-sm rounded-xl px-3 py-2">
-              <div className="flex items-center gap-2">
-                {modo === "nova_lei" ? (
-                  <Leaf className="w-4 h-4" />
-                ) : (
-                  <Building2 className="w-4 h-4" />
-                )}
-                <span className="text-sm font-medium">{config.label}</span>
-              </div>
-              <div className="text-xs text-primary-foreground/80">
-                {diasRestantes}d restantes
-              </div>
-            </div>
-          )}
-
           {/* RENACH Progress Card */}
           <div className="bg-primary-foreground/10 backdrop-blur-sm rounded-2xl p-4">
             <div className="flex items-center gap-3 mb-2">
@@ -167,18 +137,6 @@ export default function AlunoDashboard() {
                 <p className="text-xs text-primary-foreground/60">Validadas GPS/QR</p>
               </div>
             </div>
-            
-            {/* Economia no modo nova lei */}
-            {modo === "nova_lei" && (
-              <div className="mt-3 pt-3 border-t border-primary-foreground/20">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-primary-foreground/80">Economia estimada</span>
-                  <span className="font-bold text-primary-foreground">
-                    ~R$ {config.precoSugerido.max - config.precoSugerido.min + 1400}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </header>
@@ -197,41 +155,23 @@ export default function AlunoDashboard() {
                 <h2 className="font-semibold text-foreground mb-1">Seu progresso</h2>
                 <p className="text-sm text-muted-foreground mb-3">Categoria B - Primeira Habilitação</p>
                 <div className="flex items-center gap-2 text-sm">
-                  <div className={cn(
-                    "w-2 h-2 rounded-full",
-                    modo === "nova_lei" ? "bg-primary" : "bg-secondary"
-                  )} />
-                  <span className={cn(
-                    "font-medium",
-                    modo === "nova_lei" ? "text-primary" : "text-secondary"
-                  )}>
+                  <div className="w-2 h-2 rounded-full bg-primary" />
+                  <span className="font-medium text-primary">
                     Falta {requiredHours - practicalHours}h de aula prática
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* PPD Counter ou info do modo */}
+            {/* PPD Counter */}
             <div className="mt-4 pt-4 border-t border-border">
-              {modo === "nova_lei" ? (
-                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-xl">
-                  <Leaf className="w-5 h-5 text-primary" />
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">Você está na Nova Lei</p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {config.carroProprioPermitido ? "Pode usar carro próprio" : "Use o carro do instrutor"}
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3 p-3 bg-secondary/5 rounded-xl">
+                <Timer className="w-5 h-5 text-secondary" />
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">PPD automática após aprovação</p>
+                  <p className="text-sm font-semibold text-foreground">1 ano sem infrações graves</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3 p-3 bg-secondary/5 rounded-xl">
-                  <Timer className="w-5 h-5 text-secondary" />
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">PPD automática após aprovação</p>
-                    <p className="text-sm font-semibold text-foreground">1 ano sem infrações graves</p>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -252,9 +192,7 @@ export default function AlunoDashboard() {
                 <div
                   className={cn(
                     "bg-card rounded-2xl p-4 border-2 transition-all",
-                    isCurrent && modo === "nova_lei" && "border-primary shadow-card",
-                    isCurrent && modo === "atual" && "border-secondary shadow-card",
-                    isCurrent && !modo && "border-primary shadow-card",
+                    isCurrent && "border-primary shadow-card",
                     isCompleted && "border-primary/30",
                     isLocked && "border-border opacity-60"
                   )}
@@ -263,9 +201,7 @@ export default function AlunoDashboard() {
                     <div className={cn(
                       "w-12 h-12 rounded-xl flex items-center justify-center",
                       isCompleted && "bg-primary text-primary-foreground",
-                      isCurrent && modo === "nova_lei" && "bg-primary/10 text-primary",
-                      isCurrent && modo === "atual" && "bg-secondary/10 text-secondary",
-                      isCurrent && !modo && "bg-primary/10 text-primary",
+                      isCurrent && "bg-primary/10 text-primary",
                       isLocked && "bg-muted text-muted-foreground"
                     )}>
                       <Icon className="w-6 h-6" />
@@ -279,12 +215,7 @@ export default function AlunoDashboard() {
                           </span>
                         )}
                         {isCurrent && (
-                          <span className={cn(
-                            "text-xs px-2 py-0.5 rounded-full",
-                            modo === "nova_lei" 
-                              ? "bg-primary text-primary-foreground" 
-                              : "bg-secondary text-secondary-foreground"
-                          )}>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                             Em andamento
                           </span>
                         )}
@@ -301,10 +232,7 @@ export default function AlunoDashboard() {
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
-                          className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            modo === "nova_lei" ? "bg-primary" : "bg-secondary"
-                          )}
+                          className="h-full rounded-full transition-all duration-500 bg-primary"
                           style={{ width: `${step.progress}%` }}
                         />
                       </div>
@@ -347,11 +275,6 @@ export default function AlunoDashboard() {
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold text-foreground">{nextLesson.instructor}</h4>
-                  {modo === "nova_lei" && nextLesson.isMEI && (
-                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
-                      MEI
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
@@ -359,10 +282,7 @@ export default function AlunoDashboard() {
                 </div>
               </div>
               <div className="text-right">
-                <p className={cn(
-                  "font-semibold",
-                  modo === "nova_lei" ? "text-primary" : "text-secondary"
-                )}>{nextLesson.date}</p>
+                <p className="font-semibold text-primary">{nextLesson.date}</p>
                 <p className="text-sm text-muted-foreground">{nextLesson.time}</p>
               </div>
             </div>
@@ -429,26 +349,13 @@ export default function AlunoDashboard() {
                     Ver Rota
                   </Button>
                   <Link to="/aluno/validacao-aula" className="flex-1">
-                    <Button 
-                      className={cn(
-                        "w-full",
-                        modo === "nova_lei" 
-                          ? "bg-primary hover:bg-primary/90" 
-                          : "bg-secondary hover:bg-secondary/90"
-                      )}
-                    >
+                    <Button className="w-full">
                       Iniciar Aula
                     </Button>
                   </Link>
                 </>
               )}
             </div>
-            
-            {isPaid && (
-              <div className="mt-3 p-2 bg-[#4CAF50]/10 rounded-lg text-center">
-                <p className="text-sm text-[#4CAF50] font-medium">✓ Pagamento confirmado</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -457,47 +364,16 @@ export default function AlunoDashboard() {
       <PaymentCheckout
         open={showPayment}
         onClose={() => setShowPayment(false)}
-        onPaymentComplete={() => setIsPaid(true)}
+        onPaymentComplete={() => {
+          setShowPayment(false);
+          setIsPaid(true);
+          toast.success("Pagamento confirmado!");
+        }}
         amount={100}
         duration={60}
         instructorName={nextLesson.instructor}
-        lessonDate={`${nextLesson.date} às ${nextLesson.time}`}
+        lessonDate={nextLesson.date}
       />
-
-      {/* Quick Actions */}
-      <div className="px-6 mt-6">
-        <div className="max-w-md mx-auto">
-          <h3 className="font-semibold text-foreground mb-4">Ações rápidas</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              to="/aluno/buscar"
-              className={cn(
-                "rounded-2xl p-4 transition-colors",
-                modo === "nova_lei" 
-                  ? "bg-primary/5 hover:bg-primary/10" 
-                  : "bg-secondary/5 hover:bg-secondary/10"
-              )}
-            >
-              <Car className={cn(
-                "w-8 h-8 mb-2",
-                modo === "nova_lei" ? "text-primary" : "text-secondary"
-              )} />
-              <h4 className="font-medium text-foreground">Agendar aula</h4>
-              <p className="text-xs text-muted-foreground">
-                {modo === "nova_lei" ? "Instrutores MEI disponíveis" : "Encontre instrutores"}
-              </p>
-            </Link>
-            <Link
-              to="/aluno/simulado"
-              className="bg-amber-500/5 hover:bg-amber-500/10 rounded-2xl p-4 transition-colors"
-            >
-              <BookOpen className="w-8 h-8 text-amber-600 mb-2" />
-              <h4 className="font-medium text-foreground">Simulado</h4>
-              <p className="text-xs text-muted-foreground">30 questões DETRAN</p>
-            </Link>
-          </div>
-        </div>
-      </div>
 
       <BottomNav />
     </div>
