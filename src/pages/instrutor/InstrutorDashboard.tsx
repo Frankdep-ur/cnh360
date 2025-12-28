@@ -3,7 +3,7 @@ import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
-import { NovaAulaPopupEnhanced } from "@/components/instrutor/NovaAulaPopupEnhanced";
+import { RideRequestNotification } from "@/components/instrutor/RideRequestNotification";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
 import { Button } from "@/components/ui/button";
@@ -288,8 +288,8 @@ export default function InstrutorDashboard() {
     <div className="app-container pb-24">
       <ComplianceBanner />
       
-      {/* Nova Aula Popup Enhanced com Mapa */}
-      <NovaAulaPopupEnhanced 
+      {/* Notificação estilo Uber para nova aula */}
+      <RideRequestNotification 
         aula={novaAula} 
         open={showPopup} 
         onClose={() => {
