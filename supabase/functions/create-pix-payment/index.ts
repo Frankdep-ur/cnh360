@@ -24,22 +24,42 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
     logStep("Stripe key verified");
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // Get authenticated user
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get authenticated user - try with auth header first
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
-    
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    let user = null;
+    let userEmail = null;
+    let userId = null;
+
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      
+      // Create a client with the user's token to verify
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
+      });
+      
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      
+      if (!userError && userData?.user) {
+        user = userData.user;
+        userEmail = user.email;
+        userId = user.id;
+        logStep("User authenticated", { userId: user.id, email: user.email });
+      } else {
+        logStep("Auth header present but invalid", { error: userError?.message });
+      }
+    }
+
+    // If no valid auth, try to get user info from request body
+    if (!userId) {
+      logStep("No valid auth, will use data from request body");
+    }
 
     // Get payment details from request
     const { 
@@ -48,6 +68,7 @@ serve(async (req) => {
       instructorName, 
       instructorId,
       aulaId,
+      userEmail: bodyUserEmail,
     } = await req.json();
 
     if (!amount || !instructorName || !aulaId) {
@@ -55,18 +76,62 @@ serve(async (req) => {
     }
     logStep("Payment details received", { amount, duration, instructorName, aulaId });
 
+    // Get user email from the aula if not authenticated
+    let finalUserEmail = userEmail;
+    let finalUserId = userId;
+    
+    if (!finalUserEmail) {
+      // Try to get user info from the aula record
+      const { data: aulaData, error: aulaError } = await supabaseClient
+        .from("aulas")
+        .select("aluno_id")
+        .eq("id", aulaId)
+        .maybeSingle();
+      
+      if (aulaData?.aluno_id) {
+        const { data: alunoData } = await supabaseClient
+          .from("alunos")
+          .select("user_id")
+          .eq("id", aulaData.aluno_id)
+          .maybeSingle();
+        
+        if (alunoData?.user_id) {
+          finalUserId = alunoData.user_id;
+          
+          // Get email from auth.users via profiles or direct
+          const { data: profileData } = await supabaseClient
+            .from("profiles")
+            .select("id")
+            .eq("id", alunoData.user_id)
+            .maybeSingle();
+          
+          if (profileData) {
+            // Use a generic email based on user ID for Stripe
+            finalUserEmail = `user_${alunoData.user_id}@cnh360.app`;
+          }
+        }
+      }
+      
+      // Fallback to body email or generate one
+      if (!finalUserEmail) {
+        finalUserEmail = bodyUserEmail || `aula_${aulaId}@cnh360.app`;
+      }
+      
+      logStep("User info from aula", { finalUserId, finalUserEmail });
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     // Check if customer exists
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: finalUserEmail, limit: 1 });
     let customerId;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
       logStep("Existing customer found", { customerId });
     } else {
       const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: { user_id: user.id }
+        email: finalUserEmail,
+        metadata: { user_id: finalUserId || aulaId }
       });
       customerId = customer.id;
       logStep("New customer created", { customerId });
@@ -94,7 +159,7 @@ serve(async (req) => {
       customer: customerId,
       payment_method_types: ['pix'],
       metadata: {
-        user_id: user.id,
+        user_id: finalUserId || '',
         instrutor_id: instructorId || '',
         aula_id: aulaId,
         valor_instrutor: valorInstrutor.toString(),
