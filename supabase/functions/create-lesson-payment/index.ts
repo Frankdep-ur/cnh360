@@ -56,7 +56,7 @@ serve(async (req) => {
     }
     logStep("Payment details received", { amount, duration, instructorName, aulaId, paymentMethod });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
     // Check if customer exists
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });

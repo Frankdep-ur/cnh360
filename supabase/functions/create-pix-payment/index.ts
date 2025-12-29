@@ -120,7 +120,7 @@ serve(async (req) => {
       logStep("User info from aula", { finalUserId, finalUserEmail });
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
     // Check if customer exists
     const customers = await stripe.customers.list({ email: finalUserEmail, limit: 1 });

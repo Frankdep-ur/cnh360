@@ -705,8 +705,8 @@ export default function AgendarAula() {
         <PixPaymentModal
           open={showPixModal}
           onClose={() => setShowPixModal(false)}
-          amount={Math.round(totalPrice * 0.95 * 100)} // Convert to cents with discount
-          originalAmount={Math.round(totalPrice * 100)} // Original in cents
+          amount={totalPrice * 0.95} // Value in reais with 5% discount
+          originalAmount={totalPrice} // Original value in reais
           instructorName={instructor.name}
           aulaId={createdAulaId}
           onSuccess={handlePaymentSuccess}
