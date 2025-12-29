@@ -93,7 +93,7 @@ serve(async (req) => {
       isStudent
     });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
     // Get the PaymentIntent to check its status
     const paymentIntent = await stripe.paymentIntents.retrieve(aulaData.payment_intent_id);

@@ -53,13 +53,13 @@ export function PixPaymentModal({
     }
   }, [open]);
 
-  // Poll for payment status
+  // Poll for payment status using the new check-payment-status function
   useEffect(() => {
     if (!paymentIntentId || paymentStatus !== "pending") return;
 
     const interval = setInterval(async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("verify-payment", {
+        const { data, error } = await supabase.functions.invoke("check-payment-status", {
           body: { paymentIntentId },
         });
 
@@ -120,11 +120,12 @@ export function PixPaymentModal({
     setError(null);
 
     try {
-      console.log("[PixModal] Generating PIX payment...");
+      console.log("[PixModal] Generating PIX payment...", { amount, originalAmount });
       
+      // amount and originalAmount are already in REAIS (not cents)
       const { data, error: invokeError } = await supabase.functions.invoke("create-pix-payment", {
         body: {
-          amount: originalAmount / 100, // Convert back to reais
+          amount: originalAmount, // Already in reais
           duration: 60,
           instructorName,
           aulaId,
@@ -243,16 +244,16 @@ export function PixPaymentModal({
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Valor original</span>
                 <span className="line-through text-muted-foreground">
-                  R$ {(originalAmount / 100).toFixed(2)}
+                  R$ {originalAmount.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between text-sm text-green-600">
                 <span>Desconto PIX</span>
-                <span>-R$ {(discount / 100).toFixed(2)}</span>
+                <span>-R$ {discount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg border-t border-border pt-2">
                 <span>Total a pagar</span>
-                <span className="text-primary">R$ {(amount / 100).toFixed(2)}</span>
+                <span className="text-primary">R$ {amount.toFixed(2)}</span>
               </div>
             </div>
 

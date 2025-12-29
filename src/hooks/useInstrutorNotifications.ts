@@ -199,12 +199,12 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
         console.log("[Notificações] Status do canal realtime:", status);
       });
 
-    // Fallback polling every 3 seconds (mais frequente)
-    console.log("[Notificações] Iniciando polling a cada 3 segundos...");
+    // Fallback polling every 5 seconds (optimized)
+    console.log("[Notificações] Iniciando polling a cada 5 segundos...");
     pollingInterval.current = setInterval(() => {
       console.log("[Notificações] Polling check...");
       fetchAulasPendentes();
-    }, 3000);
+    }, 5000);
 
     return () => {
       console.log("[Notificações] Limpando subscriptions...");

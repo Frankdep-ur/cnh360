@@ -80,7 +80,7 @@ serve(async (req) => {
 
     logStep("Payment intent found", { paymentIntentId: aulaData.payment_intent_id });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
     // Capture the PaymentIntent
     const paymentIntent = await stripe.paymentIntents.capture(aulaData.payment_intent_id);
