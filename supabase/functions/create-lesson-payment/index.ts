@@ -92,7 +92,7 @@ serve(async (req) => {
       currency: 'brl',
       customer: customerId,
       capture_method: 'manual', // IMPORTANT: Only authorize, don't capture
-      payment_method_types: ['card', 'link'], // Enable card and Link (Apple Pay/Google Pay work via card)
+      payment_method_types: ['card'], // Apple Pay/Google Pay work automatically via card type
       metadata: {
         user_id: user.id,
         instrutor_id: instructorId || '',
