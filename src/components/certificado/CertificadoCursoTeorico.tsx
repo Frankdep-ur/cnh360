@@ -1,5 +1,13 @@
 import { useRef, useState } from "react";
-import { Award, Download, Calendar, User, BookOpen, ShieldCheck, Loader2 } from "lucide-react";
+import { 
+  Award, 
+  Download, 
+  Calendar, 
+  User, 
+  BookOpen, 
+  ShieldCheck, 
+  Loader2 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
