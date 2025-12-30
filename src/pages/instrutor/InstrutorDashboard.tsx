@@ -3,10 +3,7 @@ import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
-import { RideRequestNotification } from "@/components/instrutor/RideRequestNotification";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
-import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
-import { useAulasPendentes } from "@/hooks/useAulasPendentes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +25,6 @@ import {
   Zap,
   X,
   Check,
-  Loader2,
   Bell
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -36,21 +32,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
+// Aula de demonstração estática para exibição visual
+const aulaDemostracao = {
+  id: "demo-1",
+  aluno_id: "demo-aluno",
+  aluno_nome: "João Silva",
+  aluno_foto: null,
+  data_hora: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  duracao_minutos: 50,
+  ponto_encontro: "Av. Brasil, 1234 - Centro",
+  valor: 120.00,
+  usa_carro_aluno: false,
+  status: "pendente" as const,
+  created_at: new Date().toISOString(),
+  payment_intent_id: null,
+};
+
 export default function InstrutorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Use the unified hook for pending lessons with payment handling
-  const { 
-    aulasPendentes, 
-    loading, 
-    aceitarAula, 
-    recusarAula, 
-    refetch: fetchAulasPendentes 
-  } = useAulasPendentes();
-  
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [instrutorId, setInstrutorId] = useState<string | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   
@@ -68,12 +69,6 @@ export default function InstrutorDashboard() {
     localStorage.setItem("instrutor_online_status", String(online));
   };
 
-  // Real-time notification system
-  const { novaAula, showPopup, dismissPopup, refetch } = useInstrutorNotifications(
-    instrutorId,
-    isOnline
-  );
-
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
 
   useEffect(() => {
@@ -84,16 +79,6 @@ export default function InstrutorDashboard() {
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => setProfile(data));
-        
-      // Get instructor ID for notifications
-      supabase
-        .from("instrutores")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) setInstrutorId(data.id);
-        });
     }
   }, [user]);
 
@@ -120,25 +105,6 @@ export default function InstrutorDashboard() {
     ganhoLiquido: 1037,
   };
 
-  // Use unified handlers that properly capture/cancel payments
-  const handleAceitarAula = async (aulaId: string) => {
-    setProcessingId(aulaId);
-    try {
-      await aceitarAula(aulaId);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleRecusarAula = async (aulaId: string) => {
-    setProcessingId(aulaId);
-    try {
-      await recusarAula(aulaId);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return {
@@ -147,21 +113,16 @@ export default function InstrutorDashboard() {
     };
   };
 
-  const aulasPendentesCount = aulasPendentes.filter((a) => a.status === "pendente").length;
+  const handleDemoAction = () => {
+    toast({
+      title: "Modo demonstração",
+      description: "Esta é uma aula de exemplo para visualização.",
+    });
+  };
 
   return (
     <div className="app-container pb-24">
       <ComplianceBanner />
-      
-      {/* Notificação estilo Uber para nova aula */}
-      <RideRequestNotification 
-        aula={novaAula} 
-        open={showPopup} 
-        onClose={() => {
-          dismissPopup();
-          fetchAulasPendentes();
-        }} 
-      />
       
       <div className="px-4 py-6 page-enter space-y-6">
         {/* Header */}
@@ -200,24 +161,22 @@ export default function InstrutorDashboard() {
         {/* Online Status Toggle */}
         <OnlineStatusToggle isOnline={isOnline} onToggle={handleOnlineToggle} />
 
-        {/* Pending Lessons Alert */}
-        {aulasPendentesCount > 0 && (
-          <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/20">
-                <Bell className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-foreground">
-                  {aulasPendentesCount} nova{aulasPendentesCount > 1 ? "s" : ""} solicitaç{aulasPendentesCount > 1 ? "ões" : "ão"}!
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Aceite ou recuse as solicitações de aula abaixo
-                </p>
-              </div>
+        {/* Pending Lessons Alert - Demo */}
+        <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20">
+              <Bell className="w-5 h-5 text-amber-600" />
             </div>
-          </Card>
-        )}
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">
+                1 nova solicitação!
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Aceite ou recuse a solicitação de aula abaixo
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {/* Premium Upsell */}
         {!isPremium && (
@@ -311,15 +270,13 @@ export default function InstrutorDashboard() {
           </p>
         </Card>
 
-        {/* Solicitações e Próximas Aulas */}
+        {/* Solicitações e Próximas Aulas - Demo */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" />
               Solicitações e Aulas
-              {aulasPendentesCount > 0 && (
-                <Badge className="bg-amber-500 text-white">{aulasPendentesCount}</Badge>
-              )}
+              <Badge className="bg-amber-500 text-white">1</Badge>
             </h3>
             <Link to="/instrutor/agenda">
               <Button variant="ghost" size="sm" className="text-primary">
@@ -328,124 +285,65 @@ export default function InstrutorDashboard() {
             </Link>
           </div>
           
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          ) : aulasPendentes.length === 0 ? (
-            <Card className="p-6 text-center">
-              <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">Nenhuma aula agendada</p>
-              <p className="text-sm text-muted-foreground">
-                Novas solicitações aparecerão aqui
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {aulasPendentes.map((aula) => {
-                const { data, hora } = formatDateTime(aula.data_hora);
-                const isPendente = aula.status === "pendente";
-
-                return (
-                  <Card 
-                    key={aula.id} 
-                    className={`p-4 shadow-card ${isPendente ? "border-amber-500/50 bg-amber-500/5" : ""}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <Users className="w-6 h-6 text-muted-foreground" />
+          <div className="space-y-3">
+            {(() => {
+              const { data, hora } = formatDateTime(aulaDemostracao.data_hora);
+              return (
+                <Card className="p-4 shadow-card border-amber-500/50 bg-amber-500/5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                      <Users className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-foreground">{aulaDemostracao.aluno_nome}</h4>
+                        <Badge 
+                          variant="secondary"
+                          className="bg-amber-500/10 text-amber-600 border-0"
+                        >
+                          <AlertCircle className="w-3 h-3 mr-1" /> Nova
+                        </Badge>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-semibold text-foreground">{aula.aluno_nome}</h4>
-                          <Badge 
-                            variant={isPendente ? "secondary" : "default"}
-                            className={isPendente 
-                              ? "bg-amber-500/10 text-amber-600 border-0" 
-                              : "bg-primary/10 text-primary border-0"
-                            }
-                          >
-                            {isPendente ? (
-                              <><AlertCircle className="w-3 h-3 mr-1" /> Nova</>
-                            ) : (
-                              <><CheckCircle2 className="w-3 h-3 mr-1" /> Confirmada</>
-                            )}
-                          </Badge>
-                        </div>
-                        
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {data} às {hora} ({aula.duracao_minutos}min)
-                          </span>
-                        </div>
+                      
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {data} às {hora} ({aulaDemostracao.duracao_minutos}min)
+                        </span>
+                      </div>
 
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                          {aula.usa_carro_aluno && (
-                            <Badge variant="outline" className="text-xs bg-secondary/10 text-secondary border-secondary/20">
-                              <Car className="w-3 h-3 mr-1" />
-                              Carro do aluno
-                            </Badge>
-                          )}
-                          <span className="font-semibold text-primary">R$ {aula.valor.toFixed(2)}</span>
-                        </div>
-                        
-                        {aula.ponto_encontro && (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
-                            <MapPin className="w-3.5 h-3.5" />
-                            <span className="truncate">{aula.ponto_encontro}</span>
-                          </div>
-                        )}
-                        
-                        {isPendente ? (
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="flex-1 border-destructive text-destructive hover:bg-destructive/10"
-                              onClick={() => handleRecusarAula(aula.id)}
-                              disabled={processingId === aula.id}
-                            >
-                              {processingId === aula.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <><X className="w-4 h-4 mr-1" /> Recusar</>
-                              )}
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              className="flex-1 gradient-primary text-primary-foreground"
-                              onClick={() => handleAceitarAula(aula.id)}
-                              disabled={processingId === aula.id}
-                            >
-                              {processingId === aula.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <><Check className="w-4 h-4 mr-1" /> Aceitar</>
-                              )}
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="flex-1">
-                              <Navigation className="w-4 h-4 mr-1" />
-                              Rota
-                            </Button>
-                            <Link to="/instrutor/validar-aula" className="flex-1">
-                              <Button size="sm" className="w-full gradient-primary text-primary-foreground">
-                                <Zap className="w-4 h-4 mr-1" />
-                                Iniciar
-                              </Button>
-                            </Link>
-                          </div>
-                        )}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                        <span className="font-semibold text-primary">R$ {aulaDemostracao.valor.toFixed(2)}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="truncate">{aulaDemostracao.ponto_encontro}</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1 border-destructive text-destructive hover:bg-destructive/10"
+                          onClick={handleDemoAction}
+                        >
+                          <X className="w-4 h-4 mr-1" /> Recusar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1 gradient-primary text-primary-foreground"
+                          onClick={handleDemoAction}
+                        >
+                          <Check className="w-4 h-4 mr-1" /> Aceitar
+                        </Button>
                       </div>
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+                </Card>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Resumo da Semana */}
