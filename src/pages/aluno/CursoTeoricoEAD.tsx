@@ -7,8 +7,7 @@ import {
   CheckCircle2, 
   Lock,
   Clock,
-  Award,
-  ExternalLink,
+  ShieldCheck,
   Car,
   Heart,
   Leaf,
@@ -111,22 +110,14 @@ export default function CursoTeoricoEAD() {
             <Progress value={progressoGeral} className="h-3" />
           </div>
 
-          {/* SENATRAN Integration */}
-          <a 
-            href="https://www.gov.br/senatran" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="mt-4 flex items-center gap-3 p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Award className="w-5 h-5 text-primary" />
+          {/* Selo de Confiança */}
+          <div className="mt-4 flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+            <ShieldCheck className="w-5 h-5 text-primary" />
+            <div>
+              <p className="text-sm font-medium text-primary">Conteúdo Oficial</p>
+              <p className="text-xs text-muted-foreground">Alinhado ao CTB e resoluções CONTRAN</p>
             </div>
-            <div className="flex-1">
-              <h3 className="font-medium text-foreground text-sm">Plataforma SENATRAN</h3>
-              <p className="text-xs text-muted-foreground">Acesse o curso gratuito do governo</p>
-            </div>
-            <ExternalLink className="w-4 h-4 text-muted-foreground" />
-          </a>
+          </div>
         </div>
       </div>
 
