@@ -37,12 +37,15 @@ import ExamePratico from "./pages/aluno/ExamePratico";
 import ValidacaoAula from "./pages/aluno/ValidacaoAula";
 import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
 import CertificadoEAD from "./pages/aluno/CertificadoEAD";
+import AlunoAgenda from "./pages/aluno/AlunoAgenda";
+import AlunoChat from "./pages/aluno/AlunoChat";
 
 // Instrutor Pages
 import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
 import InstrutorPerfil from "./pages/instrutor/InstrutorPerfil";
 import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
 import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
+import InstrutorAulas from "./pages/instrutor/InstrutorAulas";
 import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
 import InstrutorACaminho from "./pages/instrutor/InstrutorACaminho";
 
@@ -186,6 +189,16 @@ const App = () => (
                 <CertificadoEAD />
               </ProtectedRoute>
             } />
+            <Route path="/aluno/agenda" element={
+              <ProtectedRoute>
+                <AlunoAgenda />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/chat" element={
+              <ProtectedRoute>
+                <AlunoChat />
+              </ProtectedRoute>
+            } />
 
             {/* Instrutor - Protected */}
             <Route path="/instrutor" element={
@@ -206,6 +219,11 @@ const App = () => (
             <Route path="/instrutor/validar-aula" element={
               <ProtectedRoute>
                 <ValidarAulaInstrutor />
+              </ProtectedRoute>
+            } />
+            <Route path="/instrutor/aulas" element={
+              <ProtectedRoute>
+                <InstrutorAulas />
               </ProtectedRoute>
             } />
             <Route path="/instrutor/a-caminho/:aulaId" element={
