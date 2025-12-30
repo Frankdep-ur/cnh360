@@ -230,6 +230,11 @@ export default function SimuladoTeorico() {
                     <p className="text-xs text-muted-foreground">
                       <strong>Explicação:</strong> {q.explicacao}
                     </p>
+                    {q.baseLegal && (
+                      <p className="text-xs text-primary mt-1 font-medium">
+                        📖 {q.baseLegal}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
