@@ -416,6 +416,18 @@ export default function Auth() {
             >
               {loading ? "Carregando..." : mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
+
+            {mode === "login" && (
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => navigate("/recuperar-senha")}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Esqueceu sua senha?
+                </button>
+              </div>
+            )}
           </form>
 
           {/* Toggle Mode */}

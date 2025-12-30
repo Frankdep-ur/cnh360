@@ -228,6 +228,27 @@ export default function Index() {
               Fazer login
             </Button>
           </div>
+
+          {/* Legal Links */}
+          <div className={cn(
+            "flex justify-center gap-6 pb-8 transition-all duration-500",
+            showContent ? "opacity-100" : "opacity-0"
+          )}
+          style={{ transitionDelay: "800ms" }}
+          >
+            <button
+              onClick={() => navigate("/politica-privacidade")}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Política de Privacidade
+            </button>
+            <button
+              onClick={() => navigate("/termos-uso")}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Termos de Uso
+            </button>
+          </div>
         </div>
       </div>
     </div>
