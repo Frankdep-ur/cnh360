@@ -20,6 +20,32 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    // SECURITY: Validate JWT authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      logStep("Missing authorization header");
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+    );
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      logStep("Invalid authentication token", { error: authError?.message });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    logStep("User authenticated", { userId: user.id });
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
     logStep("Stripe key verified");
@@ -46,6 +72,51 @@ serve(async (req) => {
       amount: paymentIntent.amount,
       currency: paymentIntent.currency
     });
+
+    // SECURITY: Verify that the requesting user owns this payment
+    const paymentUserId = paymentIntent.metadata?.user_id;
+    if (paymentUserId && paymentUserId !== user.id) {
+      logStep("User not authorized to view this payment", { 
+        paymentUserId, 
+        requestingUserId: user.id 
+      });
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: You do not have access to this payment' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Also check via aula_id if user_id is not in metadata
+    if (!paymentUserId && paymentIntent.metadata?.aula_id) {
+      const aulaId = paymentIntent.metadata.aula_id;
+      
+      // Verify user is a participant in this lesson
+      const { data: aula } = await supabaseClient
+        .from("aulas")
+        .select(`
+          aluno_id,
+          instrutor_id,
+          alunos(user_id),
+          instrutores(user_id)
+        `)
+        .eq("id", aulaId)
+        .single();
+
+      if (aula) {
+        const alunoData = aula.alunos as unknown as { user_id: string } | null;
+        const instrutorData = aula.instrutores as unknown as { user_id: string } | null;
+        const isStudent = alunoData?.user_id === user.id;
+        const isInstructor = instrutorData?.user_id === user.id;
+        
+        if (!isStudent && !isInstructor) {
+          logStep("User not a participant of this lesson", { aulaId, userId: user.id });
+          return new Response(
+            JSON.stringify({ error: 'Forbidden: You are not a participant in this lesson' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
 
     // Map Stripe status to simplified status
     let simplifiedStatus: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
