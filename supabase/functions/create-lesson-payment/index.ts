@@ -47,14 +47,36 @@ serve(async (req) => {
       duration, 
       instructorName, 
       instructorId,
-      aulaId,
-      paymentMethod 
+      paymentMethod,
+      // New fields for creating the lesson
+      scheduledDate,
+      meetingPoint,
+      useOwnCar,
+      studentLat,
+      studentLng,
     } = await req.json();
 
-    if (!amount || !instructorName || !aulaId) {
-      throw new Error("Amount, instructorName and aulaId are required");
+    if (!amount || !instructorName || !instructorId) {
+      throw new Error("Amount, instructorName and instructorId are required");
     }
-    logStep("Payment details received", { amount, duration, instructorName, aulaId, paymentMethod });
+    
+    if (!scheduledDate || !meetingPoint) {
+      throw new Error("scheduledDate and meetingPoint are required");
+    }
+    
+    logStep("Payment details received", { amount, duration, instructorName, instructorId, paymentMethod });
+
+    // Get the aluno_id for this user
+    const { data: alunoData, error: alunoError } = await supabaseClient
+      .from("alunos")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (alunoError || !alunoData) {
+      throw new Error("Aluno não encontrado. Complete seu cadastro primeiro.");
+    }
+    logStep("Aluno found", { alunoId: alunoData.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
@@ -86,17 +108,15 @@ serve(async (req) => {
     logStep("Amount calculated", { amountInCents, finalAmount, taxaPlataforma, valorInstrutor });
 
     // Create PaymentIntent with manual capture (authorization only)
-    // Enable Apple Pay and Google Pay via payment_method_types
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalAmount,
       currency: 'brl',
       customer: customerId,
       capture_method: 'manual', // IMPORTANT: Only authorize, don't capture
-      payment_method_types: ['card'], // Apple Pay/Google Pay work automatically via card type
+      payment_method_types: ['card'],
       metadata: {
         user_id: user.id,
-        instrutor_id: instructorId || '',
-        aula_id: aulaId,
+        instrutor_id: instructorId,
         valor_instrutor: valorInstrutor.toString(),
         taxa_plataforma: taxaPlataforma.toString(),
         payment_method: paymentMethod,
@@ -112,23 +132,47 @@ serve(async (req) => {
       captureMethod: paymentIntent.capture_method
     });
 
-    // Update the aula with the payment_intent_id
-    const { error: updateError } = await supabaseClient
+    // Create the lesson with the payment_intent_id ATOMICALLY
+    const { data: aulaData, error: aulaError } = await supabaseClient
       .from("aulas")
-      .update({ payment_intent_id: paymentIntent.id })
-      .eq("id", aulaId);
+      .insert({
+        aluno_id: alunoData.id,
+        instrutor_id: instructorId,
+        data_hora: scheduledDate,
+        duracao_minutos: duration || 60,
+        ponto_encontro: meetingPoint,
+        valor: amount,
+        usa_carro_aluno: useOwnCar || false,
+        status: "pendente",
+        latitude_aluno: studentLat || null,
+        longitude_aluno: studentLng || null,
+        payment_intent_id: paymentIntent.id, // ALWAYS set with the payment intent
+      })
+      .select()
+      .single();
 
-    if (updateError) {
-      logStep("Error updating aula with payment_intent_id", { error: updateError });
-      // Don't throw - we still want to return the client secret
-    } else {
-      logStep("Aula updated with payment_intent_id");
+    if (aulaError) {
+      logStep("Error creating aula", { error: aulaError });
+      // Cancel the payment intent if we can't create the lesson
+      await stripe.paymentIntents.cancel(paymentIntent.id);
+      throw new Error(`Erro ao criar aula: ${aulaError.message}`);
     }
+
+    logStep("Aula created with payment_intent_id", { aulaId: aulaData.id, paymentIntentId: paymentIntent.id });
+
+    // Update PaymentIntent metadata with aula_id
+    await stripe.paymentIntents.update(paymentIntent.id, {
+      metadata: {
+        ...paymentIntent.metadata,
+        aula_id: aulaData.id,
+      }
+    });
 
     return new Response(
       JSON.stringify({ 
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
+        aulaId: aulaData.id,
         amount: finalAmount,
       }),
       { 
