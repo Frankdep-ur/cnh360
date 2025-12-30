@@ -1379,6 +1379,8 @@ export type Database = {
           total_avaliacoes: number
         }[]
       }
+      get_user_aluno_id: { Args: { user_uuid: string }; Returns: string }
+      get_user_instrutor_id: { Args: { user_uuid: string }; Returns: string }
       get_vehicle_display_info: {
         Args: { p_instrutor_id: string }
         Returns: {
