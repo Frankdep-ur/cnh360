@@ -10,7 +10,8 @@ import {
   Trophy,
   RotateCcw,
   AlertTriangle,
-  BookOpen
+  BookOpen,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -267,9 +268,15 @@ export default function SimuladoTeorico() {
             <h2 className="text-2xl font-bold text-foreground mb-2">
               Pronto para o Simulado?
             </h2>
-            <p className="text-muted-foreground mb-8">
+            <p className="text-muted-foreground mb-4">
               30 questões • Igual ao DETRAN • 70% para aprovar
             </p>
+
+            {/* Selo de Confiança CNH360/DETRAN */}
+            <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-full mb-8">
+              <ShieldCheck className="w-5 h-5" />
+              <span className="text-sm font-medium">Conteúdo alinhado ao CTB/DETRAN</span>
+            </div>
 
             <div className="bg-card rounded-2xl p-6 border border-border mb-6 text-left">
               <h3 className="font-semibold text-foreground mb-4">Informações da Prova:</h3>
@@ -289,14 +296,13 @@ export default function SimuladoTeorico() {
               </div>
               
               <div className="mt-4 pt-4 border-t border-border">
-                <h4 className="text-sm font-medium text-foreground mb-2">Distribuição:</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">Distribuição Oficial DETRAN:</h4>
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <span>• Legislação: 8 questões</span>
+                  <span>• Legislação: 10 questões</span>
                   <span>• Direção Defensiva: 7 questões</span>
-                  <span>• Primeiros Socorros: 5 questões</span>
-                  <span>• Sinalização: 5 questões</span>
-                  <span>• Meio Ambiente: 3 questões</span>
-                  <span>• Mecânica: 2 questões</span>
+                  <span>• Primeiros Socorros: 3 questões</span>
+                  <span>• Sinalização: 6 questões</span>
+                  <span>• Meio Ambiente: 4 questões</span>
                 </div>
               </div>
             </div>
@@ -347,11 +353,17 @@ export default function SimuladoTeorico() {
               Você acertou <strong>{score}</strong> de <strong>{questions.length}</strong> questões ({percentage}%)
             </p>
             
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-sm text-muted-foreground mb-4">
               {passed 
                 ? "Parabéns! Você está preparado para a prova real do DETRAN." 
                 : "Continue estudando! Você precisa de pelo menos 21 acertos (70%) para ser aprovado."}
             </p>
+
+            {/* Selo de Confiança */}
+            <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-full mb-6">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="text-xs font-medium">Simulado alinhado ao CTB/DETRAN</span>
+            </div>
 
             {/* Score por categoria */}
             <div className="bg-card rounded-2xl p-4 border border-border mb-6 text-left">
