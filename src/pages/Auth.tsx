@@ -204,6 +204,89 @@ export default function Auth() {
     }
   };
 
+  // Handle quick login without selecting profile type first
+  const handleQuickLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newErrors: typeof errors = {};
+    
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      newErrors.email = emailResult.error.errors[0].message;
+    }
+    
+    const passwordResult = passwordSchema.safeParse(password);
+    if (!passwordResult.success) {
+      newErrors.password = passwordResult.error.errors[0].message;
+    }
+    
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+    
+    setLoading(true);
+    
+    try {
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          setErrors({ email: "Credenciais inválidas. Verifique seu email e senha." });
+          toast({
+            variant: "destructive",
+            title: "Credenciais inválidas",
+            description: "Verifique seu email e senha.",
+          });
+        } else {
+          setErrors({ email: error.message });
+          toast({
+            variant: "destructive",
+            title: "Erro ao entrar",
+            description: error.message,
+          });
+        }
+        return;
+      }
+      
+      toast({
+        title: "Bem-vindo de volta!",
+        description: "Entrando na sua conta...",
+      });
+      
+      // After successful login, check all profile types and redirect to the correct one
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        // Check aluno
+        const { data: aluno } = await supabase.from("alunos").select("id").eq("user_id", currentUser.id).maybeSingle();
+        if (aluno) {
+          navigate("/aluno", { replace: true });
+          return;
+        }
+        
+        // Check instrutor
+        const { data: instrutor } = await supabase.from("instrutores").select("id").eq("user_id", currentUser.id).maybeSingle();
+        if (instrutor) {
+          navigate("/instrutor", { replace: true });
+          return;
+        }
+        
+        // Check autoescola
+        const { data: autoescola } = await supabase.from("autoescolas").select("id").eq("user_id", currentUser.id).maybeSingle();
+        if (autoescola) {
+          navigate("/autoescola", { replace: true });
+          return;
+        }
+        
+        // No profile found, let user select type for onboarding
+        toast({
+          title: "Selecione seu perfil",
+          description: "Complete seu cadastro escolhendo seu perfil abaixo.",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -212,7 +295,7 @@ export default function Auth() {
     );
   }
 
-  // Step 1: Select user type
+  // Step 1: Select user type with quick login form
   if (step === "select-type") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -231,16 +314,120 @@ export default function Auth() {
           </div>
         </header>
 
-        <div className="flex-1 px-6 pb-8 flex flex-col justify-center">
+        <div className="flex-1 px-6 pb-8 overflow-y-auto">
           <div className="max-w-md mx-auto w-full">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                Selecione seu perfil
-              </h2>
-              <p className="text-muted-foreground">
-                Escolha como você quer usar o app
-              </p>
-            </div>
+            
+            {/* Quick Login Form - shown only in login mode */}
+            {mode === "login" && (
+              <div className="mb-8">
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold text-foreground mb-2">
+                    Entre na sua conta
+                  </h2>
+                  <p className="text-muted-foreground text-sm">
+                    Acesse com seu email e senha
+                  </p>
+                </div>
+
+                <form onSubmit={handleQuickLogin} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="h-14 pl-12 rounded-xl"
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="text-destructive text-sm mt-1">{errors.email}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Senha
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="h-14 pl-12 pr-12 rounded-xl"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-destructive text-sm mt-1">{errors.password}</p>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="hero"
+                    size="xl"
+                    className="w-full"
+                    disabled={loading}
+                  >
+                    {loading ? "Entrando..." : "Entrar"}
+                  </Button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/recuperar-senha")}
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                </form>
+
+                <div className="relative my-8">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-4 text-muted-foreground">
+                      ou crie uma conta
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Profile Selection Title - shown only in signup mode or after separator */}
+            {mode === "signup" && (
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                  Selecione seu perfil
+                </h2>
+                <p className="text-muted-foreground">
+                  Escolha como você quer usar o app
+                </p>
+              </div>
+            )}
+
+            {mode === "login" && (
+              <div className="text-center mb-6">
+                <p className="text-sm text-muted-foreground">
+                  Selecione seu perfil para criar uma conta
+                </p>
+              </div>
+            )}
 
             {/* User Type Cards */}
             <div className="space-y-4">
@@ -291,15 +478,15 @@ export default function Auth() {
             </div>
 
             {/* Toggle Mode */}
-            <div className="mt-8 text-center">
+            <div className="mt-8 text-center pb-4">
               <button
                 onClick={() => setMode(mode === "login" ? "signup" : "login")}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 {mode === "login" ? (
                   <>
-                    Não tem conta?{" "}
-                    <span className="font-semibold text-primary">Criar agora</span>
+                    Primeira vez?{" "}
+                    <span className="font-semibold text-primary">Criar conta</span>
                   </>
                 ) : (
                   <>
