@@ -262,7 +262,7 @@ export const questoesSimulado: QuestaoSimulado[] = [
   {
     id: 32,
     categoria: "Direção Defensiva",
-    pergunta: "Qual a distância segura do veículo da frente em condições normais?",
+    pergunta: "Qual o intervalo de tempo recomendado para manter distância segura do veículo da frente em condições normais?",
     opcoes: ["1 segundo", "2 segundos", "5 segundos", "10 segundos"],
     respostaCorreta: 1,
     explicacao: "A regra dos 2 segundos garante distância segura em condições normais de pista."
