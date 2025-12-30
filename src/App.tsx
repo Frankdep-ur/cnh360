@@ -26,6 +26,8 @@ import AulaConfirmada from "./pages/aluno/AulaConfirmada";
 import AulaConfirmadaById from "./pages/aluno/AulaConfirmadaById";
 import AulaSolicitada from "./pages/aluno/AulaSolicitada";
 import CursoTeoricoEAD from "./pages/aluno/CursoTeoricoEAD";
+import ModuloDetalhes from "./pages/aluno/ModuloDetalhes";
+import AulaConteudo from "./pages/aluno/AulaConteudo";
 import ExamePratico from "./pages/aluno/ExamePratico";
 import ValidacaoAula from "./pages/aluno/ValidacaoAula";
 import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
@@ -131,6 +133,16 @@ const App = () => (
             <Route path="/aluno/curso-teorico" element={
               <ProtectedRoute>
                 <CursoTeoricoEAD />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/curso-teorico/modulo/:moduloId" element={
+              <ProtectedRoute>
+                <ModuloDetalhes />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/curso-teorico/aula/:aulaId" element={
+              <ProtectedRoute>
+                <AulaConteudo />
               </ProtectedRoute>
             } />
             <Route path="/aluno/exame-pratico" element={
