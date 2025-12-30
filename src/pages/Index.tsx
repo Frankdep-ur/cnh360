@@ -1,67 +1,27 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, Loader2 } from "lucide-react";
+import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function Index() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
   const [showContent, setShowContent] = useState(false);
-  const [checkingRegistration, setCheckingRegistration] = useState(false);
 
-  // Redirecionar usuário logado para seu dashboard
+  // Animação de entrada simples
   useEffect(() => {
-    const checkAndRedirect = async () => {
-      if (authLoading) return;
-      if (!user) {
-        setShowContent(true);
-        return;
-      }
-      
-      setCheckingRegistration(true);
-      
-      const [alunoRes, instrutorRes, autoescolaRes] = await Promise.all([
-        supabase.from("alunos").select("id").eq("user_id", user.id).maybeSingle(),
-        supabase.from("instrutores").select("id").eq("user_id", user.id).maybeSingle(),
-        supabase.from("autoescolas").select("id").eq("user_id", user.id).maybeSingle(),
-      ]);
-      
-      if (autoescolaRes.data) {
-        navigate("/autoescola", { replace: true });
-      } else if (instrutorRes.data) {
-        navigate("/instrutor", { replace: true });
-      } else if (alunoRes.data) {
-        navigate("/aluno", { replace: true });
-      } else {
-        setShowContent(true);
-      }
-      
-      setCheckingRegistration(false);
-    };
-    
-    checkAndRedirect();
-  }, [user, authLoading, navigate]);
-
-  // Animação de entrada
-  useEffect(() => {
-    if (!authLoading && !checkingRegistration && !user) {
+    if (!authLoading) {
       const timer = setTimeout(() => setShowContent(true), 100);
       return () => clearTimeout(timer);
     }
-  }, [authLoading, checkingRegistration, user]);
+  }, [authLoading]);
 
-  // Loading enquanto verifica autenticação
-  if (authLoading || checkingRegistration) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   const userTypes = [
     {
@@ -119,6 +79,17 @@ export default function Index() {
                 <p className="text-primary-foreground/80 text-sm">O iFood das autoescolas</p>
               </div>
             </div>
+
+            {/* Logout Button when logged in */}
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary-foreground/20 hover:bg-primary-foreground/30 transition-colors text-sm font-medium"
+              >
+                <LogOut className="w-4 h-4" />
+                Sair
+              </button>
+            )}
           </div>
 
           {/* Headline */}
