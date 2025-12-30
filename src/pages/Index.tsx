@@ -1,13 +1,60 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users } from "lucide-react";
+import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Index() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [showContent, setShowContent] = useState(false);
+  const [checkingRegistration, setCheckingRegistration] = useState(false);
+
+  // Redirecionar usuário logado para seu dashboard
+  useEffect(() => {
+    const checkAndRedirect = async () => {
+      if (authLoading) return;
+      if (!user) {
+        setShowContent(true);
+        return;
+      }
+      
+      setCheckingRegistration(true);
+      
+      const [alunoRes, instrutorRes, autoescolaRes] = await Promise.all([
+        supabase.from("alunos").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("instrutores").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("autoescolas").select("id").eq("user_id", user.id).maybeSingle(),
+      ]);
+      
+      if (autoescolaRes.data) {
+        navigate("/autoescola", { replace: true });
+      } else if (instrutorRes.data) {
+        navigate("/instrutor", { replace: true });
+      } else if (alunoRes.data) {
+        navigate("/aluno", { replace: true });
+      } else {
+        // Usuário logado sem registro - mostrar página normal
+        setShowContent(true);
+      }
+      
+      setCheckingRegistration(false);
+    };
+    
+    checkAndRedirect();
+  }, [user, authLoading, navigate]);
+
+  // Loading enquanto verifica autenticação
+  if (authLoading || checkingRegistration) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 100);
