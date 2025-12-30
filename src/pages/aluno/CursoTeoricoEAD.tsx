@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -9,62 +8,57 @@ import {
   Lock,
   Clock,
   Award,
-  ExternalLink
+  ExternalLink,
+  Car,
+  Heart,
+  Leaf,
+  Wrench,
+  Scale
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
+import { useCursoTeorico } from "@/hooks/useCursoTeorico";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const modules = [
-  { 
-    id: 1, 
-    title: "Legislação de Trânsito", 
-    lessons: 12, 
-    completed: 12, 
-    duration: "2h 30min",
-    status: "completed" 
-  },
-  { 
-    id: 2, 
-    title: "Direção Defensiva", 
-    lessons: 10, 
-    completed: 10, 
-    duration: "2h",
-    status: "completed" 
-  },
-  { 
-    id: 3, 
-    title: "Primeiros Socorros", 
-    lessons: 8, 
-    completed: 5, 
-    duration: "1h 30min",
-    status: "current" 
-  },
-  { 
-    id: 4, 
-    title: "Meio Ambiente e Cidadania", 
-    lessons: 6, 
-    completed: 0, 
-    duration: "1h",
-    status: "locked" 
-  },
-  { 
-    id: 5, 
-    title: "Mecânica Básica", 
-    lessons: 5, 
-    completed: 0, 
-    duration: "45min",
-    status: "locked" 
-  },
-];
+const MODULOS_ICONS: Record<number, React.ElementType> = {
+  1: Scale,
+  2: Car,
+  3: Heart,
+  4: Leaf,
+  5: Wrench,
+};
 
 export default function CursoTeoricoEAD() {
   const navigate = useNavigate();
-  const totalLessons = modules.reduce((acc, m) => acc + m.lessons, 0);
-  const completedLessons = modules.reduce((acc, m) => acc + m.completed, 0);
-  const progressPercent = Math.round((completedLessons / totalLessons) * 100);
+  const { modulos, loading, progressoGeral } = useCursoTeorico();
+
+  const totalLessons = modulos.reduce((acc, m) => acc + m.totalAulas, 0);
+  const completedLessons = modulos.reduce((acc, m) => acc + m.aulasCompletas, 0);
+
+  const getModuloStatus = (modulo: typeof modulos[0], index: number) => {
+    if (modulo.aulasCompletas === modulo.totalAulas && modulo.totalAulas > 0) {
+      return "completed";
+    }
+    if (modulo.aulasCompletas > 0) {
+      return "current";
+    }
+    // Primeiro módulo sempre disponível, outros dependem do anterior
+    if (index === 0) return "current";
+    const previousModule = modulos[index - 1];
+    if (previousModule && previousModule.aulasCompletas === previousModule.totalAulas) {
+      return "current";
+    }
+    return "locked";
+  };
+
+  const handleModuleClick = (modulo: typeof modulos[0], status: string) => {
+    if (status !== "locked") {
+      navigate(`/aluno/curso-teorico/modulo/${modulo.ordem}`);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -98,15 +92,23 @@ export default function CursoTeoricoEAD() {
               </div>
               <div className="flex-1">
                 <h2 className="font-bold text-foreground text-lg">Seu Progresso</h2>
-                <p className="text-sm text-muted-foreground">
-                  {completedLessons} de {totalLessons} aulas concluídas
-                </p>
+                {loading ? (
+                  <Skeleton className="h-4 w-32 mt-1" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {completedLessons} de {totalLessons} aulas concluídas
+                  </p>
+                )}
               </div>
               <div className="text-right">
-                <span className="text-3xl font-bold text-secondary">{progressPercent}%</span>
+                {loading ? (
+                  <Skeleton className="h-9 w-14" />
+                ) : (
+                  <span className="text-3xl font-bold text-secondary">{progressoGeral}%</span>
+                )}
               </div>
             </div>
-            <Progress value={progressPercent} className="h-3" />
+            <Progress value={progressoGeral} className="h-3" />
           </div>
 
           {/* SENATRAN Integration */}
@@ -133,70 +135,81 @@ export default function CursoTeoricoEAD() {
         <div className="max-w-md mx-auto">
           <h3 className="font-semibold text-foreground mb-4">Módulos do Curso</h3>
           <div className="space-y-3">
-            {modules.map((module) => {
-              const isCompleted = module.status === "completed";
-              const isCurrent = module.status === "current";
-              const isLocked = module.status === "locked";
-              const moduleProgress = Math.round((module.completed / module.lessons) * 100);
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-2xl" />
+              ))
+            ) : (
+              modulos.map((modulo, index) => {
+                const status = getModuloStatus(modulo, index);
+                const isCompleted = status === "completed";
+                const isCurrent = status === "current";
+                const isLocked = status === "locked";
+                const moduleProgress = modulo.totalAulas > 0 
+                  ? Math.round((modulo.aulasCompletas / modulo.totalAulas) * 100)
+                  : 0;
+                const IconComponent = MODULOS_ICONS[modulo.ordem] || BookOpen;
 
-              return (
-                <div
-                  key={module.id}
-                  className={cn(
-                    "bg-card rounded-2xl p-4 border-2 transition-all",
-                    isCurrent && "border-secondary shadow-card",
-                    isCompleted && "border-primary/30",
-                    isLocked && "border-border opacity-60"
-                  )}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
-                      isCompleted && "bg-primary text-primary-foreground",
-                      isCurrent && "bg-secondary/10 text-secondary",
-                      isLocked && "bg-muted text-muted-foreground"
-                    )}>
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-6 h-6" />
-                      ) : isLocked ? (
-                        <Lock className="w-5 h-5" />
-                      ) : (
-                        <Play className="w-6 h-6" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-foreground text-sm">{module.title}</h4>
-                        {isCompleted && (
-                          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                            Concluído
-                          </span>
+                return (
+                  <div
+                    key={modulo.id}
+                    onClick={() => handleModuleClick(modulo, status)}
+                    className={cn(
+                      "bg-card rounded-2xl p-4 border-2 transition-all",
+                      isCurrent && "border-secondary shadow-card cursor-pointer hover:bg-muted/50",
+                      isCompleted && "border-primary/30 cursor-pointer hover:bg-muted/50",
+                      isLocked && "border-border opacity-60 cursor-not-allowed"
+                    )}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
+                        isCompleted && "bg-primary text-primary-foreground",
+                        isCurrent && "bg-secondary/10 text-secondary",
+                        isLocked && "bg-muted text-muted-foreground"
+                      )}>
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-6 h-6" />
+                        ) : isLocked ? (
+                          <Lock className="w-5 h-5" />
+                        ) : (
+                          <IconComponent className="w-6 h-6" />
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-3 h-3" />
-                          {module.lessons} aulas
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {module.duration}
-                        </span>
-                      </div>
-                      {isCurrent && (
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-muted-foreground">{module.completed}/{module.lessons} aulas</span>
-                            <span className="text-secondary font-medium">{moduleProgress}%</span>
-                          </div>
-                          <Progress value={moduleProgress} className="h-1.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-foreground text-sm">{modulo.titulo}</h4>
+                          {isCompleted && (
+                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                              Concluído
+                            </span>
+                          )}
                         </div>
-                      )}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            {modulo.totalAulas} aulas
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {modulo.duracao_estimada_minutos}min
+                          </span>
+                        </div>
+                        {(isCurrent || (isCompleted && moduleProgress < 100)) && modulo.totalAulas > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">{modulo.aulasCompletas}/{modulo.totalAulas} aulas</span>
+                              <span className="text-secondary font-medium">{moduleProgress}%</span>
+                            </div>
+                            <Progress value={moduleProgress} className="h-1.5" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>
