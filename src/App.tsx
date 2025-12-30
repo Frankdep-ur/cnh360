@@ -60,6 +60,7 @@ import AutoescolaComunicacao from "./pages/autoescola/AutoescolaComunicacao";
 import AutoescolaProvas from "./pages/autoescola/AutoescolaProvas";
 import AutoescolaCRM from "./pages/autoescola/AutoescolaCRM";
 import AutoescolaPerfil from "./pages/autoescola/AutoescolaPerfil";
+import AutoescolaSimuladosRelatorio from "./pages/autoescola/AutoescolaSimuladosRelatorio";
 
 const queryClient = new QueryClient();
 
@@ -267,6 +268,11 @@ const App = () => (
             <Route path="/autoescola/perfil" element={
               <ProtectedRoute>
                 <AutoescolaPerfil />
+              </ProtectedRoute>
+            } />
+            <Route path="/autoescola/simulados-relatorio" element={
+              <ProtectedRoute>
+                <AutoescolaSimuladosRelatorio />
               </ProtectedRoute>
             } />
 
