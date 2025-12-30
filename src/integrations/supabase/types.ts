@@ -265,6 +265,130 @@ export type Database = {
           },
         ]
       }
+      curso_aulas: {
+        Row: {
+          ativo: boolean
+          conteudo_texto: string
+          created_at: string
+          duracao_minutos: number
+          id: string
+          modulo_id: string
+          ordem: number
+          titulo: string
+          video_fonte: string | null
+          video_url: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo_texto: string
+          created_at?: string
+          duracao_minutos?: number
+          id?: string
+          modulo_id: string
+          ordem: number
+          titulo: string
+          video_fonte?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          conteudo_texto?: string
+          created_at?: string
+          duracao_minutos?: number
+          id?: string
+          modulo_id?: string
+          ordem?: number
+          titulo?: string
+          video_fonte?: string | null
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curso_aulas_modulo_id_fkey"
+            columns: ["modulo_id"]
+            isOneToOne: false
+            referencedRelation: "curso_modulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      curso_modulos: {
+        Row: {
+          ativo: boolean
+          cor: string
+          created_at: string
+          descricao: string | null
+          duracao_estimada_minutos: number
+          icone: string
+          id: string
+          ordem: number
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          descricao?: string | null
+          duracao_estimada_minutos?: number
+          icone?: string
+          id?: string
+          ordem: number
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          descricao?: string | null
+          duracao_estimada_minutos?: number
+          icone?: string
+          id?: string
+          ordem?: number
+          titulo?: string
+        }
+        Relationships: []
+      }
+      curso_quiz_perguntas: {
+        Row: {
+          aula_id: string
+          created_at: string
+          explicacao: string | null
+          id: string
+          opcoes: Json
+          ordem: number
+          pergunta: string
+          resposta_correta: string
+        }
+        Insert: {
+          aula_id: string
+          created_at?: string
+          explicacao?: string | null
+          id?: string
+          opcoes: Json
+          ordem: number
+          pergunta: string
+          resposta_correta: string
+        }
+        Update: {
+          aula_id?: string
+          created_at?: string
+          explicacao?: string | null
+          id?: string
+          opcoes?: Json
+          ordem?: number
+          pergunta?: string
+          resposta_correta?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curso_quiz_perguntas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "curso_aulas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       disponibilidade: {
         Row: {
           ativo: boolean | null
@@ -677,6 +801,63 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      progresso_aulas: {
+        Row: {
+          aluno_id: string
+          aula_id: string
+          concluida_em: string | null
+          created_at: string
+          id: string
+          iniciada_em: string
+          quiz_aprovado: boolean | null
+          quiz_nota: number | null
+          tempo_visualizado_segundos: number
+          tentativas_quiz: number
+          updated_at: string
+        }
+        Insert: {
+          aluno_id: string
+          aula_id: string
+          concluida_em?: string | null
+          created_at?: string
+          id?: string
+          iniciada_em?: string
+          quiz_aprovado?: boolean | null
+          quiz_nota?: number | null
+          tempo_visualizado_segundos?: number
+          tentativas_quiz?: number
+          updated_at?: string
+        }
+        Update: {
+          aluno_id?: string
+          aula_id?: string
+          concluida_em?: string | null
+          created_at?: string
+          id?: string
+          iniciada_em?: string
+          quiz_aprovado?: boolean | null
+          quiz_nota?: number | null
+          tempo_visualizado_segundos?: number
+          tentativas_quiz?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progresso_aulas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progresso_aulas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "curso_aulas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       progresso_renach: {
         Row: {
