@@ -348,25 +348,6 @@ export default function AgendarAula() {
 
     setLoading(true);
     try {
-      const { data: alunoData, error: alunoError } = await supabase
-        .from("alunos")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (alunoError) {
-        console.error("Error fetching aluno:", alunoError);
-        toast({
-          title: "Erro",
-          description: "Complete seu cadastro de aluno primeiro.",
-          variant: "destructive",
-        });
-        navigate("/onboarding/aluno");
-        return;
-      }
-
-      const realInstrutorId = instructor.id;
-
       // Calculate scheduled date/time
       const scheduledDate = new Date();
       const [hours, minutes] = time.split(":").map(Number);
@@ -398,7 +379,7 @@ export default function AgendarAula() {
           } catch (err) {
             console.log(`Location attempt ${i + 1} failed:`, err);
             if (i < attempts - 1) {
-              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+              await new Promise(r => setTimeout(r, 1000));
             }
           }
         }
@@ -415,44 +396,13 @@ export default function AgendarAula() {
           toast({
             title: "Localização não capturada",
             description: "Não conseguimos obter sua localização. O instrutor pode ter dificuldade em encontrá-lo.",
-            variant: "destructive",
           });
         }
       } catch (geoErr) {
         console.log("Could not get location:", geoErr);
-        toast({
-          title: "Localização não disponível",
-          description: "Ative a localização nas configurações do navegador para melhor experiência.",
-        });
       }
 
-      // Create the lesson with pending status
-      const { data: aulaData, error: aulaError } = await supabase
-        .from("aulas")
-        .insert({
-          aluno_id: alunoData.id,
-          instrutor_id: realInstrutorId,
-          data_hora: scheduledDate.toISOString(),
-          duracao_minutos: duration * 60,
-          ponto_encontro: meetingPoint,
-          valor: totalPrice,
-          usa_carro_aluno: useOwnCar,
-          status: "pendente",
-          latitude_aluno: studentLat,
-          longitude_aluno: studentLng,
-        })
-        .select()
-        .single();
-
-      if (aulaError) {
-        console.error("Error creating lesson:", aulaError);
-        throw aulaError;
-      }
-
-      console.log("Lesson created:", aulaData);
-      setCreatedAulaId(aulaData.id);
-
-      // For card payments (including Apple Pay/Google Pay), create PaymentIntent with manual capture
+      // For card payments (including Apple Pay/Google Pay), create PaymentIntent and lesson atomically
       if (selectedPayment === "credit" || selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
           "create-lesson-payment",
@@ -461,9 +411,14 @@ export default function AgendarAula() {
               amount: totalPrice,
               duration: duration * 60,
               instructorName: instructor.name,
-              instructorId: realInstrutorId,
-              aulaId: aulaData.id,
+              instructorId: instructor.id,
               paymentMethod: selectedPayment === "credit" ? "card" : selectedPayment,
+              // Lesson data - created atomically in the edge function
+              scheduledDate: scheduledDate.toISOString(),
+              meetingPoint,
+              useOwnCar,
+              studentLat,
+              studentLng,
             },
           }
         );
@@ -473,42 +428,73 @@ export default function AgendarAula() {
           throw new Error("Erro ao criar pagamento");
         }
 
-        if (paymentData?.clientSecret) {
-          // For Apple Pay/Google Pay, set wallet client secret for inline payment
-          if (selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
-            setWalletClientSecret(paymentData.clientSecret);
-            setIsPreparingWallet(false);
-            // The WalletPaymentButtons component will handle the payment
-            toast({
-              title: "Pronto para pagar!",
-              description: "Toque no botão de pagamento para confirmar.",
-            });
-            setLoading(false);
-            return;
-          }
-          
-          // For regular credit card, show modal
-          setClientSecret(paymentData.clientSecret);
-          setShowPaymentModal(true);
+        if (!paymentData?.aulaId || !paymentData?.clientSecret) {
+          throw new Error("Erro ao processar pagamento - dados incompletos");
+        }
+
+        console.log("Payment and lesson created:", paymentData);
+        setCreatedAulaId(paymentData.aulaId);
+
+        // For Apple Pay/Google Pay, set wallet client secret for inline payment
+        if (selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
+          setWalletClientSecret(paymentData.clientSecret);
+          setIsPreparingWallet(false);
+          toast({
+            title: "Pronto para pagar!",
+            description: "Toque no botão de pagamento para confirmar.",
+          });
           setLoading(false);
           return;
         }
+        
+        // For regular credit card, show modal
+        setClientSecret(paymentData.clientSecret);
+        setShowPaymentModal(true);
+        setLoading(false);
+        return;
       }
 
-      // For PIX payments, show PIX modal
+      // For PIX payments, also create lesson atomically via edge function
       if (selectedPayment === "pix") {
+        const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
+          "create-lesson-payment",
+          {
+            body: {
+              amount: totalPrice,
+              duration: duration * 60,
+              instructorName: instructor.name,
+              instructorId: instructor.id,
+              paymentMethod: "pix",
+              scheduledDate: scheduledDate.toISOString(),
+              meetingPoint,
+              useOwnCar,
+              studentLat,
+              studentLng,
+            },
+          }
+        );
+
+        if (paymentError) {
+          console.error("Error creating PIX payment:", paymentError);
+          throw new Error("Erro ao criar pagamento PIX");
+        }
+
+        if (!paymentData?.aulaId) {
+          throw new Error("Erro ao processar pagamento PIX - dados incompletos");
+        }
+
+        setCreatedAulaId(paymentData.aulaId);
         setShowPixModal(true);
         setLoading(false);
         return;
       }
 
-      // For wallet balance, just navigate to waiting page
+      // Wallet balance not supported yet
       toast({
-        title: "Aula solicitada!",
-        description: "Aguardando confirmação do instrutor.",
+        title: "Método não disponível",
+        description: "Este método de pagamento ainda não está disponível.",
+        variant: "destructive",
       });
-
-      navigate(`/aluno/aula-solicitada/${aulaData.id}`);
     } catch (err: any) {
       console.error("Error in createLesson:", err);
       toast({
