@@ -69,9 +69,15 @@ export default function Auth() {
         return;
       }
       
-      // No registration found, redirect to onboarding
-      if (userType) {
+      // No registration found
+      // Only redirect to onboarding if mode is "signup" and userType is defined
+      // For login mode, reset to type selection so user can complete registration
+      if (mode === "signup" && userType) {
         navigate(`/onboarding/${userType}`, { replace: true });
+      } else {
+        // User logged in but has no registration - show type selection
+        setStep("select-type");
+        setUserType(null);
       }
     };
     
