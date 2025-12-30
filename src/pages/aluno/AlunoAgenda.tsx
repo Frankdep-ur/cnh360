@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
-import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Calendar,
@@ -17,9 +16,8 @@ import {
   XCircle,
   Car,
   Navigation,
-  Zap,
-  Settings,
-  Plus,
+  MessageCircle,
+  Star,
   CalendarDays
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -36,17 +34,17 @@ interface Aula {
   valor: number;
   ponto_encontro: string | null;
   usa_carro_aluno: boolean | null;
-  aluno_nome: string | null;
-  aluno_foto: string | null;
+  instrutor_nome: string | null;
+  instrutor_foto: string | null;
+  instrutor_nota: number | null;
 }
 
-export default function InstrutorAgenda() {
+export default function AlunoAgenda() {
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [disponivel, setDisponivel] = useState(true);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
   useEffect(() => {
     if (!user) return;
@@ -54,19 +52,19 @@ export default function InstrutorAgenda() {
     const fetchAulas = async () => {
       setLoading(true);
       
-      const { data: instrutor } = await supabase
-        .from('instrutores')
-        .select('id, ativo')
+      // First get the aluno id
+      const { data: aluno } = await supabase
+        .from('alunos')
+        .select('id')
         .eq('user_id', user.id)
         .single();
 
-      if (!instrutor) {
+      if (!aluno) {
         setLoading(false);
         return;
       }
 
-      setDisponivel(instrutor.ativo ?? true);
-
+      // Fetch aulas
       const { data: aulasData, error } = await supabase
         .from('aulas')
         .select(`
@@ -77,9 +75,9 @@ export default function InstrutorAgenda() {
           valor,
           ponto_encontro,
           usa_carro_aluno,
-          aluno_id
+          instrutor_id
         `)
-        .eq('instrutor_id', instrutor.id)
+        .eq('aluno_id', aluno.id)
         .order('data_hora', { ascending: true });
 
       if (error) {
@@ -88,23 +86,25 @@ export default function InstrutorAgenda() {
         return;
       }
 
-      const aulasWithAluno = await Promise.all(
+      // Get instrutor info for each aula
+      const aulasWithInstrutor = await Promise.all(
         (aulasData || []).map(async (aula) => {
-          const { data: alunoData } = await supabase
-            .from('alunos_seguros')
-            .select('full_name, avatar_url')
-            .eq('id', aula.aluno_id)
+          const { data: instrutorData } = await supabase
+            .from('instrutores_seguros')
+            .select('full_name, avatar_url, nota_media')
+            .eq('id', aula.instrutor_id)
             .single();
 
           return {
             ...aula,
-            aluno_nome: alunoData?.full_name || 'Aluno',
-            aluno_foto: alunoData?.avatar_url
+            instrutor_nome: instrutorData?.full_name || 'Instrutor',
+            instrutor_foto: instrutorData?.avatar_url,
+            instrutor_nota: instrutorData?.nota_media
           };
         })
       );
 
-      setAulas(aulasWithAluno);
+      setAulas(aulasWithInstrutor);
       setLoading(false);
     };
 
@@ -112,14 +112,10 @@ export default function InstrutorAgenda() {
   }, [user]);
 
   const diasSemana = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  const aulasHoje = aulas.filter(aula => 
+  
+  const aulasDoDia = aulas.filter(aula => 
     isSameDay(new Date(aula.data_hora), selectedDate)
   );
-
-  const hasAulaOnDay = (date: Date) => {
-    return aulas.some(aula => isSameDay(new Date(aula.data_hora), date));
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -133,6 +129,12 @@ export default function InstrutorAgenda() {
         return (
           <Badge className="bg-secondary/10 text-secondary border-0">
             <CheckCircle2 className="w-3 h-3 mr-1" /> Confirmada
+          </Badge>
+        );
+      case "em_andamento":
+        return (
+          <Badge className="bg-blue-500/10 text-blue-600 border-0">
+            <Navigation className="w-3 h-3 mr-1" /> Em andamento
           </Badge>
         );
       case "pendente":
@@ -152,7 +154,9 @@ export default function InstrutorAgenda() {
     }
   };
 
-  const totalDia = aulasHoje.reduce((acc, aula) => acc + aula.valor, 0);
+  const hasAulaOnDay = (date: Date) => {
+    return aulas.some(aula => isSameDay(new Date(aula.data_hora), date));
+  };
 
   return (
     <div className="app-container pb-24">
@@ -162,28 +166,13 @@ export default function InstrutorAgenda() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Minha Agenda</h1>
-          <Button variant="outline" size="sm">
-            <Settings className="w-4 h-4 mr-1" />
-            Horários
-          </Button>
+          <Link to="/aluno/buscar">
+            <Button size="sm">
+              <Calendar className="w-4 h-4 mr-1" />
+              Nova Aula
+            </Button>
+          </Link>
         </div>
-
-        {/* Disponibilidade */}
-        <Card className="p-4 shadow-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-foreground">Aceitar novas aulas</p>
-              <p className="text-sm text-muted-foreground">
-                {disponivel ? "Você está disponível para agendamentos" : "Você não está aceitando aulas"}
-              </p>
-            </div>
-            <Switch 
-              checked={disponivel} 
-              onCheckedChange={setDisponivel}
-              className="data-[state=checked]:bg-primary"
-            />
-          </div>
-        </Card>
 
         {/* Calendário Semanal */}
         <Card className="p-4 shadow-card">
@@ -238,13 +227,9 @@ export default function InstrutorAgenda() {
               {format(selectedDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {aulasHoje.length} {aulasHoje.length === 1 ? 'aula' : 'aulas'} | Potencial: R${totalDia}
+              {aulasDoDia.length} {aulasDoDia.length === 1 ? 'aula' : 'aulas'}
             </p>
           </div>
-          <Button size="sm" variant="outline">
-            <Plus className="w-4 h-4 mr-1" />
-            Bloquear
-          </Button>
         </div>
 
         {/* Lista de Aulas */}
@@ -263,43 +248,49 @@ export default function InstrutorAgenda() {
               </Card>
             ))}
           </div>
-        ) : aulasHoje.length === 0 ? (
+        ) : aulasDoDia.length === 0 ? (
           <Card className="p-8 shadow-card text-center">
             <CalendarDays className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
             <h3 className="font-semibold text-foreground mb-1">Nenhuma aula neste dia</h3>
-            <p className="text-sm text-muted-foreground">
-              Você não tem aulas agendadas para esta data
+            <p className="text-sm text-muted-foreground mb-4">
+              Que tal agendar uma aula prática?
             </p>
+            <Link to="/aluno/buscar">
+              <Button>Buscar Instrutores</Button>
+            </Link>
           </Card>
         ) : (
           <div className="space-y-3">
-            {aulasHoje.map((aula) => (
+            {aulasDoDia.map((aula) => (
               <Card key={aula.id} className="p-4 shadow-card">
                 <div className="flex items-start gap-3">
                   <div className="relative">
-                    {aula.aluno_foto ? (
+                    {aula.instrutor_foto ? (
                       <img 
-                        src={aula.aluno_foto} 
-                        alt={aula.aluno_nome || 'Aluno'}
+                        src={aula.instrutor_foto} 
+                        alt={aula.instrutor_nome || 'Instrutor'}
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
                         <span className="text-lg font-semibold text-muted-foreground">
-                          {(aula.aluno_nome || 'A').charAt(0)}
+                          {(aula.instrutor_nome || 'I').charAt(0)}
                         </span>
-                      </div>
-                    )}
-                    {aula.status === "concluida" && (
-                      <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-0.5">
-                        <CheckCircle2 className="w-4 h-4 text-primary-foreground" />
                       </div>
                     )}
                   </div>
                   
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-foreground">{aula.aluno_nome}</h4>
+                      <div>
+                        <h4 className="font-semibold text-foreground">{aula.instrutor_nome}</h4>
+                        {aula.instrutor_nota && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            {aula.instrutor_nota.toFixed(1)}
+                          </div>
+                        )}
+                      </div>
                       {getStatusBadge(aula.status)}
                     </div>
                     
@@ -321,30 +312,33 @@ export default function InstrutorAgenda() {
                     {aula.usa_carro_aluno && (
                       <Badge variant="outline" className="text-xs bg-secondary/10 text-secondary border-secondary/20 mb-2">
                         <Car className="w-3 h-3 mr-1" />
-                        Carro do aluno (-20%)
+                        Usando meu carro (-20%)
                       </Badge>
                     )}
                     
-                    {(aula.status === "confirmada" || aula.status === "pendente") && (
+                    {(aula.status === "confirmada" || aula.status === "em_andamento") && (
                       <div className="flex gap-2 mt-3">
-                        <Button size="sm" variant="outline" className="flex-1">
-                          <Navigation className="w-4 h-4 mr-1" />
-                          Rota
-                        </Button>
-                        {aula.status === "confirmada" && (
-                          <Link to={`/instrutor/a-caminho/${aula.id}`} className="flex-1">
-                            <Button size="sm" className="w-full gradient-primary text-primary-foreground">
-                              <Zap className="w-4 h-4 mr-1" />
-                              Iniciar Aula
-                            </Button>
-                          </Link>
-                        )}
-                        {aula.status === "pendente" && (
-                          <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white">
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            Confirmar
+                        <Link to={`/aluno/rastrear/${aula.id}`} className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full">
+                            <Navigation className="w-4 h-4 mr-1" />
+                            Rastrear
                           </Button>
-                        )}
+                        </Link>
+                        <Link to={`/aluno/rastrear/${aula.id}`} className="flex-1">
+                          <Button size="sm" className="w-full gradient-primary text-primary-foreground">
+                            <MessageCircle className="w-4 h-4 mr-1" />
+                            Chat
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+
+                    {aula.status === "pendente" && (
+                      <div className="flex gap-2 mt-3">
+                        <Button size="sm" variant="outline" className="flex-1 text-destructive hover:text-destructive">
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Cancelar
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -354,16 +348,48 @@ export default function InstrutorAgenda() {
           </div>
         )}
 
-        {/* Adicionar Disponibilidade */}
-        <Card className="p-4 shadow-card border-dashed border-2">
-          <button className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <Plus className="w-5 h-5" />
-            <span className="font-medium">Adicionar horário disponível</span>
-          </button>
-        </Card>
+        {/* Próximas Aulas (se não estiver vendo hoje) */}
+        {!isSameDay(selectedDate, new Date()) && aulas.filter(a => 
+          new Date(a.data_hora) > new Date() && 
+          (a.status === 'confirmada' || a.status === 'pendente')
+        ).length > 0 && (
+          <div className="pt-4 border-t border-border">
+            <h3 className="font-semibold text-foreground mb-3">Próximas Aulas</h3>
+            <div className="space-y-2">
+              {aulas
+                .filter(a => 
+                  new Date(a.data_hora) > new Date() && 
+                  (a.status === 'confirmada' || a.status === 'pendente')
+                )
+                .slice(0, 3)
+                .map((aula) => (
+                  <Card 
+                    key={aula.id} 
+                    className="p-3 shadow-card cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setSelectedDate(new Date(aula.data_hora))}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Calendar className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{aula.instrutor_nome}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(aula.data_hora), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                      {getStatusBadge(aula.status)}
+                    </div>
+                  </Card>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <InstructorBottomNav />
+      <BottomNav />
     </div>
   );
 }

@@ -4,28 +4,25 @@ import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  Calendar,
   Clock,
   MapPin,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
   AlertCircle,
   XCircle,
   Car,
   Navigation,
   Zap,
-  Settings,
-  Plus,
-  CalendarDays
+  Filter,
+  MessageCircle,
+  TrendingUp,
+  BookOpen
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { format, startOfWeek, addDays, isSameDay, addWeeks, subWeeks } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Aula {
@@ -40,13 +37,13 @@ interface Aula {
   aluno_foto: string | null;
 }
 
-export default function InstrutorAgenda() {
+type StatusFilter = 'todas' | 'pendente' | 'confirmada' | 'em_andamento' | 'concluida' | 'cancelada';
+
+export default function InstrutorAulas() {
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [disponivel, setDisponivel] = useState(true);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState<StatusFilter>('todas');
 
   useEffect(() => {
     if (!user) return;
@@ -54,9 +51,10 @@ export default function InstrutorAgenda() {
     const fetchAulas = async () => {
       setLoading(true);
       
+      // First get the instructor id
       const { data: instrutor } = await supabase
         .from('instrutores')
-        .select('id, ativo')
+        .select('id')
         .eq('user_id', user.id)
         .single();
 
@@ -65,8 +63,7 @@ export default function InstrutorAgenda() {
         return;
       }
 
-      setDisponivel(instrutor.ativo ?? true);
-
+      // Then fetch aulas with aluno info via alunos_seguros view
       const { data: aulasData, error } = await supabase
         .from('aulas')
         .select(`
@@ -80,7 +77,7 @@ export default function InstrutorAgenda() {
           aluno_id
         `)
         .eq('instrutor_id', instrutor.id)
-        .order('data_hora', { ascending: true });
+        .order('data_hora', { ascending: false });
 
       if (error) {
         console.error('Error fetching aulas:', error);
@@ -88,6 +85,7 @@ export default function InstrutorAgenda() {
         return;
       }
 
+      // Get aluno info for each aula
       const aulasWithAluno = await Promise.all(
         (aulasData || []).map(async (aula) => {
           const { data: alunoData } = await supabase
@@ -111,15 +109,9 @@ export default function InstrutorAgenda() {
     fetchAulas();
   }, [user]);
 
-  const diasSemana = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  const aulasHoje = aulas.filter(aula => 
-    isSameDay(new Date(aula.data_hora), selectedDate)
-  );
-
-  const hasAulaOnDay = (date: Date) => {
-    return aulas.some(aula => isSameDay(new Date(aula.data_hora), date));
-  };
+  const aulasFiltradas = filtro === 'todas' 
+    ? aulas 
+    : aulas.filter(a => a.status === filtro);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -133,6 +125,12 @@ export default function InstrutorAgenda() {
         return (
           <Badge className="bg-secondary/10 text-secondary border-0">
             <CheckCircle2 className="w-3 h-3 mr-1" /> Confirmada
+          </Badge>
+        );
+      case "em_andamento":
+        return (
+          <Badge className="bg-blue-500/10 text-blue-600 border-0">
+            <Zap className="w-3 h-3 mr-1" /> Em andamento
           </Badge>
         );
       case "pendente":
@@ -152,7 +150,11 @@ export default function InstrutorAgenda() {
     }
   };
 
-  const totalDia = aulasHoje.reduce((acc, aula) => acc + aula.valor, 0);
+  const totalGanhos = aulas
+    .filter(a => a.status === 'concluida')
+    .reduce((acc, a) => acc + a.valor, 0);
+
+  const totalAulas = aulas.filter(a => a.status === 'concluida').length;
 
   return (
     <div className="app-container pb-24">
@@ -161,96 +163,57 @@ export default function InstrutorAgenda() {
       <div className="px-4 py-6 page-enter space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">Minha Agenda</h1>
-          <Button variant="outline" size="sm">
-            <Settings className="w-4 h-4 mr-1" />
-            Horários
-          </Button>
+          <h1 className="text-xl font-bold text-foreground">Minhas Aulas</h1>
         </div>
 
-        {/* Disponibilidade */}
-        <Card className="p-4 shadow-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-foreground">Aceitar novas aulas</p>
-              <p className="text-sm text-muted-foreground">
-                {disponivel ? "Você está disponível para agendamentos" : "Você não está aceitando aulas"}
-              </p>
+        {/* Estatísticas */}
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{totalAulas}</p>
+                <p className="text-xs text-muted-foreground">Aulas concluídas</p>
+              </div>
             </div>
-            <Switch 
-              checked={disponivel} 
-              onCheckedChange={setDisponivel}
-              className="data-[state=checked]:bg-primary"
-            />
-          </div>
-        </Card>
+          </Card>
+          <Card className="p-4 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-secondary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">R${totalGanhos}</p>
+                <p className="text-xs text-muted-foreground">Total ganho</p>
+              </div>
+            </div>
+          </Card>
+        </div>
 
-        {/* Calendário Semanal */}
-        <Card className="p-4 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))}>
-              <ChevronLeft className="w-5 h-5" />
+        {/* Filtros */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+          {(['todas', 'pendente', 'confirmada', 'em_andamento', 'concluida', 'cancelada'] as StatusFilter[]).map((status) => (
+            <Button
+              key={status}
+              variant={filtro === status ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFiltro(status)}
+              className="shrink-0"
+            >
+              {status === 'todas' ? 'Todas' : 
+               status === 'em_andamento' ? 'Em andamento' : 
+               status.charAt(0).toUpperCase() + status.slice(1)}
             </Button>
-            <h3 className="font-semibold text-foreground">
-              {format(weekStart, "MMMM yyyy", { locale: ptBR })}
-            </h3>
-            <Button variant="ghost" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-7 gap-2">
-            {diasSemana.map((dia) => {
-              const isSelected = isSameDay(dia, selectedDate);
-              const hasAula = hasAulaOnDay(dia);
-              const isToday = isSameDay(dia, new Date());
-              
-              return (
-                <button
-                  key={dia.toISOString()}
-                  onClick={() => setSelectedDate(dia)}
-                  className={`flex flex-col items-center p-2 rounded-xl transition-all relative ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : isToday
-                      ? "bg-primary/10"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  <span className="text-xs opacity-80">
-                    {format(dia, "EEE", { locale: ptBR })}
-                  </span>
-                  <span className="text-lg font-bold">{format(dia, "d")}</span>
-                  {hasAula && !isSelected && (
-                    <div className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Resumo do Dia */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              {format(selectedDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {aulasHoje.length} {aulasHoje.length === 1 ? 'aula' : 'aulas'} | Potencial: R${totalDia}
-            </p>
-          </div>
-          <Button size="sm" variant="outline">
-            <Plus className="w-4 h-4 mr-1" />
-            Bloquear
-          </Button>
+          ))}
         </div>
 
         {/* Lista de Aulas */}
         {loading ? (
           <div className="space-y-3">
-            {[1, 2].map((i) => (
+            {[1, 2, 3].map((i) => (
               <Card key={i} className="p-4 shadow-card">
                 <div className="flex items-start gap-3">
                   <Skeleton className="w-12 h-12 rounded-full" />
@@ -263,17 +226,19 @@ export default function InstrutorAgenda() {
               </Card>
             ))}
           </div>
-        ) : aulasHoje.length === 0 ? (
+        ) : aulasFiltradas.length === 0 ? (
           <Card className="p-8 shadow-card text-center">
-            <CalendarDays className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-            <h3 className="font-semibold text-foreground mb-1">Nenhuma aula neste dia</h3>
+            <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+            <h3 className="font-semibold text-foreground mb-1">Nenhuma aula encontrada</h3>
             <p className="text-sm text-muted-foreground">
-              Você não tem aulas agendadas para esta data
+              {filtro === 'todas' 
+                ? 'Você ainda não tem aulas agendadas' 
+                : `Nenhuma aula com status "${filtro}"`}
             </p>
           </Card>
         ) : (
           <div className="space-y-3">
-            {aulasHoje.map((aula) => (
+            {aulasFiltradas.map((aula) => (
               <Card key={aula.id} className="p-4 shadow-card">
                 <div className="flex items-start gap-3">
                   <div className="relative">
@@ -306,7 +271,7 @@ export default function InstrutorAgenda() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        {format(new Date(aula.data_hora), "HH:mm", { locale: ptBR })} - {aula.duracao_minutos}min
+                        {format(new Date(aula.data_hora), "dd/MM 'às' HH:mm", { locale: ptBR })}
                       </span>
                       <span className="font-semibold text-foreground">R${aula.valor}</span>
                     </div>
@@ -335,7 +300,7 @@ export default function InstrutorAgenda() {
                           <Link to={`/instrutor/a-caminho/${aula.id}`} className="flex-1">
                             <Button size="sm" className="w-full gradient-primary text-primary-foreground">
                               <Zap className="w-4 h-4 mr-1" />
-                              Iniciar Aula
+                              Iniciar
                             </Button>
                           </Link>
                         )}
@@ -347,20 +312,29 @@ export default function InstrutorAgenda() {
                         )}
                       </div>
                     )}
+
+                    {aula.status === "em_andamento" && (
+                      <div className="flex gap-2 mt-3">
+                        <Link to={`/instrutor/a-caminho/${aula.id}`} className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full">
+                            <MessageCircle className="w-4 h-4 mr-1" />
+                            Chat
+                          </Button>
+                        </Link>
+                        <Link to="/instrutor/validar-aula" className="flex-1">
+                          <Button size="sm" className="w-full gradient-primary text-primary-foreground">
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Finalizar
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
             ))}
           </div>
         )}
-
-        {/* Adicionar Disponibilidade */}
-        <Card className="p-4 shadow-card border-dashed border-2">
-          <button className="w-full flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <Plus className="w-5 h-5" />
-            <span className="font-medium">Adicionar horário disponível</span>
-          </button>
-        </Card>
       </div>
 
       <InstructorBottomNav />
