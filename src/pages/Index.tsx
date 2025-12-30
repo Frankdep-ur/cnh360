@@ -202,23 +202,31 @@ export default function Index() {
 
           {/* Legal Links */}
           <div className={cn(
-            "flex justify-center gap-6 pb-8 transition-all duration-500",
+            "flex flex-col items-center gap-4 pb-8 transition-all duration-500",
             showContent ? "opacity-100" : "opacity-0"
           )}
           style={{ transitionDelay: "800ms" }}
           >
-            <button
-              onClick={() => navigate("/politica-privacidade")}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            <div className="flex justify-center gap-6">
+              <button
+                onClick={() => navigate("/politica-de-privacidade")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Política de Privacidade
+              </button>
+              <button
+                onClick={() => navigate("/termos-de-uso")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Termos de Uso
+              </button>
+            </div>
+            <a
+              href="mailto:360cnh@gmail.com"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
             >
-              Política de Privacidade
-            </button>
-            <button
-              onClick={() => navigate("/termos-uso")}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Termos de Uso
-            </button>
+              Contato: 360cnh@gmail.com
+            </a>
           </div>
         </div>
       </div>
