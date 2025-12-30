@@ -13,7 +13,11 @@ import {
   Timer,
   FileText,
   CreditCard,
-  Navigation
+  Navigation,
+  Stethoscope,
+  Award,
+  ExternalLink,
+  Play
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,7 +50,14 @@ export default function AlunoDashboard() {
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
-  const [cursoTeoricoCompleto, setCursoTeoricoCompleto] = useState(false);
+  const [progressoRenach, setProgressoRenach] = useState<{
+    exame_medico_concluido?: boolean;
+    curso_teorico_conclusao?: string | null;
+    exame_teorico_resultado?: string | null;
+    aulas_praticas_conclusao?: string | null;
+    exame_pratico_resultado?: string | null;
+  } | null>(null);
+  const [practicalHours, setPracticalHours] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -57,68 +68,113 @@ export default function AlunoDashboard() {
         .maybeSingle()
         .then(({ data }) => setProfile(data));
 
-      // Buscar progresso do curso teórico
+      // Buscar progresso completo do RENACH
       supabase
         .from('alunos')
-        .select('id')
+        .select('id, horas_praticas_completadas')
         .eq('user_id', user.id)
         .maybeSingle()
         .then(async ({ data: aluno }) => {
           if (aluno) {
+            setPracticalHours(aluno.horas_praticas_completadas || 0);
+            
             const { data: progresso } = await supabase
               .from('progresso_renach')
-              .select('curso_teorico_conclusao')
+              .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado')
               .eq('aluno_id', aluno.id)
               .maybeSingle();
             
-            setCursoTeoricoCompleto(!!progresso?.curso_teorico_conclusao);
+            setProgressoRenach({
+              exame_medico_concluido: true, // Assumimos que passou no exame médico para estar cadastrado
+              ...progresso
+            });
           }
         });
     }
   }, [user]);
   
   const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2024
-  const practicalHours = 1;
-  const totalProgress = cursoTeoricoCompleto ? 62 : 40;
+  
+  // Status derivados do progresso real
+  const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
+  const cursoTeoricoCompleto = !!progressoRenach?.curso_teorico_conclusao;
+  const exameTeoricoAprovado = progressoRenach?.exame_teorico_resultado === 'aprovado';
+  const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
+  const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
+  
+  // Calcular progresso total baseado nas etapas
+  const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, exameTeoricoAprovado, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
+  const totalProgress = Math.round((completedSteps / 7) * 100);
+
+  // Função para determinar status da etapa baseado nas anteriores
+  const getStepStatus = (stepCompleted: boolean, previousCompleted: boolean): "completed" | "current" | "locked" => {
+    if (stepCompleted) return "completed";
+    if (previousCompleted) return "current";
+    return "locked";
+  };
 
   const steps = [
-    { id: 1, name: "Exame Médico/Psico", icon: FileText, status: "completed", progress: 100 },
+    { 
+      id: 1, 
+      name: "Exame Médico/Psicológico", 
+      icon: Stethoscope, 
+      status: exameMedicoCompleto ? "completed" : "current" as const,
+      progress: exameMedicoCompleto ? 100 : 0,
+      detail: "Avaliação médica e psicológica obrigatória"
+    },
     { 
       id: 2, 
       name: "Curso Teórico (EAD)", 
       icon: BookOpen, 
-      status: cursoTeoricoCompleto ? "completed" : "current", 
+      status: getStepStatus(cursoTeoricoCompleto, exameMedicoCompleto),
       progress: cursoTeoricoCompleto ? 100 : 0, 
-      link: "/aluno/curso-teorico",
-      subtitle: cursoTeoricoCompleto ? "Concluído" : "Concluir agora",
-      detail: cursoTeoricoCompleto 
-        ? "EAD gratuito · Sem carga horária mínima · Certificado emitido" 
-        : "EAD gratuito · Conforme nova lei"
+      link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
+      subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
+      detail: "EAD gratuito · Certificado emitido"
     },
     { 
       id: 3, 
-      name: "Exame Teórico", 
+      name: "Exame Teórico (Prova DETRAN)", 
       icon: ClipboardCheck, 
-      status: cursoTeoricoCompleto ? "completed" : "locked", 
-      progress: cursoTeoricoCompleto ? 100 : 0 
+      status: getStepStatus(exameTeoricoAprovado, cursoTeoricoCompleto),
+      progress: exameTeoricoAprovado ? 100 : 0,
+      detail: "30 questões · Mínimo 21 acertos (70%)",
+      showActions: cursoTeoricoCompleto && !exameTeoricoAprovado
     },
     { 
       id: 4, 
       name: "Aulas Práticas", 
       icon: Car, 
-      status: cursoTeoricoCompleto ? "current" : "locked", 
+      status: getStepStatus(aulasPraticasCompletas, exameTeoricoAprovado),
       progress: Math.round((practicalHours / minRequiredHours) * 100), 
-      subtitle: cursoTeoricoCompleto ? "Em andamento" : undefined,
+      subtitle: exameTeoricoAprovado && !aulasPraticasCompletas ? "Em andamento" : undefined,
       detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
-      link: "/aluno/buscar" 
+      link: exameTeoricoAprovado ? "/aluno/buscar" : undefined
     },
     { 
       id: 5, 
       name: "Exame Prático", 
       icon: Trophy, 
-      status: "locked", 
-      progress: 0, 
-      link: "/aluno/exame-pratico"
+      status: getStepStatus(examePraticoAprovado, aulasPraticasCompletas),
+      progress: examePraticoAprovado ? 100 : 0, 
+      link: aulasPraticasCompletas ? "/aluno/exame-pratico" : undefined,
+      detail: "Prova prática de direção veicular"
+    },
+    { 
+      id: 6, 
+      name: "Permissão para Dirigir (PPD)", 
+      icon: FileText, 
+      status: getStepStatus(false, examePraticoAprovado),
+      progress: 0,
+      detail: "Válida por 12 meses após aprovação"
+    },
+    { 
+      id: 7, 
+      name: "CNH Definitiva", 
+      icon: Award, 
+      status: "locked" as const,
+      progress: 0,
+      detail: "Após 12 meses sem infrações graves"
     },
   ];
 
@@ -270,14 +326,38 @@ export default function AlunoDashboard() {
                     )}
                   </div>
                   {/* Barra de progresso apenas para Aulas Práticas */}
-                  {step.name === "Aulas Práticas" && isCurrent && (
+                  {step.name === "Aulas Práticas" && (isCurrent || isCompleted) && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500 bg-primary"
-                          style={{ width: `${step.progress}%` }}
+                          style={{ width: `${Math.min(step.progress, 100)}%` }}
                         />
                       </div>
+                    </div>
+                  )}
+                  {/* Botões de ação para Exame Teórico */}
+                  {'showActions' in step && step.showActions && (
+                    <div className="mt-3 pt-3 border-t border-border flex gap-2">
+                      <Link to="/aluno/simulado" className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Play className="w-4 h-4 mr-2" />
+                          Simular prova
+                        </Button>
+                      </Link>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => {
+                          toast.info("Agendamento de prova", {
+                            description: "Acesse o site do DETRAN do seu estado para agendar sua prova teórica."
+                          });
+                        }}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Agendar prova
+                      </Button>
                     </div>
                   )}
                 </div>
