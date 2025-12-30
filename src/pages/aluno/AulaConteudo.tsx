@@ -69,11 +69,16 @@ export default function AulaConteudo() {
     carregarAula();
   }, [aulaId]);
 
-  // Extrair ID do vídeo do YouTube
+  // Extrair e validar ID do vídeo do YouTube
   const getYouTubeVideoId = (url: string) => {
     if (!url) return null;
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-    return match ? match[1] : null;
+    const videoId = match ? match[1] : null;
+    // IDs do YouTube têm exatamente 11 caracteres alfanuméricos (incluindo - e _)
+    if (videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId)) {
+      return videoId;
+    }
+    return null; // ID inválido (ex: placeholders como "placas-regulamentacao")
   };
 
   // Enviar quiz
