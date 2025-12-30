@@ -380,21 +380,50 @@ export default function AgendarAula() {
       const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
       scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
 
-      // Get student's current location
+      // Get student's current location with retry
       let studentLat: number | null = null;
       let studentLng: number | null = null;
       
+      const getLocationWithRetry = async (attempts = 3): Promise<GeolocationPosition | null> => {
+        for (let i = 0; i < attempts; i++) {
+          try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0,
+              });
+            });
+            return position;
+          } catch (err) {
+            console.log(`Location attempt ${i + 1} failed:`, err);
+            if (i < attempts - 1) {
+              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+            }
+          }
+        }
+        return null;
+      };
+
       try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
+        const position = await getLocationWithRetry();
+        if (position) {
+          studentLat = position.coords.latitude;
+          studentLng = position.coords.longitude;
+          console.log("Location captured:", { studentLat, studentLng });
+        } else {
+          toast({
+            title: "Localização não capturada",
+            description: "Não conseguimos obter sua localização. O instrutor pode ter dificuldade em encontrá-lo.",
+            variant: "destructive",
           });
-        });
-        studentLat = position.coords.latitude;
-        studentLng = position.coords.longitude;
+        }
       } catch (geoErr) {
         console.log("Could not get location:", geoErr);
+        toast({
+          title: "Localização não disponível",
+          description: "Ative a localização nas configurações do navegador para melhor experiência.",
+        });
       }
 
       // Create the lesson with pending status

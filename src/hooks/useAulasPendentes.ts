@@ -142,8 +142,16 @@ export function useAulasPendentes() {
 
       if (aulaFetchError) throw aulaFetchError;
 
-      // If there's a payment_intent_id, capture the payment
-      if (aulaData.payment_intent_id) {
+      // CRITICAL: Verify payment exists before accepting
+      if (!aulaData.payment_intent_id) {
+        toast({
+          title: "⚠️ Aula sem pagamento",
+          description: "O aluno não completou o pagamento. A aula será aceita mas sem garantia de pagamento.",
+          variant: "destructive",
+        });
+        // Still allow accepting but warn the instructor
+      } else {
+        // If there's a payment_intent_id, capture the payment
         toast({
           title: "Processando pagamento...",
           description: "Capturando o pagamento do aluno.",
