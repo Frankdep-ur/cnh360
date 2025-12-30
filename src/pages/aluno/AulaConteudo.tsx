@@ -120,21 +120,58 @@ export default function AulaConteudo() {
   const irParaProximaAula = async () => {
     if (!aula?.modulo_id) return;
     
-    // Buscar próxima aula do mesmo módulo
-    const { data: aulas } = await supabase
+    // 1. Buscar próxima aula do mesmo módulo
+    const { data: proximaAulaMesmoModulo } = await supabase
       .from('curso_aulas')
-      .select('id, ordem')
+      .select('id')
       .eq('modulo_id', aula.modulo_id)
       .gt('ordem', aula.ordem)
       .order('ordem')
       .limit(1);
 
-    if (aulas && aulas.length > 0) {
-      navigate(`/aluno/curso-teorico/aula/${aulas[0].id}`);
-    } else {
-      // Voltar para o módulo
-      navigate(`/aluno/curso-teorico/modulo/${aula.modulo_id}`);
+    if (proximaAulaMesmoModulo && proximaAulaMesmoModulo.length > 0) {
+      navigate(`/aluno/curso-teorico/aula/${proximaAulaMesmoModulo[0].id}`);
+      return;
     }
+
+    // 2. Buscar ordem do módulo atual
+    const { data: moduloAtual } = await supabase
+      .from('curso_modulos')
+      .select('ordem')
+      .eq('id', aula.modulo_id)
+      .single();
+
+    if (!moduloAtual) {
+      navigate(`/aluno/curso-teorico/modulo/${aula.modulo_id}`);
+      return;
+    }
+
+    // 3. Buscar próximo módulo
+    const { data: proximoModulo } = await supabase
+      .from('curso_modulos')
+      .select('id')
+      .gt('ordem', moduloAtual.ordem)
+      .order('ordem')
+      .limit(1);
+
+    if (proximoModulo && proximoModulo.length > 0) {
+      // 4. Buscar primeira aula do próximo módulo
+      const { data: primeiraAula } = await supabase
+        .from('curso_aulas')
+        .select('id')
+        .eq('modulo_id', proximoModulo[0].id)
+        .order('ordem')
+        .limit(1);
+
+      if (primeiraAula && primeiraAula.length > 0) {
+        navigate(`/aluno/curso-teorico/aula/${primeiraAula[0].id}`);
+        return;
+      }
+    }
+
+    // 5. Última aula do curso - parabéns e voltar para a página principal
+    toast.success('Parabéns! Você completou todo o curso teórico!');
+    navigate('/aluno/curso-teorico');
   };
 
   if (loading) {
