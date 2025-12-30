@@ -1062,14 +1062,14 @@ export const questoesSimulado: QuestaoSimulado[] = [
 ];
 
 // Função para selecionar questões aleatórias para o simulado
+// Distribuição oficial DETRAN: 30 questões conforme padrão CNH360
 export function selecionarQuestoesAleatorias(quantidade: number = 30): QuestaoSimulado[] {
   const categorias = [
-    { nome: "Legislação de Trânsito", quantidade: 9 },
-    { nome: "Direção Defensiva", quantidade: 8 },
-    { nome: "Primeiros Socorros", quantidade: 5 },
-    { nome: "Sinalização de Trânsito", quantidade: 5 },
-    { nome: "Meio Ambiente e Cidadania", quantidade: 2 },
-    { nome: "Mecânica Básica", quantidade: 1 }
+    { nome: "Legislação de Trânsito", quantidade: 10 },      // +1 (era 9)
+    { nome: "Direção Defensiva", quantidade: 7 },            // -1 (era 8)
+    { nome: "Primeiros Socorros", quantidade: 3 },           // -2 (era 5)
+    { nome: "Sinalização de Trânsito", quantidade: 6 },      // +1 (era 5)
+    { nome: "Meio Ambiente e Cidadania", quantidade: 4 }     // +2 (era 2), Mecânica removida
   ];
 
   const questoesSelecionadas: QuestaoSimulado[] = [];
