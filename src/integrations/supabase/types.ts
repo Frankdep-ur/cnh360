@@ -144,10 +144,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "aulas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "aulas_instrutor_id_fkey"
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aulas_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
             referencedColumns: ["id"]
           },
           {
@@ -250,6 +264,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "avaliacoes_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "avaliacoes_aula_id_fkey"
             columns: ["aula_id"]
             isOneToOne: true
@@ -261,6 +282,13 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avaliacoes_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
             referencedColumns: ["id"]
           },
         ]
@@ -425,6 +453,13 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "disponibilidade_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
+            referencedColumns: ["id"]
+          },
         ]
       }
       instrutores: {
@@ -494,6 +529,13 @@ export type Database = {
             columns: ["autoescola_id"]
             isOneToOne: false
             referencedRelation: "autoescolas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas_seguros"
             referencedColumns: ["id"]
           },
         ]
@@ -626,6 +668,13 @@ export type Database = {
             referencedRelation: "alunos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "logs_renach_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
         ]
       }
       mensagens_aula: {
@@ -748,6 +797,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pagamentos_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pagamentos_aula_id_fkey"
             columns: ["aula_id"]
             isOneToOne: false
@@ -759,6 +815,13 @@ export type Database = {
             columns: ["instrutor_id"]
             isOneToOne: false
             referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
             referencedColumns: ["id"]
           },
         ]
@@ -851,6 +914,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "progresso_aulas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "progresso_aulas_aula_id_fkey"
             columns: ["aula_id"]
             isOneToOne: false
@@ -914,6 +984,13 @@ export type Database = {
             columns: ["aluno_id"]
             isOneToOne: true
             referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progresso_renach_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: true
+            referencedRelation: "alunos_seguros"
             referencedColumns: ["id"]
           },
         ]
@@ -988,6 +1065,13 @@ export type Database = {
             columns: ["aluno_id"]
             isOneToOne: false
             referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulados_historico_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
             referencedColumns: ["id"]
           },
         ]
@@ -1096,11 +1180,181 @@ export type Database = {
             referencedRelation: "instrutores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "veiculos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      alunos_seguros: {
+        Row: {
+          avatar_url: string | null
+          categoria_pretendida:
+            | Database["public"]["Enums"]["categoria_cnh"]
+            | null
+          exame_pratico_aprovado: boolean | null
+          exame_teorico_aprovado: boolean | null
+          full_name: string | null
+          horas_praticas_completadas: number | null
+          horas_praticas_total: number | null
+          id: string | null
+          objetivo: Database["public"]["Enums"]["objetivo_aluno"] | null
+          phone: string | null
+          possui_carro_proprio: boolean | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      autoescolas_seguros: {
+        Row: {
+          ativa: boolean | null
+          cidade: string | null
+          email: string | null
+          estado: string | null
+          id: string | null
+          nome_fantasia: string | null
+          telefone: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          cidade?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string | null
+          nome_fantasia?: string | null
+          telefone?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          cidade?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string | null
+          nome_fantasia?: string | null
+          telefone?: string | null
+        }
+        Relationships: []
+      }
+      instrutores_seguros: {
+        Row: {
+          ativo: boolean | null
+          autoescola_id: string | null
+          avatar_url: string | null
+          bio: string | null
+          cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
+          full_name: string | null
+          id: string | null
+          is_mei_autonomo: boolean | null
+          nota_media: number | null
+          preco_hora: number | null
+          raio_atendimento_km: number | null
+          total_aulas: number | null
+          total_avaliacoes: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instrutores_autoescola_id_fkey"
+            columns: ["autoescola_id"]
+            isOneToOne: false
+            referencedRelation: "autoescolas_seguros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pagamentos_seguros: {
+        Row: {
+          aluno_id: string | null
+          aula_id: string | null
+          created_at: string | null
+          id: string | null
+          instrutor_id: string | null
+          metodo: Database["public"]["Enums"]["metodo_pagamento"] | null
+          pago_em: string | null
+          status: Database["public"]["Enums"]["status_pagamento"] | null
+          taxa_plataforma: number | null
+          updated_at: string | null
+          valor_bruto: number | null
+          valor_instrutor: number | null
+        }
+        Insert: {
+          aluno_id?: string | null
+          aula_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          instrutor_id?: string | null
+          metodo?: Database["public"]["Enums"]["metodo_pagamento"] | null
+          pago_em?: string | null
+          status?: Database["public"]["Enums"]["status_pagamento"] | null
+          taxa_plataforma?: number | null
+          updated_at?: string | null
+          valor_bruto?: number | null
+          valor_instrutor?: number | null
+        }
+        Update: {
+          aluno_id?: string | null
+          aula_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          instrutor_id?: string | null
+          metodo?: Database["public"]["Enums"]["metodo_pagamento"] | null
+          pago_em?: string | null
+          status?: Database["public"]["Enums"]["status_pagamento"] | null
+          taxa_plataforma?: number | null
+          updated_at?: string | null
+          valor_bruto?: number | null
+          valor_instrutor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagamentos_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos_seguros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       cleanup_old_locations: { Args: never; Returns: undefined }
