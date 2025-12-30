@@ -46,6 +46,7 @@ export default function AlunoDashboard() {
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
+  const [cursoTeoricoCompleto, setCursoTeoricoCompleto] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -55,32 +56,60 @@ export default function AlunoDashboard() {
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => setProfile(data));
+
+      // Buscar progresso do curso teórico
+      supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(async ({ data: aluno }) => {
+          if (aluno) {
+            const { data: progresso } = await supabase
+              .from('progresso_renach')
+              .select('curso_teorico_conclusao')
+              .eq('aluno_id', aluno.id)
+              .maybeSingle();
+            
+            setCursoTeoricoCompleto(!!progresso?.curso_teorico_conclusao);
+          }
+        });
     }
   }, [user]);
   
-  const requiredHours = 20;
+  const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2024
   const practicalHours = 1;
-  const totalProgress = 62;
+  const totalProgress = cursoTeoricoCompleto ? 62 : 40;
 
   const steps = [
     { id: 1, name: "Exame Médico/Psico", icon: FileText, status: "completed", progress: 100 },
     { 
       id: 2, 
-      name: "Curso Teórico 45h", 
+      name: "Curso Teórico (EAD)", 
       icon: BookOpen, 
-      status: "completed", 
-      progress: 100, 
+      status: cursoTeoricoCompleto ? "completed" : "current", 
+      progress: cursoTeoricoCompleto ? 100 : 0, 
       link: "/aluno/curso-teorico",
-      detail: "45 horas presenciais"
+      subtitle: cursoTeoricoCompleto ? "Concluído" : "Concluir agora",
+      detail: cursoTeoricoCompleto 
+        ? "EAD gratuito · Sem carga horária mínima · Certificado emitido" 
+        : "EAD gratuito · Conforme nova lei"
     },
-    { id: 3, name: "Exame Teórico", icon: ClipboardCheck, status: "completed", progress: 100 },
+    { 
+      id: 3, 
+      name: "Exame Teórico", 
+      icon: ClipboardCheck, 
+      status: cursoTeoricoCompleto ? "completed" : "locked", 
+      progress: cursoTeoricoCompleto ? 100 : 0 
+    },
     { 
       id: 4, 
       name: "Aulas Práticas", 
       icon: Car, 
-      status: "current", 
-      progress: Math.round((practicalHours / requiredHours) * 100), 
-      detail: `${practicalHours}h de ${requiredHours}h obrigatórias`, 
+      status: cursoTeoricoCompleto ? "current" : "locked", 
+      progress: Math.round((practicalHours / minRequiredHours) * 100), 
+      subtitle: cursoTeoricoCompleto ? "Em andamento" : undefined,
+      detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
       link: "/aluno/buscar" 
     },
     { 
@@ -131,7 +160,7 @@ export default function AlunoDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-2xl font-bold">{practicalHours}h</span>
-                <span className="text-primary-foreground/80"> / {requiredHours}h práticas</span>
+                <span className="text-primary-foreground/80"> / {minRequiredHours}h práticas</span>
               </div>
               <div className="text-right">
                 <p className="text-xs text-primary-foreground/60">Validadas GPS/QR</p>
@@ -157,7 +186,7 @@ export default function AlunoDashboard() {
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 rounded-full bg-primary" />
                   <span className="font-medium text-primary">
-                    Falta {requiredHours - practicalHours}h de aula prática
+                    Falta {minRequiredHours - practicalHours}h de aula prática
                   </span>
                 </div>
               </div>
@@ -209,26 +238,39 @@ export default function AlunoDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium text-foreground">{step.name}</h4>
-                        {isCompleted && (
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                            Concluído
+                        {step.subtitle ? (
+                          <span className={cn(
+                            "text-xs px-2 py-0.5 rounded-full",
+                            isCompleted && "bg-primary/10 text-primary",
+                            isCurrent && "bg-primary text-primary-foreground"
+                          )}>
+                            {step.subtitle}
                           </span>
-                        )}
-                        {isCurrent && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
-                            Em andamento
-                          </span>
+                        ) : (
+                          <>
+                            {isCompleted && (
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                Concluído
+                              </span>
+                            )}
+                            {isCurrent && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                                Em andamento
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       {step.detail && (
-                        <p className="text-sm text-muted-foreground">{step.detail}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{step.detail}</p>
                       )}
                     </div>
                     {!isLocked && (
                       <ChevronRight className="w-5 h-5 text-muted-foreground" />
                     )}
                   </div>
-                  {isCurrent && (
+                  {/* Barra de progresso apenas para Aulas Práticas */}
+                  {step.name === "Aulas Práticas" && isCurrent && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
