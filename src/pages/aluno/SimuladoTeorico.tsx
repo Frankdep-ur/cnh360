@@ -63,7 +63,7 @@ export default function SimuladoTeorico() {
   const calculateScore = useCallback(() => {
     let correct = 0;
     answers.forEach((answer, index) => {
-      if (answer === questions[index].correct) {
+      if (answer === questions[index].respostaCorreta) {
         correct++;
       }
     });
@@ -74,17 +74,70 @@ export default function SimuladoTeorico() {
     const categories: Record<string, { correct: number; total: number }> = {};
     
     questions.forEach((q, index) => {
-      if (!categories[q.category]) {
-        categories[q.category] = { correct: 0, total: 0 };
+      if (!categories[q.categoria]) {
+        categories[q.categoria] = { correct: 0, total: 0 };
       }
-      categories[q.category].total++;
-      if (answers[index] === q.correct) {
-        categories[q.category].correct++;
+      categories[q.categoria].total++;
+      if (answers[index] === q.respostaCorreta) {
+        categories[q.categoria].correct++;
       }
     });
     
     return categories;
   }, [answers, questions]);
+
+  // Salvar resultado no banco de dados
+  const saveResult = useCallback(async () => {
+    if (!user || saving || alreadySaved) return;
+    
+    setSaving(true);
+    try {
+      // Buscar aluno_id
+      const { data: aluno } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!aluno) {
+        toast.error('Perfil de aluno não encontrado');
+        return;
+      }
+
+      const score = calculateScore();
+      const tempoGasto = (45 * 60) - timeLeft;
+      const categories = getScoreByCategory();
+
+      const { error } = await supabase
+        .from('simulados_historico')
+        .insert({
+          aluno_id: aluno.id,
+          nota: Math.round((score / questions.length) * 100),
+          total_questoes: questions.length,
+          acertos: score,
+          tempo_gasto_segundos: tempoGasto,
+          aprovado: score >= 21,
+          detalhes_categorias: categories
+        });
+
+      if (error) throw error;
+      
+      setAlreadySaved(true);
+      toast.success('Resultado salvo no seu histórico!');
+    } catch (error) {
+      console.error('Erro ao salvar resultado:', error);
+      toast.error('Não foi possível salvar o resultado');
+    } finally {
+      setSaving(false);
+    }
+  }, [user, saving, alreadySaved, calculateScore, getScoreByCategory, timeLeft, questions.length]);
+
+  // Salvar automaticamente quando mostrar resultado
+  useEffect(() => {
+    if (showResult && !alreadySaved) {
+      saveResult();
+    }
+  }, [showResult, alreadySaved, saveResult]);
 
   const finishExam = () => {
     setShowResult(true);
@@ -133,7 +186,7 @@ export default function SimuladoTeorico() {
           <div className="max-w-md mx-auto space-y-4">
             {questions.map((q, index) => {
               const userAnswer = answers[index];
-              const isCorrect = userAnswer === q.correct;
+              const isCorrect = userAnswer === q.respostaCorreta;
               
               return (
                 <div 
@@ -151,30 +204,30 @@ export default function SimuladoTeorico() {
                       {isCorrect ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
                     </div>
                     <div>
-                      <span className="text-xs text-muted-foreground">{q.category}</span>
-                      <p className="text-sm font-medium text-foreground">{q.question}</p>
+                      <span className="text-xs text-muted-foreground">{q.categoria}</span>
+                      <p className="text-sm font-medium text-foreground">{q.pergunta}</p>
                     </div>
                   </div>
                   
                   <div className="space-y-2 ml-11">
-                    {q.options.map((opt, optIndex) => (
+                    {q.opcoes.map((opt, optIndex) => (
                       <div
                         key={optIndex}
                         className={cn(
                           "text-sm py-1 px-2 rounded",
-                          optIndex === q.correct && "bg-primary/10 text-primary font-medium",
-                          optIndex === userAnswer && optIndex !== q.correct && "bg-destructive/10 text-destructive line-through"
+                          optIndex === q.respostaCorreta && "bg-primary/10 text-primary font-medium",
+                          optIndex === userAnswer && optIndex !== q.respostaCorreta && "bg-destructive/10 text-destructive line-through"
                         )}
                       >
                         {String.fromCharCode(65 + optIndex)}) {opt}
-                        {optIndex === q.correct && " ✓"}
+                        {optIndex === q.respostaCorreta && " ✓"}
                       </div>
                     ))}
                   </div>
                   
                   <div className="mt-3 ml-11 p-2 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground">
-                      <strong>Explicação:</strong> {q.explanation}
+                      <strong>Explicação:</strong> {q.explicacao}
                     </p>
                   </div>
                 </div>
@@ -410,13 +463,13 @@ export default function SimuladoTeorico() {
 
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto">
-          <span className="text-xs text-primary font-medium">{question.category}</span>
+          <span className="text-xs text-primary font-medium">{question.categoria}</span>
           <h2 className="text-lg font-semibold text-foreground mb-6 mt-1">
-            {question.question}
+            {question.pergunta}
           </h2>
 
           <div className="space-y-3">
-            {question.options.map((option, index) => (
+            {question.opcoes.map((option, index) => (
               <button
                 key={index}
                 onClick={() => handleAnswer(index)}
