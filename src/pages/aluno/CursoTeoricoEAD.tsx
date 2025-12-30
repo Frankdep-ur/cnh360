@@ -4,6 +4,7 @@ import {
   Play, 
   BookOpen, 
   FileText, 
+  Award,
   CheckCircle2, 
   Lock,
   Clock,
@@ -204,6 +205,30 @@ export default function CursoTeoricoEAD() {
           </div>
         </div>
       </div>
+
+      {/* Certificate CTA - only when course is complete */}
+      {progressoGeral === 100 && (
+        <div className="px-6 mt-6">
+          <div className="max-w-md mx-auto">
+            <Link to="/aluno/certificado-ead">
+              <div className="bg-gradient-to-r from-green-600 to-green-500 rounded-2xl p-5 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Award className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold">Certificado Disponível!</h3>
+                    <p className="text-sm opacity-90">Você concluiu o curso teórico</p>
+                  </div>
+                  <Button variant="secondary" size="sm">
+                    Ver
+                  </Button>
+                </div>
+              </div>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Simulado CTA */}
       <div className="px-6 mt-6">
