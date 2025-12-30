@@ -35,6 +35,7 @@ import AulaConteudo from "./pages/aluno/AulaConteudo";
 import ExamePratico from "./pages/aluno/ExamePratico";
 import ValidacaoAula from "./pages/aluno/ValidacaoAula";
 import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
+import CertificadoEAD from "./pages/aluno/CertificadoEAD";
 
 // Instrutor Pages
 import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
@@ -174,6 +175,11 @@ const App = () => (
             <Route path="/aluno/rastrear/:aulaId" element={
               <ProtectedRoute>
                 <RastrearInstrutor />
+              </ProtectedRoute>
+            } />
+            <Route path="/aluno/certificado-ead" element={
+              <ProtectedRoute>
+                <CertificadoEAD />
               </ProtectedRoute>
             } />
 
