@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Play, CheckCircle2, XCircle, ChevronRight, Video, BookOpen, HelpCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -27,7 +27,7 @@ export default function AulaConteudo() {
   const [aula, setAula] = useState<any>(null);
   const [quiz, setQuiz] = useState<QuizPergunta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'conteudo' | 'video' | 'quiz'>('conteudo');
+  const [activeTab, setActiveTab] = useState<'conteudo' | 'quiz'>('conteudo');
   
   // Estado do Quiz
   const [respostas, setRespostas] = useState<{ [key: string]: string }>({});
@@ -69,17 +69,6 @@ export default function AulaConteudo() {
     carregarAula();
   }, [aulaId]);
 
-  // Extrair e validar ID do vídeo do YouTube
-  const getYouTubeVideoId = (url: string) => {
-    if (!url) return null;
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-    const videoId = match ? match[1] : null;
-    // IDs do YouTube têm exatamente 11 caracteres alfanuméricos (incluindo - e _)
-    if (videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId)) {
-      return videoId;
-    }
-    return null; // ID inválido (ex: placeholders como "placas-regulamentacao")
-  };
 
   // Enviar quiz
   const handleEnviarQuiz = async () => {
@@ -200,7 +189,7 @@ export default function AulaConteudo() {
     );
   }
 
-  const videoId = getYouTubeVideoId(aula.video_url);
+  
 
   return (
     <div className="min-h-screen bg-background pb-6">
@@ -235,19 +224,6 @@ export default function AulaConteudo() {
           <BookOpen className="w-4 h-4" />
           Conteúdo
         </button>
-        {videoId && (
-          <button
-            onClick={() => setActiveTab('video')}
-            className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
-              activeTab === 'video' 
-                ? 'text-primary border-b-2 border-primary' 
-                : 'text-muted-foreground'
-            }`}
-          >
-            <Video className="w-4 h-4" />
-            Vídeo
-          </button>
-        )}
         <button
           onClick={() => setActiveTab('quiz')}
           className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
@@ -284,42 +260,16 @@ export default function AulaConteudo() {
           
           <div className="mt-6">
             <Button 
-              onClick={() => setActiveTab(videoId ? 'video' : 'quiz')}
+              onClick={() => setActiveTab('quiz')}
               className="w-full"
             >
-              {videoId ? 'Assistir Vídeo' : 'Fazer Quiz'}
+              Fazer Quiz
               <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Vídeo */}
-      {activeTab === 'video' && videoId && (
-        <div className="p-4">
-          <div className="aspect-video bg-black rounded-xl overflow-hidden mb-4">
-            <iframe
-              src={`https://www.youtube.com/embed/${videoId}`}
-              title={aula.titulo}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-          
-          <p className="text-sm text-muted-foreground mb-4 text-center">
-            Fonte: {aula.video_fonte || 'YouTube'}
-          </p>
-          
-          <Button 
-            onClick={() => setActiveTab('quiz')}
-            className="w-full"
-          >
-            Fazer Quiz
-            <ChevronRight className="w-4 h-4 ml-2" />
-          </Button>
-        </div>
-      )}
 
       {/* Quiz */}
       {activeTab === 'quiz' && (
