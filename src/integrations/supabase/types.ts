@@ -948,6 +948,50 @@ export type Database = {
         }
         Relationships: []
       }
+      simulados_historico: {
+        Row: {
+          acertos: number
+          aluno_id: string
+          aprovado: boolean
+          created_at: string
+          detalhes_categorias: Json | null
+          id: string
+          nota: number
+          tempo_gasto_segundos: number
+          total_questoes: number
+        }
+        Insert: {
+          acertos: number
+          aluno_id: string
+          aprovado: boolean
+          created_at?: string
+          detalhes_categorias?: Json | null
+          id?: string
+          nota: number
+          tempo_gasto_segundos: number
+          total_questoes?: number
+        }
+        Update: {
+          acertos?: number
+          aluno_id?: string
+          aprovado?: boolean
+          created_at?: string
+          detalhes_categorias?: Json | null
+          id?: string
+          nota?: number
+          tempo_gasto_segundos?: number
+          total_questoes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulados_historico_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "alunos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
