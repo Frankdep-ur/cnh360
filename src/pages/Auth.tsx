@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { z } from "zod";
-import { Car, GraduationCap, Building2, ArrowLeft, Mail, Lock, User, Eye, EyeOff, LogOut } from "lucide-react";
+import { Car, GraduationCap, Building2, ArrowLeft, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +20,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { user, signIn, signUp, signOut, loading: authLoading } = useAuth();
+  const { signIn, signUp, loading: authLoading } = useAuth();
   
   const [userType, setUserType] = useState<UserType>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -31,7 +31,6 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
-  const [showLoggedInPrompt, setShowLoggedInPrompt] = useState(false);
 
   // Get userType from query params if present
   useEffect(() => {
@@ -42,18 +41,6 @@ export default function Auth() {
       setStep("form");
     }
   }, [location.search]);
-
-  // Show prompt if user is already logged in
-  useEffect(() => {
-    if (user && !authLoading) {
-      setShowLoggedInPrompt(true);
-    }
-  }, [user, authLoading]);
-
-  const handleLogoutAndContinue = async () => {
-    await signOut();
-    setShowLoggedInPrompt(false);
-  };
 
   const validate = () => {
     const newErrors: typeof errors = {};
@@ -161,44 +148,6 @@ export default function Auth() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
-      </div>
-    );
-  }
-
-  // Show prompt if user is already logged in
-  if (showLoggedInPrompt && user) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="max-w-md w-full bg-card rounded-2xl p-6 shadow-elevated border border-border">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-bold text-foreground mb-2">
-              Você já está logado
-            </h2>
-            <p className="text-muted-foreground">
-              Conectado como <span className="font-medium text-foreground">{user.email}</span>
-            </p>
-          </div>
-          
-          <div className="space-y-3">
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full"
-              onClick={handleLogoutAndContinue}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair e usar outra conta
-            </Button>
-            <Button
-              variant="default"
-              size="lg"
-              className="w-full"
-              onClick={() => navigate("/")}
-            >
-              Voltar para o início
-            </Button>
-          </div>
-        </div>
       </div>
     );
   }
