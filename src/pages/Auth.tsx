@@ -32,6 +32,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Get userType from query params if present
   useEffect(() => {
@@ -45,13 +46,15 @@ export default function Auth() {
 
   // Redirect after login/signup when user is authenticated
   useEffect(() => {
-    if (user && !authLoading && userType) {
+    if (user && !authLoading && userType && !isRedirecting) {
       checkProfileAndRedirect();
     }
-  }, [user, authLoading, userType]);
+  }, [user, authLoading, userType, isRedirecting]);
 
   const checkProfileAndRedirect = async () => {
-    if (!user || !userType) return;
+    if (!user || !userType || isRedirecting) return;
+    
+    setIsRedirecting(true);
 
     try {
       // Check if user has a profile for the selected type
@@ -63,9 +66,9 @@ export default function Auth() {
           .maybeSingle();
         
         if (aluno) {
-          navigate("/aluno");
+          navigate("/aluno", { replace: true });
         } else {
-          navigate("/onboarding/aluno");
+          navigate("/onboarding/aluno", { replace: true });
         }
       } else if (userType === "instrutor") {
         const { data: instrutor } = await supabase
@@ -75,9 +78,9 @@ export default function Auth() {
           .maybeSingle();
         
         if (instrutor) {
-          navigate("/instrutor");
+          navigate("/instrutor", { replace: true });
         } else {
-          navigate("/onboarding/instrutor");
+          navigate("/onboarding/instrutor", { replace: true });
         }
       } else if (userType === "autoescola") {
         const { data: autoescola } = await supabase
@@ -87,15 +90,15 @@ export default function Auth() {
           .maybeSingle();
         
         if (autoescola) {
-          navigate("/autoescola");
+          navigate("/autoescola", { replace: true });
         } else {
-          navigate("/onboarding/autoescola");
+          navigate("/onboarding/autoescola", { replace: true });
         }
       }
     } catch (error) {
       console.error("Error checking profile:", error);
       // Fallback to onboarding
-      navigate(`/onboarding/${userType}`);
+      navigate(`/onboarding/${userType}`, { replace: true });
     }
   };
 
