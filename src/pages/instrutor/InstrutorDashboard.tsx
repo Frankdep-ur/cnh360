@@ -6,6 +6,7 @@ import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
 import { RideRequestNotification } from "@/components/instrutor/RideRequestNotification";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
+import { useAulasPendentes } from "@/hooks/useAulasPendentes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,23 +36,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
-interface AulaPendente {
-  id: string;
-  aluno_nome: string;
-  aluno_foto: string | null;
-  data_hora: string;
-  duracao_minutos: number;
-  ponto_encontro: string | null;
-  valor: number;
-  usa_carro_aluno: boolean;
-  status: string;
-}
-
 export default function InstrutorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [aulasPendentes, setAulasPendentes] = useState<AulaPendente[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Use the unified hook for pending lessons with payment handling
+  const { 
+    aulasPendentes, 
+    loading, 
+    aceitarAula, 
+    recusarAula, 
+    refetch: fetchAulasPendentes 
+  } = useAulasPendentes();
+  
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -87,6 +84,16 @@ export default function InstrutorDashboard() {
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => setProfile(data));
+        
+      // Get instructor ID for notifications
+      supabase
+        .from("instrutores")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setInstrutorId(data.id);
+        });
     }
   }, [user]);
 
@@ -113,166 +120,24 @@ export default function InstrutorDashboard() {
     ganhoLiquido: 1037,
   };
 
-  useEffect(() => {
-    if (user) {
-      fetchAulasPendentes();
-      
-      // Setup realtime subscription for new lessons
-      const channel = supabase
-        .channel("aulas-instrutor")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "aulas",
-          },
-          () => {
-            console.log("Aulas table changed, refetching...");
-            fetchAulasPendentes();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [user]);
-
-  async function fetchAulasPendentes() {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-
-      // Get instructor ID
-      const { data: instrutorData, error: instrutorError } = await supabase
-        .from("instrutores")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (instrutorError) {
-        console.error("Error fetching instructor:", instrutorError);
-        return;
-      }
-
-      if (instrutorData) {
-        setInstrutorId(instrutorData.id);
-      }
-
-      // Get pending/confirmed lessons
-      const { data: aulasData, error: aulasError } = await supabase
-        .from("aulas")
-        .select("*")
-        .eq("instrutor_id", instrutorData.id)
-        .in("status", ["pendente", "confirmada"])
-        .order("data_hora", { ascending: true });
-
-      if (aulasError) {
-        console.error("Error fetching lessons:", aulasError);
-        return;
-      }
-
-      // Get student names
-      const aulasComNomes: AulaPendente[] = [];
-      for (const aula of aulasData || []) {
-        let alunoNome = "Aluno";
-
-        try {
-          const { data: alunoData } = await supabase
-            .from("alunos")
-            .select("user_id")
-            .eq("id", aula.aluno_id)
-            .single();
-
-          if (alunoData) {
-            const { data: nome } = await supabase.rpc("get_participant_name", {
-              p_user_id: alunoData.user_id,
-            });
-            if (nome) alunoNome = nome;
-          }
-        } catch (err) {
-          console.error("Error fetching student name:", err);
-        }
-
-        aulasComNomes.push({
-          id: aula.id,
-          aluno_nome: alunoNome,
-          aluno_foto: null,
-          data_hora: aula.data_hora,
-          duracao_minutos: aula.duracao_minutos,
-          ponto_encontro: aula.ponto_encontro,
-          valor: Number(aula.valor),
-          usa_carro_aluno: aula.usa_carro_aluno || false,
-          status: aula.status,
-        });
-      }
-
-      setAulasPendentes(aulasComNomes);
-    } catch (err) {
-      console.error("Error in fetchAulasPendentes:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleAceitarAula(aulaId: string) {
+  // Use unified handlers that properly capture/cancel payments
+  const handleAceitarAula = async (aulaId: string) => {
     setProcessingId(aulaId);
     try {
-      const { error } = await supabase
-        .from("aulas")
-        .update({ status: "confirmada" })
-        .eq("id", aulaId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Aula aceita!",
-        description: "O aluno será notificado.",
-      });
-
-      fetchAulasPendentes();
-    } catch (err: any) {
-      console.error("Error accepting lesson:", err);
-      toast({
-        title: "Erro ao aceitar aula",
-        description: err.message,
-        variant: "destructive",
-      });
+      await aceitarAula(aulaId);
     } finally {
       setProcessingId(null);
     }
-  }
+  };
 
-  async function handleRecusarAula(aulaId: string) {
+  const handleRecusarAula = async (aulaId: string) => {
     setProcessingId(aulaId);
     try {
-      const { error } = await supabase
-        .from("aulas")
-        .update({ status: "cancelada" })
-        .eq("id", aulaId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Aula recusada",
-        description: "O aluno será notificado.",
-      });
-
-      fetchAulasPendentes();
-    } catch (err: any) {
-      console.error("Error declining lesson:", err);
-      toast({
-        title: "Erro ao recusar aula",
-        description: err.message,
-        variant: "destructive",
-      });
+      await recusarAula(aulaId);
     } finally {
       setProcessingId(null);
     }
-  }
+  };
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
