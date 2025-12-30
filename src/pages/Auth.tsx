@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const emailSchema = z.string().email("Email inválido");
@@ -20,7 +21,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { signIn, signUp, loading: authLoading } = useAuth();
+  const { user, signIn, signUp, loading: authLoading } = useAuth();
   
   const [userType, setUserType] = useState<UserType>(null);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -41,6 +42,62 @@ export default function Auth() {
       setStep("form");
     }
   }, [location.search]);
+
+  // Redirect after login/signup when user is authenticated
+  useEffect(() => {
+    if (user && !authLoading && userType) {
+      checkProfileAndRedirect();
+    }
+  }, [user, authLoading, userType]);
+
+  const checkProfileAndRedirect = async () => {
+    if (!user || !userType) return;
+
+    try {
+      // Check if user has a profile for the selected type
+      if (userType === "aluno") {
+        const { data: aluno } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        if (aluno) {
+          navigate("/aluno");
+        } else {
+          navigate("/onboarding/aluno");
+        }
+      } else if (userType === "instrutor") {
+        const { data: instrutor } = await supabase
+          .from("instrutores")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        if (instrutor) {
+          navigate("/instrutor");
+        } else {
+          navigate("/onboarding/instrutor");
+        }
+      } else if (userType === "autoescola") {
+        const { data: autoescola } = await supabase
+          .from("autoescolas")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        if (autoescola) {
+          navigate("/autoescola");
+        } else {
+          navigate("/onboarding/autoescola");
+        }
+      }
+    } catch (error) {
+      console.error("Error checking profile:", error);
+      // Fallback to onboarding
+      navigate(`/onboarding/${userType}`);
+    }
+  };
 
   const validate = () => {
     const newErrors: typeof errors = {};
