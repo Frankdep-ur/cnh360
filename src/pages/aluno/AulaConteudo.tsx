@@ -37,6 +37,16 @@ export default function AulaConteudo() {
 
   // Carregar dados da aula
   useEffect(() => {
+    // RESET de todos os estados quando aulaId mudar
+    setAula(null);
+    setQuiz([]);
+    setLoading(true);
+    setActiveTab('conteudo');
+    setRespostas({});
+    setQuizEnviado(false);
+    setResultado(null);
+    setMostrarExplicacoes(false);
+
     async function carregarAula() {
       if (!aulaId) return;
       
