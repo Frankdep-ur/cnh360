@@ -14,6 +14,7 @@ import RecuperarSenha from "./pages/RecuperarSenha";
 import RedefinirSenha from "./pages/RedefinirSenha";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import TermosUso from "./pages/TermosUso";
+import Status from "./pages/Status";
 
 // Onboarding
 import AlunoOnboarding from "./pages/onboarding/AlunoOnboarding";
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
             <Route path="/termos-uso" element={<TermosUso />} />
             <Route path="/termos-de-uso" element={<TermosUso />} />
+            <Route path="/status" element={<Status />} />
 
             {/* Onboarding - Protected */}
             <Route path="/onboarding/aluno" element={
