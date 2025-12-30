@@ -37,7 +37,6 @@ export default function Index() {
       } else if (alunoRes.data) {
         navigate("/aluno", { replace: true });
       } else {
-        // Usuário logado sem registro - mostrar página normal
         setShowContent(true);
       }
       
@@ -47,6 +46,14 @@ export default function Index() {
     checkAndRedirect();
   }, [user, authLoading, navigate]);
 
+  // Animação de entrada
+  useEffect(() => {
+    if (!authLoading && !checkingRegistration && !user) {
+      const timer = setTimeout(() => setShowContent(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, checkingRegistration, user]);
+
   // Loading enquanto verifica autenticação
   if (authLoading || checkingRegistration) {
     return (
@@ -55,11 +62,6 @@ export default function Index() {
       </div>
     );
   }
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   const userTypes = [
     {
