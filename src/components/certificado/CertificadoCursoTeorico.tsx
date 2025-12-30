@@ -1,8 +1,11 @@
-import { useRef } from "react";
-import { Award, Download, Calendar, User, BookOpen, ShieldCheck } from "lucide-react";
+import { useRef, useState } from "react";
+import { Award, Download, Calendar, User, BookOpen, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { toast } from "sonner";
 
 interface CertificadoCursoTeoricoProps {
   nomeAluno: string;
@@ -16,11 +19,57 @@ export function CertificadoCursoTeorico({
   horasCompletadas = 45,
 }: CertificadoCursoTeoricoProps) {
   const certificadoRef = useRef<HTMLDivElement>(null);
+  const [gerando, setGerando] = useState(false);
 
-  const handleDownload = () => {
-    // Para uma implementação real, você usaria html2canvas ou similar
-    // Por agora, vamos abrir em uma nova janela para impressão
-    window.print();
+  const handleDownload = async () => {
+    if (!certificadoRef.current) return;
+
+    setGerando(true);
+    try {
+      // Capturar o certificado como imagem
+      const canvas = await html2canvas(certificadoRef.current, {
+        scale: 2, // Melhor qualidade
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      // Criar PDF em formato paisagem A4
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calcular dimensões mantendo proporção
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      
+      const finalWidth = imgWidth * ratio;
+      const finalHeight = imgHeight * ratio;
+      
+      // Centralizar no PDF
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
+
+      pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
+      
+      // Gerar nome do arquivo
+      const nomeArquivo = `certificado_curso_teorico_${format(dataConlusao, "yyyy-MM-dd")}.pdf`;
+      pdf.save(nomeArquivo);
+      
+      toast.success("Certificado baixado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Erro ao gerar o certificado. Tente novamente.");
+    } finally {
+      setGerando(false);
+    }
   };
 
   const dataFormatada = format(dataConlusao, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -30,9 +79,18 @@ export function CertificadoCursoTeorico({
     <div className="w-full max-w-4xl mx-auto">
       {/* Botão de Download */}
       <div className="flex justify-end mb-4 print:hidden">
-        <Button onClick={handleDownload} className="gap-2">
-          <Download className="w-4 h-4" />
-          Baixar Certificado
+        <Button onClick={handleDownload} className="gap-2" disabled={gerando}>
+          {gerando ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Gerando PDF...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" />
+              Baixar Certificado (PDF)
+            </>
+          )}
         </Button>
       </div>
 
