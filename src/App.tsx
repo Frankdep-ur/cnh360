@@ -82,7 +82,9 @@ const App = () => (
             <Route path="/recuperar-senha" element={<RecuperarSenha />} />
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
             <Route path="/politica-privacidade" element={<PoliticaPrivacidade />} />
+            <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
             <Route path="/termos-uso" element={<TermosUso />} />
+            <Route path="/termos-de-uso" element={<TermosUso />} />
 
             {/* Onboarding - Protected */}
             <Route path="/onboarding/aluno" element={
