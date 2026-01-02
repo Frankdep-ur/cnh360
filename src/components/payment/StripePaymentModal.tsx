@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Loader2, Shield, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { STRIPE_PUBLISHABLE_KEY } from "@/lib/stripe";
 
-// Use the publishable key
-const stripePromise = loadStripe("pk_live_51RSkCFE3Lvi1VXvkiLUfJk1qhB2JMEA1JYjU6sJ6NyTDhZfH3A3f5qCvdMfOaM2Ew6A4KdJC6E8Ub7E1hRqPqdR800hV3VLxK8");
+// Initialize Stripe with centralized key
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 interface PaymentFormProps {
   amount: number;
