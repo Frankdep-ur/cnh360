@@ -183,8 +183,19 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
+    
+    // Return user-friendly error messages
+    let friendlyMessage = errorMessage;
+    if (errorMessage.includes("STRIPE_SECRET_KEY")) {
+      friendlyMessage = "Sistema de pagamento temporariamente indisponível.";
+    } else if (errorMessage.includes("Authentication")) {
+      friendlyMessage = "Faça login para continuar com o pagamento.";
+    } else if (errorMessage.includes("Aluno não encontrado")) {
+      friendlyMessage = "Complete seu cadastro de aluno antes de agendar uma aula.";
+    }
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: friendlyMessage }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500 

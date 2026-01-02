@@ -120,7 +120,7 @@ export function PixPaymentModal({
     setError(null);
 
     try {
-      console.log("[PixModal] Generating PIX payment...", { amount, originalAmount });
+      console.log("[PixModal] Generating PIX payment...", { amount, originalAmount, aulaId });
       
       // amount and originalAmount are already in REAIS (not cents)
       const { data, error: invokeError } = await supabase.functions.invoke("create-pix-payment", {
@@ -134,28 +134,62 @@ export function PixPaymentModal({
 
       if (invokeError) {
         console.error("[PixModal] Error generating PIX:", invokeError);
-        throw new Error(invokeError.message);
+        // Mensagem amigável para o usuário
+        const friendlyMessage = getFriendlyErrorMessage(invokeError.message);
+        throw new Error(friendlyMessage);
       }
 
       console.log("[PixModal] PIX generated:", data);
+
+      if (data?.error) {
+        // Handle error returned in the response body
+        const friendlyMessage = getFriendlyErrorMessage(data.error);
+        throw new Error(friendlyMessage);
+      }
 
       if (data?.pix) {
         setPixData(data.pix);
         setPaymentIntentId(data.paymentIntentId);
       } else {
-        throw new Error("Failed to generate PIX QR Code");
+        throw new Error("Não foi possível gerar o QR Code PIX. Tente novamente.");
       }
     } catch (err: any) {
       console.error("[PixModal] Error:", err);
-      setError(err.message || "Erro ao gerar PIX");
+      const errorMsg = err.message || "Erro ao gerar PIX. Tente novamente em instantes.";
+      setError(errorMsg);
       toast({
-        title: "Erro ao gerar PIX",
-        description: err.message || "Tente novamente",
+        title: "Erro no pagamento PIX",
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
+  }
+
+  // Função para converter mensagens técnicas em mensagens amigáveis
+  function getFriendlyErrorMessage(technicalError: string): string {
+    const errorMap: Record<string, string> = {
+      "Edge Function returned a non-2xx status code": "Não foi possível processar o pagamento. Tente novamente em instantes.",
+      "pix payment method is not enabled": "O pagamento via PIX não está disponível no momento. Por favor, escolha outro método de pagamento.",
+      "STRIPE_SECRET_KEY is not set": "Sistema de pagamento temporariamente indisponível. Tente novamente mais tarde.",
+      "User not authenticated": "Faça login para continuar com o pagamento.",
+      "Aula não encontrada": "Não foi possível encontrar os dados da aula. Tente novamente.",
+    };
+
+    // Verifica se alguma chave está contida na mensagem de erro
+    for (const [key, friendlyMsg] of Object.entries(errorMap)) {
+      if (technicalError.toLowerCase().includes(key.toLowerCase())) {
+        return friendlyMsg;
+      }
+    }
+
+    // Se não encontrar correspondência, retorna uma mensagem genérica
+    if (technicalError.includes("non-2xx") || technicalError.includes("500") || technicalError.includes("error")) {
+      return "Não foi possível processar o pagamento. Tente novamente em instantes.";
+    }
+
+    return technicalError;
   }
 
   const copyPixCode = async () => {

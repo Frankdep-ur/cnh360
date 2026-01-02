@@ -153,25 +153,40 @@ serve(async (req) => {
 
     // Create PaymentIntent with PIX as payment method
     // PIX payments are immediate (no manual capture option)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: discountedAmountInCents,
-      currency: 'brl',
-      customer: customerId,
-      payment_method_types: ['pix'],
-      metadata: {
-        user_id: finalUserId || '',
-        instrutor_id: instructorId || '',
-        aula_id: aulaId,
-        valor_instrutor: valorInstrutor.toString(),
-        taxa_plataforma: taxaPlataforma.toString(),
-        payment_method: 'pix',
-        instructor_name: instructorName,
-        duration_minutes: duration?.toString() || '',
-        original_amount: originalAmountInCents.toString(),
-        discount_applied: '5',
-      },
-      description: `Aula de Direção - ${duration || 60}min com ${instructorName} (PIX)`,
-    });
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: discountedAmountInCents,
+        currency: 'brl',
+        customer: customerId,
+        payment_method_types: ['pix'],
+        metadata: {
+          user_id: finalUserId || '',
+          instrutor_id: instructorId || '',
+          aula_id: aulaId,
+          valor_instrutor: valorInstrutor.toString(),
+          taxa_plataforma: taxaPlataforma.toString(),
+          payment_method: 'pix',
+          instructor_name: instructorName,
+          duration_minutes: duration?.toString() || '',
+          original_amount: originalAmountInCents.toString(),
+          discount_applied: '5',
+        },
+        description: `Aula de Direção - ${duration || 60}min com ${instructorName} (PIX)`,
+      });
+    } catch (stripeError: any) {
+      logStep("Stripe PaymentIntent creation failed", { 
+        error: stripeError.message,
+        code: stripeError.code,
+        type: stripeError.type
+      });
+      
+      // Check if PIX is not enabled
+      if (stripeError.message?.includes("pix") || stripeError.code === "payment_method_not_available") {
+        throw new Error("PIX payment method is not enabled. Please contact support.");
+      }
+      throw stripeError;
+    }
 
     logStep("PIX PaymentIntent created", { 
       paymentIntentId: paymentIntent.id, 
@@ -192,12 +207,29 @@ serve(async (req) => {
 
     // Get the PIX QR code data from the PaymentIntent
     // We need to confirm the payment intent first to generate the PIX code
-    const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntent.id, {
-      payment_method_data: {
-        type: 'pix',
-      },
-      return_url: `${req.headers.get("origin")}/aluno/aula-solicitada/${aulaId}`,
-    });
+    let confirmedPaymentIntent;
+    try {
+      confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntent.id, {
+        payment_method_data: {
+          type: 'pix',
+        },
+        return_url: `${req.headers.get("origin") || "https://cnh360.com"}/aluno/aula-solicitada/${aulaId}`,
+      });
+    } catch (confirmError: any) {
+      logStep("Error confirming PaymentIntent for PIX", { 
+        error: confirmError.message,
+        code: confirmError.code 
+      });
+      
+      // Cancel the payment intent if confirmation fails
+      try {
+        await stripe.paymentIntents.cancel(paymentIntent.id);
+      } catch (cancelError) {
+        logStep("Failed to cancel PaymentIntent", { error: cancelError });
+      }
+      
+      throw new Error("Não foi possível gerar o código PIX. Tente novamente.");
+    }
 
     logStep("PaymentIntent confirmed for PIX", { 
       status: confirmedPaymentIntent.status,
@@ -208,7 +240,10 @@ serve(async (req) => {
     const pixAction = confirmedPaymentIntent.next_action?.pix_display_qr_code;
     
     if (!pixAction) {
-      throw new Error("Failed to generate PIX QR Code");
+      logStep("No PIX QR Code data in response", { 
+        nextAction: confirmedPaymentIntent.next_action 
+      });
+      throw new Error("Não foi possível gerar o QR Code PIX. Verifique se o PIX está habilitado na conta.");
     }
 
     logStep("PIX QR Code generated successfully");
@@ -236,8 +271,17 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
+    
+    // Return user-friendly error messages
+    let friendlyMessage = errorMessage;
+    if (errorMessage.includes("STRIPE_SECRET_KEY")) {
+      friendlyMessage = "Sistema de pagamento temporariamente indisponível.";
+    } else if (errorMessage.includes("not enabled") || errorMessage.includes("pix")) {
+      friendlyMessage = "O pagamento via PIX não está disponível no momento.";
+    }
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: friendlyMessage }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500 

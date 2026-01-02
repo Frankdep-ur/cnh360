@@ -24,9 +24,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import { WalletPaymentButtons } from "@/components/payment/WalletPaymentButtons";
+import { STRIPE_PUBLISHABLE_KEY } from "@/lib/stripe";
 
-// Initialize Stripe
-const stripePromise = loadStripe("pk_test_51RVxwm2MzPduPRmkVHxV5VK5C5jFJDcGvxpH6pvbWmkBDPwT5FT4FBL3hYO5RpRiCmGNlxUcxG7F9yc0rZyM2TRZ00XaIZlDaF");
+// Initialize Stripe with centralized key
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 const paymentMethods = [
   { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0, isWallet: true },
