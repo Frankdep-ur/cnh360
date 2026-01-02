@@ -258,6 +258,13 @@ export default function AgendarAula() {
   const [walletClientSecret, setWalletClientSecret] = useState<string | null>(null);
   const [isPreparingWallet, setIsPreparingWallet] = useState(false);
 
+  // Location state - captured early for better UX
+  const [studentLocation, setStudentLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'failed'>('idle');
+
   useEffect(() => {
     if (id) {
       fetchInstructorData();
@@ -328,8 +335,72 @@ export default function AgendarAula() {
     return false;
   };
 
+  // Capture location function - can be called manually or automatically
+  const captureLocation = async (): Promise<boolean> => {
+    if (studentLocation) return true; // Already captured
+    
+    setLocationStatus('loading');
+    console.log("[AgendarAula] Iniciando captura de localização...");
+    
+    const getLocationWithRetry = async (attempts = 3): Promise<GeolocationPosition | null> => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0,
+            });
+          });
+          return position;
+        } catch (err: any) {
+          console.log(`[AgendarAula] Tentativa ${i + 1} falhou:`, err.message);
+          if (i < attempts - 1) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+      }
+      return null;
+    };
+
+    try {
+      const position = await getLocationWithRetry();
+      if (position) {
+        setStudentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('success');
+        console.log("[AgendarAula] Localização capturada com sucesso:", {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        return true;
+      } else {
+        setLocationStatus('failed');
+        console.log("[AgendarAula] Falha ao capturar localização após tentativas");
+        return false;
+      }
+    } catch (err) {
+      console.error("[AgendarAula] Erro ao capturar localização:", err);
+      setLocationStatus('failed');
+      return false;
+    }
+  };
+
+  // Start capturing location when user types meeting point
+  useEffect(() => {
+    if (meetingPoint.length > 3 && locationStatus === 'idle') {
+      captureLocation();
+    }
+  }, [meetingPoint]);
+
   const handleNext = async () => {
     if (step < 2) {
+      // Try to capture location before moving to payment step
+      if (locationStatus === 'idle') {
+        captureLocation();
+      }
       setStep(step + 1);
     } else {
       await createLesson();
@@ -348,6 +419,15 @@ export default function AgendarAula() {
     }
 
     setLoading(true);
+    
+    console.log("[AgendarAula] Iniciando createLesson:", {
+      selectedPayment,
+      totalPrice,
+      instructorId: instructor.id,
+      studentLocation,
+      locationStatus,
+    });
+    
     try {
       // Calculate scheduled date/time
       const scheduledDate = new Date();
@@ -362,45 +442,29 @@ export default function AgendarAula() {
       const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
       scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
 
-      // Get student's current location with retry
-      let studentLat: number | null = null;
-      let studentLng: number | null = null;
+      // Use already captured location or try one more time
+      let studentLat: number | null = studentLocation?.lat || null;
+      let studentLng: number | null = studentLocation?.lng || null;
       
-      const getLocationWithRetry = async (attempts = 3): Promise<GeolocationPosition | null> => {
-        for (let i = 0; i < attempts; i++) {
-          try {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 0,
-              });
-            });
-            return position;
-          } catch (err) {
-            console.log(`Location attempt ${i + 1} failed:`, err);
-            if (i < attempts - 1) {
-              await new Promise(r => setTimeout(r, 1000));
-            }
-          }
+      // If location not captured yet, try one more time
+      if (!studentLocation && locationStatus !== 'loading') {
+        console.log("[AgendarAula] Tentando capturar localização uma última vez...");
+        const success = await captureLocation();
+        if (success && studentLocation) {
+          studentLat = studentLocation.lat;
+          studentLng = studentLocation.lng;
         }
-        return null;
-      };
-
-      try {
-        const position = await getLocationWithRetry();
-        if (position) {
-          studentLat = position.coords.latitude;
-          studentLng = position.coords.longitude;
-          console.log("Location captured:", { studentLat, studentLng });
-        } else {
-          toast({
-            title: "Localização não capturada",
-            description: "Não conseguimos obter sua localização. O instrutor pode ter dificuldade em encontrá-lo.",
-          });
-        }
-      } catch (geoErr) {
-        console.log("Could not get location:", geoErr);
+      }
+      
+      // Show warning if location still not available (but don't block)
+      if (!studentLat || !studentLng) {
+        console.log("[AgendarAula] Localização não disponível, continuando sem ela");
+        toast({
+          title: "Localização não capturada",
+          description: "O instrutor pode ter dificuldade em encontrá-lo. Informe um ponto de encontro detalhado.",
+        });
+      } else {
+        console.log("[AgendarAula] Usando localização:", { studentLat, studentLng });
       }
 
       // For card payments (including Apple Pay/Google Pay), create PaymentIntent and lesson atomically
@@ -655,6 +719,57 @@ export default function AgendarAula() {
                   />
                 </div>
               </div>
+
+              {/* Location Status */}
+              {locationStatus === 'loading' && (
+                <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                    Obtendo sua localização para facilitar o encontro...
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {locationStatus === 'success' && (
+                <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700 dark:text-green-300 text-sm">
+                    Localização capturada! O instrutor poderá te encontrar facilmente.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {locationStatus === 'failed' && (
+                <div className="space-y-2">
+                  <Alert className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+                    <MapPin className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
+                      Não conseguimos obter sua localização. Toque abaixo para tentar novamente.
+                    </AlertDescription>
+                  </Alert>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={captureLocation}
+                    className="w-full"
+                  >
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Compartilhar Localização
+                  </Button>
+                </div>
+              )}
+
+              {locationStatus === 'idle' && meetingPoint.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={captureLocation}
+                  className="w-full"
+                >
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Compartilhar Localização
+                </Button>
+              )}
             </div>
           )}
 
