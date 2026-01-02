@@ -78,6 +78,48 @@ serve(async (req) => {
     }
     logStep("Aluno found", { alunoId: alunoData.id });
 
+    // FOR PIX: Create lesson first without PaymentIntent (PIX will create its own)
+    if (paymentMethod === 'pix') {
+      logStep("PIX payment - creating lesson without PaymentIntent");
+      
+      const { data: aulaData, error: aulaError } = await supabaseClient
+        .from("aulas")
+        .insert({
+          aluno_id: alunoData.id,
+          instrutor_id: instructorId,
+          data_hora: scheduledDate,
+          duracao_minutos: duration || 60,
+          ponto_encontro: meetingPoint,
+          valor: amount,
+          usa_carro_aluno: useOwnCar || false,
+          status: "pendente",
+          latitude_aluno: studentLat || null,
+          longitude_aluno: studentLng || null,
+          payment_intent_id: null, // PIX will set this later
+        })
+        .select()
+        .single();
+
+      if (aulaError) {
+        logStep("Error creating aula for PIX", { error: aulaError });
+        throw new Error(`Erro ao criar aula: ${aulaError.message}`);
+      }
+
+      logStep("Aula created for PIX payment", { aulaId: aulaData.id });
+
+      return new Response(
+        JSON.stringify({ 
+          aulaId: aulaData.id,
+          paymentMethod: 'pix',
+        }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200 
+        }
+      );
+    }
+
+    // FOR CARD: Create PaymentIntent and lesson atomically
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
     // Check if customer exists
@@ -100,16 +142,11 @@ serve(async (req) => {
     const taxaPlataforma = Math.round(amount * 0.20 * 100); // 20% platform fee
     const valorInstrutor = amountInCents - taxaPlataforma;
 
-    // Apply PIX discount if selected
-    const finalAmount = paymentMethod === 'pix' 
-      ? Math.round(amountInCents * 0.95) // 5% discount
-      : amountInCents;
-
-    logStep("Amount calculated", { amountInCents, finalAmount, taxaPlataforma, valorInstrutor });
+    logStep("Amount calculated", { amountInCents, taxaPlataforma, valorInstrutor });
 
     // Create PaymentIntent with manual capture (authorization only)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: finalAmount,
+      amount: amountInCents,
       currency: 'brl',
       customer: customerId,
       capture_method: 'manual', // IMPORTANT: Only authorize, don't capture
@@ -146,7 +183,7 @@ serve(async (req) => {
         status: "pendente",
         latitude_aluno: studentLat || null,
         longitude_aluno: studentLng || null,
-        payment_intent_id: paymentIntent.id, // ALWAYS set with the payment intent
+        payment_intent_id: paymentIntent.id,
       })
       .select()
       .single();
@@ -173,7 +210,7 @@ serve(async (req) => {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         aulaId: aulaData.id,
-        amount: finalAmount,
+        amount: amountInCents,
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
