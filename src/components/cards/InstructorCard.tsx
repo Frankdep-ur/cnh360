@@ -1,7 +1,9 @@
+import { memo } from "react";
 import { Star, MapPin, Car, Clock, Shield, Leaf } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 interface InstructorCardProps {
   id: string;
@@ -19,7 +21,7 @@ interface InstructorCardProps {
   showCarroProprio?: boolean;
 }
 
-export function InstructorCard({
+function InstructorCardComponent({
   id,
   name,
   photo,
@@ -43,7 +45,7 @@ export function InstructorCard({
         <div className="flex gap-4">
           {/* Photo */}
           <div className="relative">
-            <img
+            <OptimizedImage
               src={photo}
               alt={name}
               className="w-20 h-20 rounded-xl object-cover"
@@ -126,3 +128,5 @@ export function InstructorCard({
     </Link>
   );
 }
+
+export const InstructorCard = memo(InstructorCardComponent);
