@@ -1,73 +1,74 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { queryClient } from "@/lib/queryClient";
+import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
 
-// Pages
+// Critical pages - load immediately
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-import RecuperarSenha from "./pages/RecuperarSenha";
-import RedefinirSenha from "./pages/RedefinirSenha";
-import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
-import TermosUso from "./pages/TermosUso";
-import Status from "./pages/Status";
 
-// Onboarding
-import AlunoOnboarding from "./pages/onboarding/AlunoOnboarding";
-import InstrutorOnboarding from "./pages/onboarding/InstrutorOnboarding";
-import AutoescolaOnboarding from "./pages/onboarding/AutoescolaOnboarding";
+// Lazy loaded pages - Onboarding
+const AlunoOnboarding = lazy(() => import("./pages/onboarding/AlunoOnboarding"));
+const InstrutorOnboarding = lazy(() => import("./pages/onboarding/InstrutorOnboarding"));
+const AutoescolaOnboarding = lazy(() => import("./pages/onboarding/AutoescolaOnboarding"));
 
-// Aluno Pages
-import AlunoDashboard from "./pages/aluno/AlunoDashboard";
-import AlunoPerfil from "./pages/aluno/AlunoPerfil";
-import BuscarInstrutores from "./pages/aluno/BuscarInstrutores";
-import InstrutorPerfilView from "./pages/aluno/InstrutorPerfil";
-import AgendarAula from "./pages/aluno/AgendarAula";
-import AulaConfirmada from "./pages/aluno/AulaConfirmada";
-import AulaConfirmadaById from "./pages/aluno/AulaConfirmadaById";
-import AulaSolicitada from "./pages/aluno/AulaSolicitada";
-import CursoTeoricoEAD from "./pages/aluno/CursoTeoricoEAD";
-import ModuloDetalhes from "./pages/aluno/ModuloDetalhes";
-import AulaConteudo from "./pages/aluno/AulaConteudo";
-import ExamePratico from "./pages/aluno/ExamePratico";
-import ValidacaoAula from "./pages/aluno/ValidacaoAula";
-import SimuladoTeorico from "./pages/aluno/SimuladoTeorico";
-import CertificadoEAD from "./pages/aluno/CertificadoEAD";
-import AlunoAgenda from "./pages/aluno/AlunoAgenda";
-import AlunoChat from "./pages/aluno/AlunoChat";
+// Lazy loaded pages - Aluno
+const AlunoDashboard = lazy(() => import("./pages/aluno/AlunoDashboard"));
+const AlunoPerfil = lazy(() => import("./pages/aluno/AlunoPerfil"));
+const BuscarInstrutores = lazy(() => import("./pages/aluno/BuscarInstrutores"));
+const InstrutorPerfilView = lazy(() => import("./pages/aluno/InstrutorPerfil"));
+const AgendarAula = lazy(() => import("./pages/aluno/AgendarAula"));
+const AulaConfirmada = lazy(() => import("./pages/aluno/AulaConfirmada"));
+const AulaConfirmadaById = lazy(() => import("./pages/aluno/AulaConfirmadaById"));
+const AulaSolicitada = lazy(() => import("./pages/aluno/AulaSolicitada"));
+const CursoTeoricoEAD = lazy(() => import("./pages/aluno/CursoTeoricoEAD"));
+const ModuloDetalhes = lazy(() => import("./pages/aluno/ModuloDetalhes"));
+const AulaConteudo = lazy(() => import("./pages/aluno/AulaConteudo"));
+const ExamePratico = lazy(() => import("./pages/aluno/ExamePratico"));
+const ValidacaoAula = lazy(() => import("./pages/aluno/ValidacaoAula"));
+const SimuladoTeorico = lazy(() => import("./pages/aluno/SimuladoTeorico"));
+const CertificadoEAD = lazy(() => import("./pages/aluno/CertificadoEAD"));
+const AlunoAgenda = lazy(() => import("./pages/aluno/AlunoAgenda"));
+const AlunoChat = lazy(() => import("./pages/aluno/AlunoChat"));
+const RastrearInstrutor = lazy(() => import("./pages/aluno/RastrearInstrutor"));
 
-// Instrutor Pages
-import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
-import InstrutorPerfil from "./pages/instrutor/InstrutorPerfil";
-import InstrutorGanhos from "./pages/instrutor/InstrutorGanhos";
-import InstrutorAgenda from "./pages/instrutor/InstrutorAgenda";
-import InstrutorAulas from "./pages/instrutor/InstrutorAulas";
-import ValidarAulaInstrutor from "./pages/instrutor/ValidarAulaInstrutor";
-import InstrutorACaminho from "./pages/instrutor/InstrutorACaminho";
+// Lazy loaded pages - Instrutor
+const InstrutorDashboard = lazy(() => import("./pages/instrutor/InstrutorDashboard"));
+const InstrutorPerfil = lazy(() => import("./pages/instrutor/InstrutorPerfil"));
+const InstrutorGanhos = lazy(() => import("./pages/instrutor/InstrutorGanhos"));
+const InstrutorAgenda = lazy(() => import("./pages/instrutor/InstrutorAgenda"));
+const InstrutorAulas = lazy(() => import("./pages/instrutor/InstrutorAulas"));
+const ValidarAulaInstrutor = lazy(() => import("./pages/instrutor/ValidarAulaInstrutor"));
+const InstrutorACaminho = lazy(() => import("./pages/instrutor/InstrutorACaminho"));
 
-// Aluno tracking
-import RastrearInstrutor from "./pages/aluno/RastrearInstrutor";
+// Lazy loaded pages - Autoescola
+const AutoescolaDashboard = lazy(() => import("./pages/autoescola/AutoescolaDashboard"));
+const AutoescolaLeads = lazy(() => import("./pages/autoescola/AutoescolaLeads"));
+const AutoescolaTurmas = lazy(() => import("./pages/autoescola/AutoescolaTurmas"));
+const AutoescolaMEI = lazy(() => import("./pages/autoescola/AutoescolaMEI"));
+const AutoescolaAgenda = lazy(() => import("./pages/autoescola/AutoescolaAgenda"));
+const AutoescolaFinanceiro = lazy(() => import("./pages/autoescola/AutoescolaFinanceiro"));
+const AutoescolaContratos = lazy(() => import("./pages/autoescola/AutoescolaContratos"));
+const AutoescolaAvaliacoes = lazy(() => import("./pages/autoescola/AutoescolaAvaliacoes"));
+const AutoescolaComunicacao = lazy(() => import("./pages/autoescola/AutoescolaComunicacao"));
+const AutoescolaProvas = lazy(() => import("./pages/autoescola/AutoescolaProvas"));
+const AutoescolaCRM = lazy(() => import("./pages/autoescola/AutoescolaCRM"));
+const AutoescolaPerfil = lazy(() => import("./pages/autoescola/AutoescolaPerfil"));
+const AutoescolaSimuladosRelatorio = lazy(() => import("./pages/autoescola/AutoescolaSimuladosRelatorio"));
 
-// Autoescola Pages
-import AutoescolaDashboard from "./pages/autoescola/AutoescolaDashboard";
-import AutoescolaLeads from "./pages/autoescola/AutoescolaLeads";
-import AutoescolaTurmas from "./pages/autoescola/AutoescolaTurmas";
-import AutoescolaMEI from "./pages/autoescola/AutoescolaMEI";
-import AutoescolaAgenda from "./pages/autoescola/AutoescolaAgenda";
-import AutoescolaFinanceiro from "./pages/autoescola/AutoescolaFinanceiro";
-import AutoescolaContratos from "./pages/autoescola/AutoescolaContratos";
-import AutoescolaAvaliacoes from "./pages/autoescola/AutoescolaAvaliacoes";
-import AutoescolaComunicacao from "./pages/autoescola/AutoescolaComunicacao";
-import AutoescolaProvas from "./pages/autoescola/AutoescolaProvas";
-import AutoescolaCRM from "./pages/autoescola/AutoescolaCRM";
-import AutoescolaPerfil from "./pages/autoescola/AutoescolaPerfil";
-import AutoescolaSimuladosRelatorio from "./pages/autoescola/AutoescolaSimuladosRelatorio";
-
-const queryClient = new QueryClient();
+// Lazy loaded pages - Other
+const RecuperarSenha = lazy(() => import("./pages/RecuperarSenha"));
+const RedefinirSenha = lazy(() => import("./pages/RedefinirSenha"));
+const PoliticaPrivacidade = lazy(() => import("./pages/PoliticaPrivacidade"));
+const TermosUso = lazy(() => import("./pages/TermosUso"));
+const Status = lazy(() => import("./pages/Status"));
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -76,237 +77,239 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <Suspense fallback={<PageSkeleton />}>
             <Routes>
-            {/* Public */}
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/login" element={<Auth />} />
-            <Route path="/entrar" element={<Auth />} />
-            <Route path="/cadastro" element={<Auth />} />
-            <Route path="/recuperar-senha" element={<RecuperarSenha />} />
-            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
-            <Route path="/politica-privacidade" element={<PoliticaPrivacidade />} />
-            <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
-            <Route path="/termos-uso" element={<TermosUso />} />
-            <Route path="/termos-de-uso" element={<TermosUso />} />
-            <Route path="/status" element={<Status />} />
+              {/* Public */}
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/login" element={<Auth />} />
+              <Route path="/entrar" element={<Auth />} />
+              <Route path="/cadastro" element={<Auth />} />
+              <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+              <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+              <Route path="/politica-privacidade" element={<PoliticaPrivacidade />} />
+              <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
+              <Route path="/termos-uso" element={<TermosUso />} />
+              <Route path="/termos-de-uso" element={<TermosUso />} />
+              <Route path="/status" element={<Status />} />
 
-            {/* Onboarding - Protected */}
-            <Route path="/onboarding/aluno" element={
-              <ProtectedRoute>
-                <AlunoOnboarding />
-              </ProtectedRoute>
-            } />
-            <Route path="/onboarding/instrutor" element={
-              <ProtectedRoute>
-                <InstrutorOnboarding />
-              </ProtectedRoute>
-            } />
-            <Route path="/onboarding/autoescola" element={
-              <ProtectedRoute>
-                <AutoescolaOnboarding />
-              </ProtectedRoute>
-            } />
+              {/* Onboarding - Protected */}
+              <Route path="/onboarding/aluno" element={
+                <ProtectedRoute>
+                  <AlunoOnboarding />
+                </ProtectedRoute>
+              } />
+              <Route path="/onboarding/instrutor" element={
+                <ProtectedRoute>
+                  <InstrutorOnboarding />
+                </ProtectedRoute>
+              } />
+              <Route path="/onboarding/autoescola" element={
+                <ProtectedRoute>
+                  <AutoescolaOnboarding />
+                </ProtectedRoute>
+              } />
 
-            {/* Aluno - Protected */}
-            <Route path="/aluno" element={
-              <ProtectedRoute>
-                <AlunoDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/buscar" element={
-              <ProtectedRoute>
-                <BuscarInstrutores />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/instrutor/:id" element={
-              <ProtectedRoute>
-                <InstrutorPerfilView />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/perfil" element={
-              <ProtectedRoute>
-                <AlunoPerfil />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/agendar/:id" element={
-              <ProtectedRoute>
-                <AgendarAula />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/aula-confirmada" element={
-              <ProtectedRoute>
-                <AulaConfirmada />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/aula-confirmada/:aulaId" element={
-              <ProtectedRoute>
-                <AulaConfirmadaById />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/aula-solicitada/:aulaId" element={
-              <ProtectedRoute>
-                <AulaSolicitada />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/curso-teorico" element={
-              <ProtectedRoute>
-                <CursoTeoricoEAD />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/curso-teorico/modulo/:moduloId" element={
-              <ProtectedRoute>
-                <ModuloDetalhes />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/curso-teorico/aula/:aulaId" element={
-              <ProtectedRoute>
-                <AulaConteudo />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/exame-pratico" element={
-              <ProtectedRoute>
-                <ExamePratico />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/validacao-aula" element={
-              <ProtectedRoute>
-                <ValidacaoAula />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/simulado" element={
-              <ProtectedRoute>
-                <SimuladoTeorico />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/rastrear/:aulaId" element={
-              <ProtectedRoute>
-                <RastrearInstrutor />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/certificado-ead" element={
-              <ProtectedRoute>
-                <CertificadoEAD />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/agenda" element={
-              <ProtectedRoute>
-                <AlunoAgenda />
-              </ProtectedRoute>
-            } />
-            <Route path="/aluno/chat" element={
-              <ProtectedRoute>
-                <AlunoChat />
-              </ProtectedRoute>
-            } />
+              {/* Aluno - Protected */}
+              <Route path="/aluno" element={
+                <ProtectedRoute>
+                  <AlunoDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/buscar" element={
+                <ProtectedRoute>
+                  <BuscarInstrutores />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/instrutor/:id" element={
+                <ProtectedRoute>
+                  <InstrutorPerfilView />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/perfil" element={
+                <ProtectedRoute>
+                  <AlunoPerfil />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/agendar/:id" element={
+                <ProtectedRoute>
+                  <AgendarAula />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/aula-confirmada" element={
+                <ProtectedRoute>
+                  <AulaConfirmada />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/aula-confirmada/:aulaId" element={
+                <ProtectedRoute>
+                  <AulaConfirmadaById />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/aula-solicitada/:aulaId" element={
+                <ProtectedRoute>
+                  <AulaSolicitada />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/curso-teorico" element={
+                <ProtectedRoute>
+                  <CursoTeoricoEAD />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/curso-teorico/modulo/:moduloId" element={
+                <ProtectedRoute>
+                  <ModuloDetalhes />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/curso-teorico/aula/:aulaId" element={
+                <ProtectedRoute>
+                  <AulaConteudo />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/exame-pratico" element={
+                <ProtectedRoute>
+                  <ExamePratico />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/validacao-aula" element={
+                <ProtectedRoute>
+                  <ValidacaoAula />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/simulado" element={
+                <ProtectedRoute>
+                  <SimuladoTeorico />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/rastrear/:aulaId" element={
+                <ProtectedRoute>
+                  <RastrearInstrutor />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/certificado-ead" element={
+                <ProtectedRoute>
+                  <CertificadoEAD />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/agenda" element={
+                <ProtectedRoute>
+                  <AlunoAgenda />
+                </ProtectedRoute>
+              } />
+              <Route path="/aluno/chat" element={
+                <ProtectedRoute>
+                  <AlunoChat />
+                </ProtectedRoute>
+              } />
 
-            {/* Instrutor - Protected */}
-            <Route path="/instrutor" element={
-              <ProtectedRoute>
-                <InstrutorDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/ganhos" element={
-              <ProtectedRoute>
-                <InstrutorGanhos />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/agenda" element={
-              <ProtectedRoute>
-                <InstrutorAgenda />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/validar-aula" element={
-              <ProtectedRoute>
-                <ValidarAulaInstrutor />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/aulas" element={
-              <ProtectedRoute>
-                <InstrutorAulas />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/a-caminho/:aulaId" element={
-              <ProtectedRoute>
-                <InstrutorACaminho />
-              </ProtectedRoute>
-            } />
-            <Route path="/instrutor/perfil" element={
-              <ProtectedRoute>
-                <InstrutorPerfil />
-              </ProtectedRoute>
-            } />
+              {/* Instrutor - Protected */}
+              <Route path="/instrutor" element={
+                <ProtectedRoute>
+                  <InstrutorDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/ganhos" element={
+                <ProtectedRoute>
+                  <InstrutorGanhos />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/agenda" element={
+                <ProtectedRoute>
+                  <InstrutorAgenda />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/validar-aula" element={
+                <ProtectedRoute>
+                  <ValidarAulaInstrutor />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/aulas" element={
+                <ProtectedRoute>
+                  <InstrutorAulas />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/a-caminho/:aulaId" element={
+                <ProtectedRoute>
+                  <InstrutorACaminho />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/perfil" element={
+                <ProtectedRoute>
+                  <InstrutorPerfil />
+                </ProtectedRoute>
+              } />
 
-            {/* Autoescola - Protected */}
-            <Route path="/autoescola" element={
-              <ProtectedRoute>
-                <AutoescolaDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/leads" element={
-              <ProtectedRoute>
-                <AutoescolaLeads />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/turmas" element={
-              <ProtectedRoute>
-                <AutoescolaTurmas />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/mei" element={
-              <ProtectedRoute>
-                <AutoescolaMEI />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/agenda" element={
-              <ProtectedRoute>
-                <AutoescolaAgenda />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/financeiro" element={
-              <ProtectedRoute>
-                <AutoescolaFinanceiro />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/contratos" element={
-              <ProtectedRoute>
-                <AutoescolaContratos />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/avaliacoes" element={
-              <ProtectedRoute>
-                <AutoescolaAvaliacoes />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/comunicacao" element={
-              <ProtectedRoute>
-                <AutoescolaComunicacao />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/provas" element={
-              <ProtectedRoute>
-                <AutoescolaProvas />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/crm" element={
-              <ProtectedRoute>
-                <AutoescolaCRM />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/perfil" element={
-              <ProtectedRoute>
-                <AutoescolaPerfil />
-              </ProtectedRoute>
-            } />
-            <Route path="/autoescola/simulados-relatorio" element={
-              <ProtectedRoute>
-                <AutoescolaSimuladosRelatorio />
-              </ProtectedRoute>
-            } />
+              {/* Autoescola - Protected */}
+              <Route path="/autoescola" element={
+                <ProtectedRoute>
+                  <AutoescolaDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/leads" element={
+                <ProtectedRoute>
+                  <AutoescolaLeads />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/turmas" element={
+                <ProtectedRoute>
+                  <AutoescolaTurmas />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/mei" element={
+                <ProtectedRoute>
+                  <AutoescolaMEI />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/agenda" element={
+                <ProtectedRoute>
+                  <AutoescolaAgenda />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/financeiro" element={
+                <ProtectedRoute>
+                  <AutoescolaFinanceiro />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/contratos" element={
+                <ProtectedRoute>
+                  <AutoescolaContratos />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/avaliacoes" element={
+                <ProtectedRoute>
+                  <AutoescolaAvaliacoes />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/comunicacao" element={
+                <ProtectedRoute>
+                  <AutoescolaComunicacao />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/provas" element={
+                <ProtectedRoute>
+                  <AutoescolaProvas />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/crm" element={
+                <ProtectedRoute>
+                  <AutoescolaCRM />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/perfil" element={
+                <ProtectedRoute>
+                  <AutoescolaPerfil />
+                </ProtectedRoute>
+              } />
+              <Route path="/autoescola/simulados-relatorio" element={
+                <ProtectedRoute>
+                  <AutoescolaSimuladosRelatorio />
+                </ProtectedRoute>
+              } />
 
-            {/* Catch-all */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* Catch-all */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
