@@ -32,6 +32,75 @@ async function validateAuth(req: Request): Promise<boolean> {
   return true;
 }
 
+// Validate coordinate object
+function validateCoordinate(coord: unknown): { lat: number; lng: number } | null {
+  if (typeof coord !== 'object' || coord === null) {
+    return null;
+  }
+  
+  const obj = coord as Record<string, unknown>;
+  const lat = obj.lat;
+  const lng = obj.lng;
+  
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return null;
+  }
+  
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  
+  if (lat < -90 || lat > 90) {
+    return null;
+  }
+  
+  if (lng < -180 || lng > 180) {
+    return null;
+  }
+  
+  return { lat, lng };
+}
+
+// Validate address string
+function validateAddressString(address: unknown): string | null {
+  if (typeof address !== 'string') {
+    return null;
+  }
+  
+  const trimmed = address.trim();
+  
+  // Minimum length check
+  if (trimmed.length < 3) {
+    return null;
+  }
+  
+  // Maximum length check (prevent abuse)
+  if (trimmed.length > 500) {
+    return null;
+  }
+  
+  return trimmed;
+}
+
+// Validate origin/destination which can be either coordinate object or address string
+function validateLocation(location: unknown): string | null {
+  if (!location) {
+    return null;
+  }
+  
+  // Try as coordinate object
+  if (typeof location === 'object') {
+    const coord = validateCoordinate(location);
+    if (coord) {
+      return `${coord.lat},${coord.lng}`;
+    }
+    return null;
+  }
+  
+  // Try as address string
+  return validateAddressString(location);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -50,10 +119,31 @@ serve(async (req) => {
   }
 
   try {
-    const { origin, destination } = await req.json();
+    const body = await req.json();
+    const { origin, destination } = body;
     
-    if (!origin || !destination) {
-      throw new Error("Origin and destination are required");
+    // Validate origin
+    const validOrigin = validateLocation(origin);
+    if (!validOrigin) {
+      return new Response(
+        JSON.stringify({ error: "Invalid origin. Must be a valid address string (3-500 chars) or coordinate object with lat (-90 to 90) and lng (-180 to 180)." }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400 
+        }
+      );
+    }
+    
+    // Validate destination
+    const validDestination = validateLocation(destination);
+    if (!validDestination) {
+      return new Response(
+        JSON.stringify({ error: "Invalid destination. Must be a valid address string (3-500 chars) or coordinate object with lat (-90 to 90) and lng (-180 to 180)." }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400 
+        }
+      );
     }
 
     const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -61,18 +151,10 @@ serve(async (req) => {
       throw new Error("GOOGLE_MAPS_API_KEY is not configured");
     }
 
-    // Origin and destination can be lat,lng or address string
-    const originParam = typeof origin === "object" 
-      ? `${origin.lat},${origin.lng}` 
-      : origin;
-    const destParam = typeof destination === "object" 
-      ? `${destination.lat},${destination.lng}` 
-      : destination;
-
-    console.log(`[ROUTE] Calculating route from ${originParam} to ${destParam}`);
+    console.log(`[ROUTE] Calculating route from ${validOrigin} to ${validDestination}`);
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&key=${apiKey}&language=pt-BR&mode=driving`
+      `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(validOrigin)}&destination=${encodeURIComponent(validDestination)}&key=${apiKey}&language=pt-BR&mode=driving`
     );
 
     const data = await response.json();
@@ -98,7 +180,7 @@ serve(async (req) => {
       start_address: leg.start_address,
       end_address: leg.end_address,
       polyline: route.overview_polyline.points,
-      steps: leg.steps.map((step: any) => ({
+      steps: leg.steps.map((step: { html_instructions: string; distance: { text: string }; duration: { text: string } }) => ({
         instruction: step.html_instructions,
         distance: step.distance.text,
         duration: step.duration.text,

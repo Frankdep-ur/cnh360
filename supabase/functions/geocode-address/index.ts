@@ -32,6 +32,31 @@ async function validateAuth(req: Request): Promise<boolean> {
   return true;
 }
 
+// Validate and sanitize coordinate inputs
+function validateCoordinates(latitude: unknown, longitude: unknown): { lat: number; lng: number } | null {
+  // Check types
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return null;
+  }
+  
+  // Check for NaN or Infinity
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  
+  // Validate latitude range: -90 to 90
+  if (latitude < -90 || latitude > 90) {
+    return null;
+  }
+  
+  // Validate longitude range: -180 to 180
+  if (longitude < -180 || longitude > 180) {
+    return null;
+  }
+  
+  return { lat: latitude, lng: longitude };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -50,10 +75,19 @@ serve(async (req) => {
   }
 
   try {
-    const { latitude, longitude } = await req.json();
+    const body = await req.json();
+    const { latitude, longitude } = body;
     
-    if (!latitude || !longitude) {
-      throw new Error("Latitude and longitude are required");
+    // Validate coordinates with proper range checks
+    const coords = validateCoordinates(latitude, longitude);
+    if (!coords) {
+      return new Response(
+        JSON.stringify({ error: "Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180." }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400 
+        }
+      );
     }
 
     const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -61,10 +95,10 @@ serve(async (req) => {
       throw new Error("GOOGLE_MAPS_API_KEY is not configured");
     }
 
-    console.log(`[GEOCODE] Fetching address for: ${latitude}, ${longitude}`);
+    console.log(`[GEOCODE] Fetching address for: ${coords.lat}, ${coords.lng}`);
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=pt-BR`
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.lat},${coords.lng}&key=${apiKey}&language=pt-BR`
     );
 
     const data = await response.json();

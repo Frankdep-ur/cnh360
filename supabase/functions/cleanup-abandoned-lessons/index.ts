@@ -3,12 +3,36 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-edge-secret',
 };
+
+// Validate internal edge function secret for cron/internal calls
+function validateEdgeSecret(req: Request): boolean {
+  const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
+  if (!edgeSecret) {
+    console.warn("EDGE_FUNCTION_SECRET not configured");
+    return false;
+  }
+  
+  const providedSecret = req.headers.get("x-edge-secret");
+  return providedSecret === edgeSecret;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate the edge secret for internal/cron calls
+  if (!validateEdgeSecret(req)) {
+    console.error("Invalid or missing edge secret");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { 
+        status: 401, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 
   try {
