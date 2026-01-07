@@ -32,6 +32,43 @@ async function validateAuth(req: Request): Promise<boolean> {
   return true;
 }
 
+// Validate address string
+function validateAddress(address: unknown): string | null {
+  if (typeof address !== 'string') {
+    return null;
+  }
+  
+  const trimmed = address.trim();
+  
+  // Minimum length check
+  if (trimmed.length < 3) {
+    return null;
+  }
+  
+  // Maximum length check (prevent abuse)
+  if (trimmed.length > 300) {
+    return null;
+  }
+  
+  return trimmed;
+}
+
+// Validate and constrain dimension values
+function validateDimension(value: unknown, defaultValue: number, min: number, max: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.min(Math.max(Math.floor(value), min), max);
+  }
+  
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (Number.isFinite(parsed)) {
+      return Math.min(Math.max(parsed, min), max);
+    }
+  }
+  
+  return defaultValue;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -51,18 +88,26 @@ serve(async (req) => {
   }
 
   try {
-    const { originAddress, destinationAddress, width = 600, height = 300 } = await req.json();
+    const body = await req.json();
+    const { originAddress, destinationAddress, width: rawWidth, height: rawHeight } = body;
 
-    if (!originAddress || !destinationAddress) {
-      console.error('Missing required parameters:', { originAddress, destinationAddress });
+    // Validate addresses
+    const validOrigin = validateAddress(originAddress);
+    const validDestination = validateAddress(destinationAddress);
+    
+    if (!validOrigin || !validDestination) {
       return new Response(
-        JSON.stringify({ error: 'Origin and destination addresses are required' }),
+        JSON.stringify({ error: 'Invalid addresses. Both origin and destination must be non-empty strings (3-300 characters).' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+
+    // Validate and constrain dimensions (min 100, max 1200)
+    const width = validateDimension(rawWidth, 600, 100, 1200);
+    const height = validateDimension(rawHeight, 300, 100, 1200);
 
     const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!apiKey) {
@@ -76,11 +121,11 @@ serve(async (req) => {
       );
     }
 
-    console.log('Generating static map:', { originAddress, destinationAddress, width, height });
+    console.log('Generating static map:', { originAddress: validOrigin, destinationAddress: validDestination, width, height });
 
     // Encode addresses for URL
-    const origin = encodeURIComponent(originAddress);
-    const destination = encodeURIComponent(destinationAddress);
+    const origin = encodeURIComponent(validOrigin);
+    const destination = encodeURIComponent(validDestination);
 
     // Build Google Maps Static API URL with route
     // Using Directions API to get the actual path, then embedding in Static Maps
