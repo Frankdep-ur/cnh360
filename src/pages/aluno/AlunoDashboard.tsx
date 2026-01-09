@@ -240,14 +240,31 @@ export default function AlunoDashboard() {
               </div>
             </div>
 
-            {/* PPD Counter */}
+            {/* PPD Card - Destacado */}
             <div className="mt-4 pt-4 border-t border-border">
-              <div className="flex items-center gap-3 p-3 bg-secondary/5 rounded-xl">
-                <Timer className="w-5 h-5 text-secondary" />
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">PPD automática após aprovação</p>
-                  <p className="text-sm font-semibold text-foreground">1 ano sem infrações graves</p>
+              <div className="relative overflow-hidden flex items-center gap-4 p-4 bg-gradient-to-r from-primary/15 to-emerald-500/15 rounded-2xl border border-primary/30">
+                {/* Ícone destacado */}
+                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <Award className="w-6 h-6 text-primary" />
                 </div>
+                
+                {/* Conteúdo */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                      Objetivo Final
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-foreground">
+                    PPD automática após aprovação
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    1 ano sem infrações graves = CNH definitiva
+                  </p>
+                </div>
+                
+                {/* Seta indicativa */}
+                <ChevronRight className="w-5 h-5 text-primary/50" />
               </div>
             </div>
           </div>
