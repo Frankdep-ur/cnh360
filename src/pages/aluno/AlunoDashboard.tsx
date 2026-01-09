@@ -168,14 +168,6 @@ export default function AlunoDashboard() {
       progress: 0,
       detail: "Válida por 12 meses após aprovação"
     },
-    { 
-      id: 7, 
-      name: "CNH Definitiva", 
-      icon: Award, 
-      status: "locked" as const,
-      progress: 0,
-      detail: "Após 12 meses sem infrações graves"
-    },
   ];
 
   return (
