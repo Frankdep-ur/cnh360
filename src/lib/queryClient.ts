@@ -6,7 +6,17 @@ export const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh
       gcTime: 30 * 60 * 1000, // 30 minutes - cache garbage collection
       refetchOnWindowFocus: false, // Don't refetch on tab focus
-      retry: 2, // Retry failed requests twice
+      retry: (failureCount, error: unknown) => {
+        // Don't retry on authentication errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCode = (error as { code?: string })?.code;
+        
+        if (errorMessage.includes('JWT expired') || errorCode === 'PGRST303') {
+          console.log('JWT expirado - não tentar novamente');
+          return false;
+        }
+        return failureCount < 2;
+      },
       refetchOnMount: false, // Don't refetch if data is fresh
     },
   },
