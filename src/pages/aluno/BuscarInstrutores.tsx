@@ -37,41 +37,8 @@ interface InstructorData {
   email: string | null;
 }
 
-// Mock data fallback for demo
-const mockInstructors: InstructorData[] = [
-  {
-    id: "mock-1",
-    name: "Carlos Silva",
-    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
-    rating: 4.9,
-    reviews: 127,
-    price: 80,
-    distance: "1.2 km",
-    carType: "VW Polo - Automático",
-    available: true,
-    verified: true,
-    isMEI: true,
-    aceitaCarroProprio: true,
-    tags: ["Paciente", "Pontual", "Experiente"],
-    email: null,
-  },
-  {
-    id: "mock-2",
-    name: "Ana Rodrigues",
-    photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face",
-    rating: 4.8,
-    reviews: 89,
-    price: 75,
-    distance: "2.5 km",
-    carType: "Fiat Argo - Manual",
-    available: true,
-    verified: true,
-    isMEI: true,
-    aceitaCarroProprio: true,
-    tags: ["Instrutora mulher", "Calma", "Didática"],
-    email: null,
-  },
-];
+// Mock data fallback for demo (empty - uses real data from database)
+const mockInstructors: InstructorData[] = [];
 
 // Fetch all instructors with vehicles in a single optimized query
 async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
