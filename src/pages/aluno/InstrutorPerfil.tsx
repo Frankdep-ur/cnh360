@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -11,50 +11,121 @@ import {
   MessageCircle,
   Phone,
   ChevronRight,
-  Check
+  Check,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
 
-const instructor = {
-  id: "1",
-  name: "Carlos Silva",
-  photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
-  rating: 4.9,
-  reviews: 127,
-  price: 80,
-  distance: "1.2 km",
+// Default availability slots for display
+const defaultAvailability = [
+  { day: "Seg", slots: ["08:00", "09:00", "14:00", "15:00", "16:00"] },
+  { day: "Ter", slots: ["08:00", "09:00", "10:00", "14:00", "15:00"] },
+  { day: "Qua", slots: ["14:00", "15:00", "16:00", "17:00"] },
+  { day: "Qui", slots: ["08:00", "09:00", "14:00", "15:00", "16:00"] },
+  { day: "Sex", slots: ["08:00", "09:00", "10:00", "11:00"] },
+];
+
+// Default reviews for display
+const defaultReviews = [
+  { id: 1, name: "Aluno", rating: 5, text: "Excelente instrutor! Muito paciente e didático.", date: "Recente" },
+  { id: 2, name: "Aluno", rating: 5, text: "Passei de primeira! Recomendo!", date: "Recente" },
+  { id: 3, name: "Aluno", rating: 4, text: "Ótimas aulas, pontual e profissional.", date: "Recente" },
+];
+
+interface InstructorData {
+  id: string;
+  name: string;
+  photo: string;
+  rating: number;
+  reviews: number;
+  price: number;
+  distance: string;
   car: {
-    model: "VW Polo 2023",
-    transmission: "Automático",
-    features: ["Ar condicionado", "Direção elétrica", "Câmera de ré"],
-  },
-  verified: true,
-  bio: "Instrutor credenciado há 8 anos, especializado em alunos iniciantes. Paciente e dedicado a ensinar da melhor forma possível.",
-  totalLessons: 1250,
-  responseTime: "5 min",
-  tags: ["Paciente", "Pontual", "Experiente", "Aulas noturnas"],
-  availability: [
-    { day: "Seg", slots: ["08:00", "09:00", "14:00", "15:00", "16:00"] },
-    { day: "Ter", slots: ["08:00", "09:00", "10:00", "14:00", "15:00"] },
-    { day: "Qua", slots: ["14:00", "15:00", "16:00", "17:00"] },
-    { day: "Qui", slots: ["08:00", "09:00", "14:00", "15:00", "16:00"] },
-    { day: "Sex", slots: ["08:00", "09:00", "10:00", "11:00"] },
-  ],
-  recentReviews: [
-    { id: 1, name: "Mariana L.", rating: 5, text: "Excelente instrutor! Muito paciente e didático.", date: "2 dias atrás" },
-    { id: 2, name: "João P.", rating: 5, text: "Passei de primeira graças ao Carlos. Recomendo!", date: "1 semana atrás" },
-    { id: 3, name: "Ana C.", rating: 4, text: "Ótimas aulas, pontual e profissional.", date: "2 semanas atrás" },
-  ],
-};
+    model: string;
+    transmission: string;
+    features: string[];
+  };
+  verified: boolean;
+  bio: string;
+  totalLessons: number;
+  responseTime: string;
+  tags: string[];
+}
 
 export default function InstrutorPerfil() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [selectedDay, setSelectedDay] = useState(instructor.availability[0].day);
+  const [loading, setLoading] = useState(true);
+  const [instructor, setInstructor] = useState<InstructorData | null>(null);
+  const [selectedDay, setSelectedDay] = useState(defaultAvailability[0].day);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  const selectedDaySlots = instructor.availability.find((d) => d.day === selectedDay)?.slots || [];
+  useEffect(() => {
+    if (id) {
+      fetchInstructorData();
+    }
+  }, [id]);
+
+  async function fetchInstructorData() {
+    try {
+      setLoading(true);
+      
+      // Fetch instructor from cache
+      const { data: cacheData, error: cacheError } = await supabase
+        .from("instrutores_publico_cache")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (cacheError) {
+        console.error("Error fetching instructor:", cacheError);
+        navigate("/aluno/buscar");
+        return;
+      }
+
+      // Fetch vehicle info
+      const { data: veiculoData } = await supabase.rpc(
+        "get_vehicle_display_info",
+        { p_instrutor_id: id }
+      );
+
+      const veiculo = veiculoData && veiculoData.length > 0 ? veiculoData[0] : null;
+
+      setInstructor({
+        id: id!,
+        name: cacheData.nome || "Instrutor",
+        photo: cacheData.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
+        rating: Number(cacheData.nota_media) || 5.0,
+        reviews: cacheData.total_avaliacoes || 0,
+        price: Number(cacheData.preco_hora) || 80,
+        distance: `${cacheData.raio_atendimento_km || 10} km`,
+        car: {
+          model: veiculo?.modelo || "Veículo não informado",
+          transmission: veiculo?.transmissao === "automatico" ? "Automático" : "Manual",
+          features: ["Ar condicionado", "Direção elétrica"],
+        },
+        verified: true,
+        bio: cacheData.bio || "Instrutor profissional credenciado pelo DETRAN.",
+        totalLessons: cacheData.total_aulas || 0,
+        responseTime: "5 min",
+        tags: ["Paciente", "Pontual", "Experiente"],
+      });
+    } catch (err) {
+      console.error("Error in fetchInstructorData:", err);
+      navigate("/aluno/buscar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const selectedDaySlots = defaultAvailability.find((d) => d.day === selectedDay)?.slots || [];
+
+  if (loading || !instructor) {
+    return <PageSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -169,7 +240,7 @@ export default function InstrutorPerfil() {
             <div className="bg-card rounded-2xl p-4 border border-border">
               {/* Days */}
               <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                {instructor.availability.map((day) => (
+                {defaultAvailability.map((day) => (
                   <button
                     key={day.day}
                     onClick={() => {
@@ -218,7 +289,7 @@ export default function InstrutorPerfil() {
               </button>
             </div>
             <div className="space-y-3">
-              {instructor.recentReviews.map((review) => (
+              {defaultReviews.map((review) => (
                 <div
                   key={review.id}
                   className="bg-card rounded-2xl p-4 border border-border"

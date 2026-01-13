@@ -44,11 +44,12 @@ export default function ValidacaoAula() {
   const [validatingGPS, setValidatingGPS] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
-  const instructor = {
-    name: "Carlos Silva",
+  // TODO: Fetch real instructor data from database based on lesson ID
+  const [instructor, setInstructor] = useState({
+    name: "Instrutor",
     photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
-    car: "VW Polo 2023 - ABC-1234",
-  };
+    car: "Veículo do instrutor",
+  });
 
   const meetingPoint = {
     address: "Av. Brasil, 1234 - Centro, Araçatuba",

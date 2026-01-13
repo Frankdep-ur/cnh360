@@ -274,15 +274,8 @@ export default function AgendarAula() {
   async function fetchInstructorData() {
     try {
       if (id?.startsWith("mock-")) {
-        setInstructor({
-          id: id,
-          user_id: "mock-user",
-          name: "Carlos Silva",
-          photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
-          price: 80,
-          car: "VW Polo 2023 - Automático",
-          email: null,
-        });
+        // Mock instructors não são mais suportados - redirecionar para busca
+        navigate("/aluno/buscar");
         return;
       }
 
