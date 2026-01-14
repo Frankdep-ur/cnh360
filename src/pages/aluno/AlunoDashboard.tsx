@@ -17,7 +17,9 @@ import {
   Stethoscope,
   Award,
   ExternalLink,
-  Play
+  Play,
+  Upload,
+  Info
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +31,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { LocationShareButton } from "@/components/maps/LocationShareButton";
 import { RouteMapCard } from "@/components/maps/RouteMapCard";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
+import { UploadCertificadoModal } from "@/components/certificado/UploadCertificadoModal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -59,8 +62,10 @@ export default function AlunoDashboard() {
     exame_teorico_resultado?: string | null;
     aulas_praticas_conclusao?: string | null;
     exame_pratico_resultado?: string | null;
+    prova_teorica_detran_aprovada?: boolean | null;
   } | null>(null);
   const [practicalHours, setPracticalHours] = useState(0);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -83,7 +88,7 @@ export default function AlunoDashboard() {
             
             const { data: progresso } = await supabase
               .from('progresso_renach')
-              .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado')
+              .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
               .eq('aluno_id', aluno.id)
               .maybeSingle();
             
@@ -153,7 +158,7 @@ export default function AlunoDashboard() {
   // Status derivados do progresso real
   const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
   const cursoTeoricoCompleto = !!progressoRenach?.curso_teorico_conclusao;
-  const exameTeoricoAprovado = progressoRenach?.exame_teorico_resultado === 'aprovado';
+  const exameTeoricoAprovado = progressoRenach?.prova_teorica_detran_aprovada ?? (progressoRenach?.exame_teorico_resultado === 'aprovado');
   const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
   const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
   
@@ -185,7 +190,8 @@ export default function AlunoDashboard() {
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
       subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
-      detail: "Estudo + simulados · EAD gratuito · Certificado incluso"
+      detail: "Estudo completo + simulados de prova · EAD grátis · Certificado emitido · Treine aqui antes da prova oficial DETRAN",
+      infoText: "Esta preparação é complemento para treinar. A prova oficial é feita no DETRAN-SP. Após aprovação, volte aqui e envie o certificado para liberar as aulas práticas."
     },
     { 
       id: 3, 
@@ -194,7 +200,8 @@ export default function AlunoDashboard() {
       status: getStepStatus(exameTeoricoAprovado, cursoTeoricoCompleto),
       progress: exameTeoricoAprovado ? 100 : 0,
       detail: "30 questões · Mínimo 21 acertos (70%)",
-      showActions: cursoTeoricoCompleto && !exameTeoricoAprovado
+      showActions: cursoTeoricoCompleto && !exameTeoricoAprovado,
+      showUploadAction: cursoTeoricoCompleto && !exameTeoricoAprovado
     },
     { 
       id: 4, 
@@ -400,28 +407,52 @@ export default function AlunoDashboard() {
                       </div>
                     </div>
                   )}
+                  {/* Texto explicativo para Preparação Teórica */}
+                  {'infoText' in step && step.infoText && isCurrent && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <div className="flex items-start gap-2 bg-muted/50 rounded-lg p-3">
+                        <Info className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground">
+                          {step.infoText}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {/* Botões de ação para Exame Teórico */}
                   {'showActions' in step && step.showActions && (
-                    <div className="mt-3 pt-3 border-t border-border flex gap-2">
-                      <Link to="/aluno/simulado" className="flex-1">
-                        <Button variant="outline" size="sm" className="w-full">
-                          <Play className="w-4 h-4 mr-2" />
-                          Simular prova
+                    <div className="mt-3 pt-3 border-t border-border space-y-3">
+                      <div className="flex gap-2">
+                        <Link to="/aluno/simulado" className="flex-1">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Play className="w-4 h-4 mr-2" />
+                            Simular prova
+                          </Button>
+                        </Link>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => {
+                            window.open('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica', '_blank');
+                          }}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Agendar prova
                         </Button>
-                      </Link>
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => {
-                          toast.info("Agendamento de prova", {
-                            description: "Acesse o site do DETRAN do seu estado para agendar sua prova teórica."
-                          });
-                        }}
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Agendar prova
-                      </Button>
+                      </div>
+                      
+                      {/* Botão de upload de certificado */}
+                      {'showUploadAction' in step && step.showUploadAction && (
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          className="w-full bg-[#00c853] hover:bg-[#00a843]"
+                          onClick={() => setShowUploadModal(true)}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Já fui aprovado - Enviar certificado
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -590,6 +621,36 @@ export default function AlunoDashboard() {
           lessonDate={proximaAula.date}
         />
       )}
+
+      {/* Upload Certificado Modal */}
+      <UploadCertificadoModal
+        open={showUploadModal}
+        onOpenChange={setShowUploadModal}
+        onSuccess={() => {
+          // Recarregar dados do progresso
+          if (user) {
+            supabase
+              .from('alunos')
+              .select('id')
+              .eq('user_id', user.id)
+              .maybeSingle()
+              .then(async ({ data: aluno }) => {
+                if (aluno) {
+                  const { data: progresso } = await supabase
+                    .from('progresso_renach')
+                    .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
+                    .eq('aluno_id', aluno.id)
+                    .maybeSingle();
+                  
+                  setProgressoRenach({
+                    exame_medico_concluido: true,
+                    ...progresso
+                  });
+                }
+              });
+          }
+        }}
+      />
 
       <BottomNav />
     </div>
