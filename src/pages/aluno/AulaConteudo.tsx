@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -34,6 +34,11 @@ export default function AulaConteudo() {
   const [quizEnviado, setQuizEnviado] = useState(false);
   const [resultado, setResultado] = useState<{ aprovado: boolean; nota: number; acertos?: number; total?: number } | null>(null);
   const [mostrarExplicacoes, setMostrarExplicacoes] = useState(false);
+
+  // Estado da tela de conclusão
+  const [mostrarConclusao, setMostrarConclusao] = useState(false);
+  const [modulosPendentes, setModulosPendentes] = useState<{ id: string; titulo: string; progresso: number }[]>([]);
+  const [cursoCompleto, setCursoCompleto] = useState(false);
 
   // Carregar dados da aula
   useEffect(() => {
@@ -168,9 +173,82 @@ export default function AulaConteudo() {
       }
     }
 
-    // 5. Última aula do curso - parabéns e voltar para a página principal
-    toast.success('Parabéns! Você completou todo o curso teórico!');
-    navigate('/aluno/curso-teorico');
+    // 5. Última aula do curso - verificar conclusão completa
+    await verificarConclusaoCurso();
+  };
+
+  // Verificar se o curso está 100% completo
+  const verificarConclusaoCurso = async () => {
+    try {
+      // Buscar aluno_id do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: aluno } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!aluno) return;
+
+      // Buscar todos os módulos com suas aulas
+      const { data: modulos } = await supabase
+        .from('curso_modulos')
+        .select(`
+          id,
+          titulo,
+          ordem,
+          curso_aulas(id)
+        `)
+        .eq('ativo', true)
+        .order('ordem');
+
+      if (!modulos) return;
+
+      // Buscar progresso do aluno
+      const { data: progresso } = await supabase
+        .from('progresso_aulas')
+        .select('aula_id, quiz_aprovado')
+        .eq('aluno_id', aluno.id);
+
+      const progressoMap = new Map(
+        progresso?.map(p => [p.aula_id, p.quiz_aprovado]) || []
+      );
+
+      // Calcular quais módulos estão incompletos
+      const pendentes: { id: string; titulo: string; progresso: number }[] = [];
+
+      for (const modulo of modulos) {
+        const aulasDoModulo = modulo.curso_aulas || [];
+        const totalAulas = aulasDoModulo.length;
+        
+        if (totalAulas === 0) continue;
+
+        const aulasCompletas = aulasDoModulo.filter(
+          (aula: { id: string }) => progressoMap.get(aula.id) === true
+        ).length;
+
+        const progressoModulo = Math.round((aulasCompletas / totalAulas) * 100);
+
+        if (progressoModulo < 100) {
+          pendentes.push({
+            id: modulo.id,
+            titulo: modulo.titulo,
+            progresso: progressoModulo
+          });
+        }
+      }
+
+      // Mostrar tela de conclusão
+      setModulosPendentes(pendentes);
+      setCursoCompleto(pendentes.length === 0);
+      setMostrarConclusao(true);
+    } catch (error) {
+      console.error('Erro ao verificar conclusão:', error);
+      toast.success('Parabéns! Você completou todo o curso teórico!');
+      navigate('/aluno/curso-teorico');
+    }
   };
 
   if (loading) {
@@ -199,7 +277,116 @@ export default function AulaConteudo() {
     );
   }
 
-  
+  // Tela de conclusão do curso
+  if (mostrarConclusao) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          {cursoCompleto ? (
+            // Curso 100% completo
+            <div className="space-y-6">
+              <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                <Trophy className="w-12 h-12 text-white" />
+              </div>
+              
+              <div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  Parabéns! 🎉
+                </h1>
+                <p className="text-muted-foreground">
+                  Você completou todo o curso teórico! Seu certificado está disponível para download.
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-r from-[#00c853]/10 to-[#00a843]/10 border border-[#00c853]/30 rounded-xl p-4">
+                <div className="flex items-center justify-center gap-2 text-[#00c853] mb-2">
+                  <Award className="w-5 h-5" />
+                  <span className="font-semibold">100% Concluído</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Todos os 5 módulos foram finalizados com sucesso
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={() => navigate('/aluno/certificado-ead')}
+                  className="w-full bg-[#00c853] hover:bg-[#00a843] h-12"
+                >
+                  <Award className="w-5 h-5 mr-2" />
+                  Baixar Certificado
+                </Button>
+                
+                <Button
+                  onClick={() => navigate('/aluno/curso-teorico')}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Ver Módulos
+                </Button>
+              </div>
+            </div>
+          ) : (
+            // Curso incompleto - mostrar módulos pendentes
+            <div className="space-y-6">
+              <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                <AlertCircle className="w-12 h-12 text-white" />
+              </div>
+              
+              <div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  Quase lá! 💪
+                </h1>
+                <p className="text-muted-foreground">
+                  Você ainda tem {modulosPendentes.length} {modulosPendentes.length === 1 ? 'módulo pendente' : 'módulos pendentes'} para completar.
+                </p>
+              </div>
+
+              <div className="bg-card border rounded-xl divide-y">
+                {modulosPendentes.map((modulo) => (
+                  <div 
+                    key={modulo.id}
+                    className="p-4 flex items-center justify-between"
+                  >
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-foreground text-sm">{modulo.titulo}</p>
+                      <p className="text-xs text-muted-foreground">{modulo.progresso}% concluído</p>
+                    </div>
+                    <div className="w-16">
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#00c853] transition-all"
+                          style={{ width: `${modulo.progresso}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={() => navigate(`/aluno/curso-teorico/modulo/${modulosPendentes[0]?.id}`)}
+                  className="w-full bg-[#00c853] hover:bg-[#00a843] h-12"
+                >
+                  Continuar Estudando
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </Button>
+                
+                <Button
+                  onClick={() => navigate('/aluno/curso-teorico')}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Ver Todos os Módulos
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-6">
