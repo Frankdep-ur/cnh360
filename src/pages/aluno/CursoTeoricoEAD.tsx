@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
-  Play, 
   BookOpen, 
   FileText, 
   Award,

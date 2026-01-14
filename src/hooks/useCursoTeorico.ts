@@ -19,8 +19,6 @@ interface Aula {
   ordem: number;
   titulo: string;
   conteudo_texto: string;
-  video_url: string | null;
-  video_fonte: string | null;
   duracao_minutos: number;
 }
 
