@@ -111,12 +111,12 @@ export default function CursoTeoricoEAD() {
             <Progress value={progressoGeral} className="h-3" />
           </div>
 
-          {/* Selo de Confiança */}
+          {/* Selo de Confiança - Atualizado com resoluções */}
           <div className="mt-4 flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
             <ShieldCheck className="w-5 h-5 text-primary" />
             <div>
               <p className="text-sm font-medium text-primary">Conteúdo Oficial</p>
-              <p className="text-xs text-muted-foreground">Alinhado ao CTB e resoluções CONTRAN</p>
+              <p className="text-xs text-muted-foreground">CTB • CONTRAN 789/2020 • 925/2022 • 1.020/2025</p>
             </div>
           </div>
         </div>
@@ -245,6 +245,28 @@ export default function CursoTeoricoEAD() {
                 </div>
                 <Button variant="secondary" size="sm">
                   Iniciar
+                </Button>
+              </div>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* Mecânica Básica CTA - Conteúdo Extra */}
+      <div className="px-6 mt-4">
+        <div className="max-w-md mx-auto">
+          <Link to="/aluno/simulado-mecanica">
+            <div className="bg-gradient-to-r from-amber-500/10 to-amber-600/10 rounded-2xl p-5 border border-amber-500/30">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-foreground">Mecânica Básica</h3>
+                  <p className="text-sm text-muted-foreground">15 questões extras • Conteúdo opcional</p>
+                </div>
+                <Button variant="outline" size="sm" className="border-amber-500 text-amber-600">
+                  Praticar
                 </Button>
               </div>
             </div>

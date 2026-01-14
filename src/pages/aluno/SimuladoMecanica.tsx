@@ -10,30 +10,26 @@ import {
   Trophy,
   RotateCcw,
   AlertTriangle,
-  BookOpen,
-  ShieldCheck
+  Wrench,
+  ShieldCheck,
+  BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { selecionarQuestoesAleatorias, type QuestaoSimulado } from "@/data/questoesSimulado";
+import { selecionarQuestoesMecanica, type QuestaoSimulado } from "@/data/questoesSimulado";
 
-export default function SimuladoTeorico() {
+export default function SimuladoMecanica() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [started, setStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>(new Array(30).fill(null));
+  const [answers, setAnswers] = useState<(number | null)[]>(new Array(15).fill(null));
   const [showResult, setShowResult] = useState(false);
   const [showReview, setShowReview] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(45 * 60);
-  const [questions] = useState<QuestaoSimulado[]>(() => selecionarQuestoesAleatorias(30));
-  const [saving, setSaving] = useState(false);
-  const [alreadySaved, setAlreadySaved] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(20 * 60); // 20 minutos
+  const [questions] = useState<QuestaoSimulado[]>(() => selecionarQuestoesMecanica(15));
 
   // Timer funcional
   useEffect(() => {
@@ -71,86 +67,17 @@ export default function SimuladoTeorico() {
     return correct;
   }, [answers, questions]);
 
-  const getScoreByCategory = useCallback(() => {
-    const categories: Record<string, { correct: number; total: number }> = {};
-    
-    questions.forEach((q, index) => {
-      if (!categories[q.categoria]) {
-        categories[q.categoria] = { correct: 0, total: 0 };
-      }
-      categories[q.categoria].total++;
-      if (answers[index] === q.respostaCorreta) {
-        categories[q.categoria].correct++;
-      }
-    });
-    
-    return categories;
-  }, [answers, questions]);
-
-  // Salvar resultado no banco de dados
-  const saveResult = useCallback(async () => {
-    if (!user || saving || alreadySaved) return;
-    
-    setSaving(true);
-    try {
-      // Buscar aluno_id
-      const { data: aluno } = await supabase
-        .from('alunos')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!aluno) {
-        toast.error('Perfil de aluno não encontrado');
-        return;
-      }
-
-      const score = calculateScore();
-      const tempoGasto = (45 * 60) - timeLeft;
-      const categories = getScoreByCategory();
-
-      const { error } = await supabase
-        .from('simulados_historico')
-        .insert({
-          aluno_id: aluno.id,
-          nota: Math.round((score / questions.length) * 100),
-          total_questoes: questions.length,
-          acertos: score,
-          tempo_gasto_segundos: tempoGasto,
-          aprovado: score >= 21,
-          detalhes_categorias: categories
-        });
-
-      if (error) throw error;
-      
-      setAlreadySaved(true);
-      toast.success('Resultado salvo no seu histórico!');
-    } catch (error) {
-      console.error('Erro ao salvar resultado:', error);
-      toast.error('Não foi possível salvar o resultado');
-    } finally {
-      setSaving(false);
-    }
-  }, [user, saving, alreadySaved, calculateScore, getScoreByCategory, timeLeft, questions.length]);
-
-  // Salvar automaticamente quando mostrar resultado
-  useEffect(() => {
-    if (showResult && !alreadySaved) {
-      saveResult();
-    }
-  }, [showResult, alreadySaved, saveResult]);
-
   const finishExam = () => {
     setShowResult(true);
   };
 
   const restartExam = () => {
-    setAnswers(new Array(30).fill(null));
+    setAnswers(new Array(15).fill(null));
     setCurrentQuestion(0);
     setShowResult(false);
     setShowReview(false);
     setStarted(false);
-    setTimeLeft(45 * 60);
+    setTimeLeft(20 * 60);
   };
 
   const score = calculateScore();
@@ -178,7 +105,7 @@ export default function SimuladoTeorico() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h1 className="text-lg font-bold text-foreground">Revisão das Respostas</h1>
+              <h1 className="text-lg font-bold text-foreground">Revisão - Mecânica</h1>
             </div>
           </div>
         </header>
@@ -260,60 +187,65 @@ export default function SimuladoTeorico() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h1 className="text-lg font-bold text-foreground">Simulado Teórico DETRAN</h1>
+              <h1 className="text-lg font-bold text-foreground">Mecânica Básica</h1>
             </div>
           </div>
         </header>
 
         <div className="px-6 py-8">
           <div className="max-w-md mx-auto text-center">
-            <div className="w-24 h-24 rounded-full bg-secondary/10 flex items-center justify-center mx-auto mb-6">
-              <BookOpen className="w-12 h-12 text-secondary" />
+            <div className="w-24 h-24 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-6">
+              <Wrench className="w-12 h-12 text-amber-500" />
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-2">
-              Pronto para o Simulado?
+              Prática de Mecânica
             </h2>
             <p className="text-muted-foreground mb-4">
-              30 questões • Igual ao DETRAN • 70% para aprovar
+              15 questões • Conteúdo Extra • Prática Opcional
             </p>
 
-            {/* Selo de Confiança CNH360/DETRAN - Atualizado */}
-            <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-full mb-8">
-              <ShieldCheck className="w-5 h-5" />
-              <span className="text-sm font-medium">CTB • CONTRAN 789 • 925 • 1.020/2025</span>
+            {/* Badge de conteúdo extra */}
+            <div className="inline-flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-4 py-2 rounded-full mb-8">
+              <Wrench className="w-5 h-5" />
+              <span className="text-sm font-medium">Conteúdo complementar (não cai na prova)</span>
             </div>
 
             <div className="bg-card rounded-2xl p-6 border border-border mb-6 text-left">
-              <h3 className="font-semibold text-foreground mb-4">Informações da Prova:</h3>
+              <h3 className="font-semibold text-foreground mb-4">Sobre este Simulado:</h3>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-primary" />
-                  <span className="text-sm text-foreground">45 minutos de duração</span>
+                  <Clock className="w-5 h-5 text-amber-500" />
+                  <span className="text-sm text-foreground">20 minutos de duração</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  <span className="text-sm text-foreground">Mínimo 21 acertos (70%)</span>
+                  <CheckCircle2 className="w-5 h-5 text-amber-500" />
+                  <span className="text-sm text-foreground">15 questões de mecânica veicular</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <span className="text-sm text-foreground">Tempo esgotado = prova finalizada</span>
+                  <span className="text-sm text-foreground">Não é conteúdo obrigatório do DETRAN</span>
                 </div>
               </div>
               
               <div className="mt-4 pt-4 border-t border-border">
-                <h4 className="text-sm font-medium text-foreground mb-2">Distribuição Oficial DETRAN:</h4>
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <span>• Legislação: 10 questões</span>
-                  <span>• Direção Defensiva: 7 questões</span>
-                  <span>• Primeiros Socorros: 3 questões</span>
-                  <span>• Sinalização: 6 questões</span>
-                  <span>• Meio Ambiente: 4 questões</span>
+                <h4 className="text-sm font-medium text-foreground mb-2">Tópicos Abordados:</h4>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>• Sistema de freios, suspensão e direção</p>
+                  <p>• Motor, óleo e fluidos</p>
+                  <p>• Pneus, bateria e elétrica</p>
+                  <p>• Manutenção preventiva</p>
                 </div>
               </div>
             </div>
 
-            <Button variant="hero" size="xl" className="w-full" onClick={() => setStarted(true)}>
-              Iniciar Simulado
+            <Button 
+              variant="outline" 
+              size="xl" 
+              className="w-full border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10" 
+              onClick={() => setStarted(true)}
+            >
+              <Wrench className="w-5 h-5 mr-2" />
+              Iniciar Prática de Mecânica
             </Button>
           </div>
         </div>
@@ -325,13 +257,11 @@ export default function SimuladoTeorico() {
 
   // Tela de resultado
   if (showResult) {
-    const categoryScores = getScoreByCategory();
-    
     return (
       <div className="min-h-screen bg-background pb-24">
         <header className="bg-card border-b border-border px-6 pt-6 pb-4">
           <div className="max-w-md mx-auto">
-            <h1 className="text-lg font-bold text-foreground text-center">Resultado do Simulado</h1>
+            <h1 className="text-lg font-bold text-foreground text-center">Resultado - Mecânica</h1>
           </div>
         </header>
 
@@ -339,20 +269,20 @@ export default function SimuladoTeorico() {
           <div className="max-w-md mx-auto text-center">
             <div className={cn(
               "w-28 h-28 rounded-full flex items-center justify-center mx-auto mb-6",
-              passed ? "bg-primary" : "bg-destructive"
+              passed ? "bg-amber-500" : "bg-muted"
             )}>
               {passed ? (
-                <Trophy className="w-14 h-14 text-primary-foreground" />
+                <Trophy className="w-14 h-14 text-white" />
               ) : (
-                <XCircle className="w-14 h-14 text-destructive-foreground" />
+                <Wrench className="w-14 h-14 text-muted-foreground" />
               )}
             </div>
 
             <h2 className={cn(
               "text-3xl font-bold mb-2",
-              passed ? "text-primary" : "text-destructive"
+              passed ? "text-amber-500" : "text-muted-foreground"
             )}>
-              {passed ? "APROVADO!" : "REPROVADO"}
+              {passed ? "BOM TRABALHO!" : "CONTINUE PRATICANDO"}
             </h2>
             <p className="text-muted-foreground mb-6">
               Você acertou <strong>{score}</strong> de <strong>{questions.length}</strong> questões ({percentage}%)
@@ -360,56 +290,18 @@ export default function SimuladoTeorico() {
             
             <p className="text-sm text-muted-foreground mb-4">
               {passed 
-                ? "Parabéns! Você está preparado para a prova real do DETRAN." 
-                : "Continue estudando! Você precisa de pelo menos 21 acertos (70%) para ser aprovado."}
+                ? "Você demonstra bom conhecimento em mecânica básica!" 
+                : "Revise os conceitos de mecânica para melhorar seu conhecimento."}
             </p>
-
-            {/* Selo de Confiança - Atualizado */}
-            <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-full mb-6">
-              <ShieldCheck className="w-4 h-4" />
-              <span className="text-xs font-medium">CTB • CONTRAN 789 • 925 • 1.020/2025</span>
-            </div>
-
-            {/* Score por categoria */}
-            <div className="bg-card rounded-2xl p-4 border border-border mb-6 text-left">
-              <h3 className="font-semibold text-foreground mb-3">Desempenho por Categoria:</h3>
-              <div className="space-y-2">
-                {Object.entries(categoryScores).map(([category, data]) => {
-                  const catPercentage = Math.round((data.correct / data.total) * 100);
-                  return (
-                    <div key={category} className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">{category}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className={cn(
-                              "h-full rounded-full",
-                              catPercentage >= 70 ? "bg-primary" : "bg-destructive"
-                            )}
-                            style={{ width: `${catPercentage}%` }}
-                          />
-                        </div>
-                        <span className={cn(
-                          "text-xs font-medium w-16 text-right",
-                          catPercentage >= 70 ? "text-primary" : "text-destructive"
-                        )}>
-                          {data.correct}/{data.total} ({catPercentage}%)
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
             <div className="bg-card rounded-2xl p-6 border border-border mb-6">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">{score}</div>
+                  <div className="text-3xl font-bold text-amber-500">{score}</div>
                   <p className="text-xs text-muted-foreground">Acertos</p>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-destructive">{questions.length - score}</div>
+                  <div className="text-3xl font-bold text-muted-foreground">{questions.length - score}</div>
                   <p className="text-xs text-muted-foreground">Erros</p>
                 </div>
                 <div className="text-center">
@@ -424,12 +316,17 @@ export default function SimuladoTeorico() {
                 <BookOpen className="w-5 h-5 mr-2" />
                 Ver Gabarito Comentado
               </Button>
-              <Button variant="hero" size="xl" className="w-full" onClick={restartExam}>
+              <Button 
+                variant="outline" 
+                size="xl" 
+                className="w-full border-amber-500 text-amber-600" 
+                onClick={restartExam}
+              >
                 <RotateCcw className="w-5 h-5 mr-2" />
-                Fazer Novo Simulado
+                Praticar Novamente
               </Button>
-              <Button variant="ghost" size="xl" className="w-full" onClick={() => navigate("/aluno")}>
-                Voltar ao Dashboard
+              <Button variant="ghost" size="xl" className="w-full" onClick={() => navigate("/aluno/simulado")}>
+                Ir para Simulado Oficial
               </Button>
             </div>
           </div>
@@ -442,7 +339,7 @@ export default function SimuladoTeorico() {
 
   // Tela de questões
   const question = questions[currentQuestion];
-  const isTimeWarning = timeLeft <= 5 * 60; // Últimos 5 minutos
+  const isTimeWarning = timeLeft <= 3 * 60;
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -451,7 +348,7 @@ export default function SimuladoTeorico() {
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => {
-                if (confirm("Deseja sair do simulado? Seu progresso será perdido.")) {
+                if (confirm("Deseja sair da prática? Seu progresso será perdido.")) {
                   navigate(-1);
                 }
               }}
@@ -459,122 +356,103 @@ export default function SimuladoTeorico() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="font-semibold text-foreground">
-              {currentQuestion + 1} / {questions.length}
-            </span>
             <div className={cn(
-              "flex items-center gap-1 px-3 py-1 rounded-full",
-              isTimeWarning ? "bg-destructive/10 text-destructive" : "text-muted-foreground"
+              "flex items-center gap-2 px-4 py-2 rounded-full",
+              isTimeWarning ? "bg-destructive text-destructive-foreground" : "bg-amber-500/10 text-amber-600"
             )}>
               <Clock className="w-4 h-4" />
-              <span className="text-sm font-mono">{formatTime(timeLeft)}</span>
+              <span className="font-mono font-bold">{formatTime(timeLeft)}</span>
             </div>
           </div>
-          <Progress value={progress} className="h-2" />
-          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-            <span>{answeredCount} respondidas</span>
-            <span>{questions.length - answeredCount} restantes</span>
+          
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">
+              Questão {currentQuestion + 1} de {questions.length}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {answeredCount} respondidas
+            </span>
           </div>
+          <Progress value={progress} className="h-2" />
         </div>
       </header>
 
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto">
-          <span className="text-xs text-primary font-medium">{question.categoria}</span>
-          <h2 className="text-lg font-semibold text-foreground mb-6 mt-1">
-            {question.pergunta}
-          </h2>
+          <div className="bg-card rounded-2xl p-5 border border-border mb-4">
+            <span className="inline-block text-xs bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full mb-3">
+              {question.categoria}
+            </span>
+            <p className="text-foreground font-medium leading-relaxed">
+              {question.pergunta}
+            </p>
+          </div>
 
           <div className="space-y-3">
-            {question.opcoes.map((option, index) => (
+            {question.opcoes.map((opcao, index) => (
               <button
                 key={index}
                 onClick={() => handleAnswer(index)}
                 className={cn(
-                  "w-full p-4 rounded-2xl border-2 text-left transition-all",
+                  "w-full text-left p-4 rounded-xl border-2 transition-all",
                   answers[currentQuestion] === index
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-amber-500 bg-amber-500/10"
+                    : "border-border bg-card hover:border-amber-500/50"
                 )}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <div className={cn(
-                    "w-8 h-8 rounded-full border-2 flex items-center justify-center font-medium text-sm flex-shrink-0",
+                    "w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold",
                     answers[currentQuestion] === index
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-muted-foreground text-muted-foreground"
+                      ? "bg-amber-500 text-white"
+                      : "bg-muted text-muted-foreground"
                   )}>
                     {String.fromCharCode(65 + index)}
                   </div>
-                  <span className="text-foreground">{option}</span>
+                  <span className="text-foreground">{opcao}</span>
                 </div>
-              </button>
-            ))}
-          </div>
-          
-          {/* Navegação por questões */}
-          <div className="mt-6 flex flex-wrap gap-2 justify-center">
-            {questions.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentQuestion(idx)}
-                className={cn(
-                  "w-8 h-8 rounded-lg text-xs font-medium transition-all",
-                  idx === currentQuestion && "ring-2 ring-primary",
-                  answers[idx] !== null 
-                    ? "bg-primary text-primary-foreground" 
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {idx + 1}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent">
-        <div className="max-w-md mx-auto flex gap-3">
+      {/* Navigation Footer */}
+      <div className="fixed bottom-20 left-0 right-0 bg-card border-t border-border px-6 py-4">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <Button
             variant="outline"
-            size="xl"
-            className="flex-1"
+            onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
             disabled={currentQuestion === 0}
-            onClick={() => setCurrentQuestion(prev => prev - 1)}
+            className="flex-1"
           >
-            <ChevronLeft className="w-5 h-5 mr-1" />
+            <ChevronLeft className="w-4 h-4 mr-1" />
             Anterior
           </Button>
+          
           {currentQuestion === questions.length - 1 ? (
             <Button
               variant="hero"
-              size="xl"
+              onClick={finishExam}
               className="flex-1"
-              onClick={() => {
-                if (answeredCount < questions.length) {
-                  if (confirm(`Você ainda tem ${questions.length - answeredCount} questões sem resposta. Deseja finalizar mesmo assim?`)) {
-                    finishExam();
-                  }
-                } else {
-                  finishExam();
-                }
-              }}
+              disabled={answeredCount < questions.length}
             >
               Finalizar
             </Button>
           ) : (
             <Button
-              variant="hero"
-              size="xl"
+              variant="default"
+              onClick={() => setCurrentQuestion(prev => Math.min(questions.length - 1, prev + 1))}
               className="flex-1"
-              onClick={() => setCurrentQuestion(prev => prev + 1)}
             >
               Próxima
-              <ChevronRight className="w-5 h-5 ml-1" />
+              <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           )}
         </div>
       </div>
+
+      <BottomNav />
     </div>
   );
 }
