@@ -185,7 +185,7 @@ export default function AlunoDashboard() {
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
       subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
-      detail: "Estudo completo + simulados de prova · EAD gratuito · Certificado emitido · Prepara para a prova oficial do DETRAN"
+      detail: "Estudo + simulados · EAD gratuito · Certificado incluso"
     },
     { 
       id: 3, 
