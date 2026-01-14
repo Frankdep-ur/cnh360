@@ -25,8 +25,8 @@ export const questoesSimulado: QuestaoSimulado[] = [
     pergunta: "O que significa CNH?",
     opcoes: ["Carteira Nacional de Habilitação", "Certificado Nacional de Habilitação", "Código Nacional de Habilitação", "Controle Nacional de Habilitação"],
     respostaCorreta: 0,
-    explicacao: "CNH significa Carteira Nacional de Habilitação, documento que autoriza o cidadão a conduzir veículos.",
-    baseLegal: "Art. 140 do CTB"
+    explicacao: "CNH significa Carteira Nacional de Habilitação, documento que autoriza o cidadão a conduzir veículos. As regras de habilitação são definidas pelo CTB e regulamentadas pela Resolução CONTRAN 1.020/2025.",
+    baseLegal: "Art. 140 do CTB | Resolução CONTRAN 1.020/2025"
   },
   {
     id: 3,
@@ -61,8 +61,8 @@ export const questoesSimulado: QuestaoSimulado[] = [
     pergunta: "O que é PPD?",
     opcoes: ["Permissão Provisória para Dirigir", "Primeiro Passo para Dirigir", "Programa de Prática de Direção", "Permissão Permanente de Direção"],
     respostaCorreta: 0,
-    explicacao: "PPD é a Permissão Provisória para Dirigir, válida por 12 meses antes da CNH definitiva.",
-    baseLegal: "Art. 148, §3º do CTB"
+    explicacao: "PPD é a Permissão Provisória para Dirigir, válida por 12 meses. Se o condutor não cometer infrações graves ou gravíssimas, recebe a CNH definitiva automaticamente.",
+    baseLegal: "Art. 148, §3º do CTB | Resolução CONTRAN 1.020/2025"
   },
   {
     id: 7,
@@ -97,8 +97,8 @@ export const questoesSimulado: QuestaoSimulado[] = [
     pergunta: "Qual a validade da CNH para condutores com menos de 50 anos?",
     opcoes: ["5 anos", "10 anos", "15 anos", "Vitalícia"],
     respostaCorreta: 1,
-    explicacao: "A CNH tem validade de 10 anos para condutores com menos de 50 anos de idade.",
-    baseLegal: "Art. 147, §2º do CTB"
+    explicacao: "A CNH tem validade de 10 anos para condutores com menos de 50 anos de idade. Para condutores de 50 a 69 anos, 5 anos; acima de 70 anos, 3 anos.",
+    baseLegal: "Art. 147, §2º do CTB | Resolução CONTRAN 1.020/2025"
   },
   {
     id: 11,
@@ -1214,3 +1214,20 @@ export function selecionarQuestoesAleatorias(quantidade: number = 30): QuestaoSi
   // Embaralhar todas as questões selecionadas
   return questoesSelecionadas.sort(() => Math.random() - 0.5);
 }
+
+// Função para selecionar questões de Mecânica Básica (modo extra opcional)
+export function selecionarQuestoesMecanica(quantidade: number = 15): QuestaoSimulado[] {
+  const questoesMecanica = questoesSimulado.filter(q => q.categoria === "Mecânica Básica");
+  const shuffled = [...questoesMecanica].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, quantidade);
+}
+
+// Lista de bases legais utilizadas no app (para referência)
+export const BASES_LEGAIS = {
+  ctb: "Lei 9.503/1997 - Código de Trânsito Brasileiro",
+  contran789: "Resolução CONTRAN 789/2020 - Regulamenta habilitação",
+  contran925: "Resolução CONTRAN 925/2022 - Manual Brasileiro de Fiscalização",
+  contran1020: "Resolução CONTRAN 1.020/2025 - Atualiza regras de CNH/PPD",
+  contran168: "Resolução CONTRAN 168/04 - Exames de habilitação",
+  conama418: "Resolução CONAMA 418/09 - Emissões veiculares"
+};
