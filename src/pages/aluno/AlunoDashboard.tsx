@@ -179,13 +179,13 @@ export default function AlunoDashboard() {
     },
     { 
       id: 2, 
-      name: "Curso Teórico (EAD)", 
+      name: "Preparação Teórica (EAD)", 
       icon: BookOpen, 
       status: getStepStatus(cursoTeoricoCompleto, exameMedicoCompleto),
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
       subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
-      detail: "EAD gratuito · Certificado emitido"
+      detail: "Estudo completo + simulados de prova · EAD gratuito · Certificado emitido · Prepara para a prova oficial do DETRAN"
     },
     { 
       id: 3, 
