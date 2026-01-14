@@ -934,6 +934,8 @@ export type Database = {
           aluno_id: string
           aulas_praticas_conclusao: string | null
           aulas_praticas_inicio: string | null
+          certificado_teorico_enviado_em: string | null
+          certificado_teorico_url: string | null
           cnh_emitida_em: string | null
           created_at: string
           curso_teorico_conclusao: string | null
@@ -944,12 +946,15 @@ export type Database = {
           exame_teorico_data: string | null
           exame_teorico_resultado: string | null
           id: string
+          prova_teorica_detran_aprovada: boolean | null
           updated_at: string
         }
         Insert: {
           aluno_id: string
           aulas_praticas_conclusao?: string | null
           aulas_praticas_inicio?: string | null
+          certificado_teorico_enviado_em?: string | null
+          certificado_teorico_url?: string | null
           cnh_emitida_em?: string | null
           created_at?: string
           curso_teorico_conclusao?: string | null
@@ -960,12 +965,15 @@ export type Database = {
           exame_teorico_data?: string | null
           exame_teorico_resultado?: string | null
           id?: string
+          prova_teorica_detran_aprovada?: boolean | null
           updated_at?: string
         }
         Update: {
           aluno_id?: string
           aulas_praticas_conclusao?: string | null
           aulas_praticas_inicio?: string | null
+          certificado_teorico_enviado_em?: string | null
+          certificado_teorico_url?: string | null
           cnh_emitida_em?: string | null
           created_at?: string
           curso_teorico_conclusao?: string | null
@@ -976,6 +984,7 @@ export type Database = {
           exame_teorico_data?: string | null
           exame_teorico_resultado?: string | null
           id?: string
+          prova_teorica_detran_aprovada?: boolean | null
           updated_at?: string
         }
         Relationships: [

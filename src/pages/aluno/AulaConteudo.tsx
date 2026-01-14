@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, Award } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, Award, ExternalLink, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -9,6 +9,7 @@ import { useCursoTeorico } from '@/hooks/useCursoTeorico';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UploadCertificadoModal } from '@/components/certificado/UploadCertificadoModal';
 
 interface QuizPergunta {
   id: string;
@@ -38,6 +39,7 @@ export default function AulaConteudo() {
   // Estado da tela de conclusão
   const [mostrarConclusao, setMostrarConclusao] = useState(false);
   const [modulosPendentes, setModulosPendentes] = useState<{ id: string; titulo: string; progresso: number }[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [cursoCompleto, setCursoCompleto] = useState(false);
 
   // Carregar dados da aula
@@ -283,7 +285,7 @@ export default function AulaConteudo() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center">
           {cursoCompleto ? (
-            // Curso 100% completo
+            // Curso 100% completo - Pronto para prova DETRAN
             <div className="space-y-6">
               <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
                 <Trophy className="w-12 h-12 text-white" />
@@ -291,40 +293,71 @@ export default function AulaConteudo() {
               
               <div>
                 <h1 className="text-2xl font-bold text-foreground mb-2">
-                  Parabéns! 🎉
+                  Parabéns! Você está pronto para a prova oficial. 🎉
                 </h1>
                 <p className="text-muted-foreground">
-                  Você completou todo o curso teórico! Seu certificado está disponível para download.
+                  Você completou todo o curso teórico e os simulados!
                 </p>
               </div>
 
-              <div className="bg-gradient-to-r from-[#00c853]/10 to-[#00a843]/10 border border-[#00c853]/30 rounded-xl p-4">
-                <div className="flex items-center justify-center gap-2 text-[#00c853] mb-2">
-                  <Award className="w-5 h-5" />
-                  <span className="font-semibold">100% Concluído</span>
-                </div>
+              {/* Card explicativo */}
+              <div className="bg-muted/50 rounded-xl p-4 text-left">
                 <p className="text-sm text-muted-foreground">
-                  Todos os 5 módulos foram finalizados com sucesso
+                  Treine quantas vezes quiser no app. Quando estiver confiante, clique abaixo para agendar a prova teórica real no site oficial do DETRAN-SP (30 questões, mínimo 21 acertos).
                 </p>
               </div>
 
               <div className="space-y-3">
+                {/* Botão principal DETRAN */}
                 <Button
-                  onClick={() => navigate('/aluno/certificado-ead')}
-                  className="w-full bg-[#00c853] hover:bg-[#00a843] h-12"
+                  onClick={() => window.open('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica', '_blank')}
+                  className="w-full bg-[#00c853] hover:bg-[#00a843] h-14 text-base"
                 >
-                  <Award className="w-5 h-5 mr-2" />
-                  Baixar Certificado
+                  <ExternalLink className="w-5 h-5 mr-2" />
+                  Agendar e Fazer Prova Oficial no DETRAN-SP
                 </Button>
+
+                {/* Divisor */}
+                <div className="flex items-center gap-3 my-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground uppercase">ou</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Já foi aprovado */}
+                <p className="text-sm text-muted-foreground">
+                  Já fez a prova e foi aprovado?
+                </p>
                 
                 <Button
-                  onClick={() => navigate('/aluno/curso-teorico')}
+                  onClick={() => setShowUploadModal(true)}
                   variant="outline"
-                  className="w-full"
+                  className="w-full h-12"
                 >
-                  Ver Módulos
+                  <Upload className="w-5 h-5 mr-2" />
+                  Enviar Comprovante de Aprovação
+                </Button>
+
+                {/* Certificado EAD */}
+                <Button
+                  onClick={() => navigate('/aluno/certificado-ead')}
+                  variant="ghost"
+                  className="w-full text-muted-foreground"
+                >
+                  <Award className="w-4 h-4 mr-2" />
+                  Baixar Certificado do Curso EAD
                 </Button>
               </div>
+
+              {/* Modal de upload */}
+              <UploadCertificadoModal
+                open={showUploadModal}
+                onOpenChange={setShowUploadModal}
+                onSuccess={() => {
+                  setMostrarConclusao(false);
+                  navigate('/aluno');
+                }}
+              />
             </div>
           ) : (
             // Curso incompleto - mostrar módulos pendentes
