@@ -105,13 +105,26 @@ export default function ModuloDetalhes() {
   const progresso = aulas.length > 0 ? Math.round((aulasCompletas / aulas.length) * 100) : 0;
 
   const getAulaStatus = (aula: AulaComProgresso, index: number) => {
+    // Se já completou o quiz, está concluída
     if (aula.progresso?.quiz_aprovado) return 'concluida';
+    
+    // Se tem progresso (começou mas não terminou), está em progresso
     if (aula.progresso) return 'em_progresso';
     
-    // Primeira aula sempre disponível, demais dependem da anterior
+    // Primeira aula sempre disponível
     if (index === 0) return 'disponivel';
+    
+    // Verifica se pelo menos uma aula anterior foi concluída
+    // Isso permite flexibilidade caso aulas tenham sido feitas fora de ordem
+    const temAulaAnteriorConcluida = aulas.slice(0, index).some(
+      a => a.progresso?.quiz_aprovado
+    );
+    
+    // Ou se a aula imediatamente anterior foi concluída (lógica tradicional)
     const aulaAnterior = aulas[index - 1];
-    if (aulaAnterior?.progresso?.quiz_aprovado) return 'disponivel';
+    const anteriorConcluida = aulaAnterior?.progresso?.quiz_aprovado;
+    
+    if (anteriorConcluida || temAulaAnteriorConcluida) return 'disponivel';
     
     return 'bloqueada';
   };
