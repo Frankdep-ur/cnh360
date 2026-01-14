@@ -32,15 +32,17 @@ import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const nextLesson = {
-  instructor: "Carlos Silva",
-  photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
-  date: "Amanhã",
-  time: "14:00",
-  location: "Av. Brasil, 1234 - Araçatuba",
-  duration: "1 hora",
-  isMEI: true,
-};
+interface ProximaAula {
+  id: string;
+  instructor: string;
+  photo: string | null;
+  date: string;
+  time: string;
+  location: string;
+  duration: string;
+  valor: number;
+  instructorId: string;
+}
 
 export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
@@ -50,6 +52,7 @@ export default function AlunoDashboard() {
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
+  const [proximaAula, setProximaAula] = useState<ProximaAula | null>(null);
   const [progressoRenach, setProgressoRenach] = useState<{
     exame_medico_concluido?: boolean;
     curso_teorico_conclusao?: string | null;
@@ -68,7 +71,7 @@ export default function AlunoDashboard() {
         .maybeSingle()
         .then(({ data }) => setProfile(data));
 
-      // Buscar progresso completo do RENACH
+      // Buscar progresso completo do RENACH e próxima aula
       supabase
         .from('alunos')
         .select('id, horas_praticas_completadas')
@@ -85,9 +88,61 @@ export default function AlunoDashboard() {
               .maybeSingle();
             
             setProgressoRenach({
-              exame_medico_concluido: true, // Assumimos que passou no exame médico para estar cadastrado
+              exame_medico_concluido: true,
               ...progresso
             });
+
+            // Buscar próxima aula confirmada
+            const { data: aulas } = await supabase
+              .from('aulas')
+              .select(`
+                id,
+                data_hora,
+                duracao_minutos,
+                ponto_encontro,
+                valor,
+                instrutor_id
+              `)
+              .eq('aluno_id', aluno.id)
+              .eq('status', 'confirmada')
+              .gte('data_hora', new Date().toISOString())
+              .order('data_hora', { ascending: true })
+              .limit(1);
+
+            if (aulas && aulas.length > 0) {
+              const aula = aulas[0];
+              
+              // Buscar dados do instrutor
+              const { data: instrutor } = await supabase
+                .from('instrutores_publico_cache')
+                .select('nome, foto')
+                .eq('id', aula.instrutor_id)
+                .maybeSingle();
+
+              const dataAula = new Date(aula.data_hora);
+              const hoje = new Date();
+              const amanha = new Date(hoje);
+              amanha.setDate(amanha.getDate() + 1);
+
+              let dateLabel = dataAula.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+              if (dataAula.toDateString() === hoje.toDateString()) {
+                dateLabel = 'Hoje';
+              } else if (dataAula.toDateString() === amanha.toDateString()) {
+                dateLabel = 'Amanhã';
+              }
+
+              setProximaAula({
+                id: aula.id,
+                instructor: instrutor?.nome || 'Instrutor',
+                photo: instrutor?.foto || null,
+                date: dateLabel,
+                time: dataAula.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                location: aula.ponto_encontro || 'Local a definir',
+                duration: `${aula.duracao_minutos} min`,
+                valor: aula.valor,
+                instructorId: aula.instrutor_id
+              });
+            }
           }
         });
     }
@@ -387,124 +442,154 @@ export default function AlunoDashboard() {
       </div>
 
       {/* Next Lesson */}
-      <div className="px-6 mt-6">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">Próxima aula</h3>
-            <Link to="/aluno/agenda" className="text-sm text-primary font-medium">
-              Ver agenda
-            </Link>
-          </div>
-
-          <div className="bg-card rounded-2xl p-4 shadow-card border border-border/50">
-            <div className="flex items-center gap-4 mb-4">
-              <img
-                src={nextLesson.photo}
-                alt={nextLesson.instructor}
-                className="w-14 h-14 rounded-xl object-cover"
-              />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-foreground">{nextLesson.instructor}</h4>
-                </div>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  <span>4.9</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-primary">{nextLesson.date}</p>
-                <p className="text-sm text-muted-foreground">{nextLesson.time}</p>
-              </div>
+      {proximaAula ? (
+        <div className="px-6 mt-6">
+          <div className="max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground">Próxima aula</h3>
+              <Link to="/aluno/agenda" className="text-sm text-primary font-medium">
+                Ver agenda
+              </Link>
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-              <div className="flex items-center gap-1">
-                <MapPin className="w-4 h-4" />
-                <span>{sharedLocation?.address || nextLesson.location}</span>
+            <div className="bg-card rounded-2xl p-4 shadow-card border border-border/50">
+              <div className="flex items-center gap-4 mb-4">
+                {proximaAula.photo ? (
+                  <img
+                    src={proximaAula.photo}
+                    alt={proximaAula.instructor}
+                    className="w-14 h-14 rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center">
+                    <span className="text-lg font-bold text-muted-foreground">
+                      {proximaAula.instructor.charAt(0)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground">{proximaAula.instructor}</h4>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    <span>4.9</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-primary">{proximaAula.date}</p>
+                  <p className="text-sm text-muted-foreground">{proximaAula.time}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                <span>{nextLesson.duration}</span>
+
+              <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  <span>{sharedLocation?.address || proximaAula.location}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>{proximaAula.duration}</span>
+                </div>
               </div>
-            </div>
 
-            {/* Location Share Section */}
-            {!locationShared ? (
-              <LocationShareButton
-                className="w-full mb-3"
-                onLocationShared={(loc) => {
-                  setLocationShared(true);
-                  setSharedLocation(loc);
-                  toast.success("Localização enviada ao instrutor!");
-                }}
-              />
-            ) : (
-              <RouteMapCard
-                originAddress={sharedLocation?.address || "Sua localização"}
-                destinationAddress={nextLesson.location}
-                distance="3.2 km"
-                eta="8 min"
-                showNavButton={false}
-                className="mb-3"
-              />
-            )}
-
-            {/* Payment and Action Buttons */}
-            <div className="flex gap-3">
-              {!isPaid ? (
-                <>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={() => {
-                      toast.info("Reagendamento solicitado", {
-                        description: "Reembolso de 80% será processado via PIX"
-                      });
-                    }}
-                  >
-                    Reagendar
-                  </Button>
-                  <Button 
-                    onClick={() => setShowPayment(true)}
-                    className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Pagar R$100
-                  </Button>
-                </>
+              {/* Location Share Section */}
+              {!locationShared ? (
+                <LocationShareButton
+                  className="w-full mb-3"
+                  onLocationShared={(loc) => {
+                    setLocationShared(true);
+                    setSharedLocation(loc);
+                    toast.success("Localização enviada ao instrutor!");
+                  }}
+                />
               ) : (
-                <>
-                  <Button variant="outline" className="flex-1">
-                    <Navigation className="w-4 h-4 mr-2" />
-                    Ver Rota
-                  </Button>
-                  <Link to="/aluno/validacao-aula" className="flex-1">
-                    <Button className="w-full">
-                      Iniciar Aula
-                    </Button>
-                  </Link>
-                </>
+                <RouteMapCard
+                  originAddress={sharedLocation?.address || "Sua localização"}
+                  destinationAddress={proximaAula.location}
+                  distance="3.2 km"
+                  eta="8 min"
+                  showNavButton={false}
+                  className="mb-3"
+                />
               )}
+
+              {/* Payment and Action Buttons */}
+              <div className="flex gap-3">
+                {!isPaid ? (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => {
+                        toast.info("Reagendamento solicitado", {
+                          description: "Reembolso de 80% será processado via PIX"
+                        });
+                      }}
+                    >
+                      Reagendar
+                    </Button>
+                    <Button 
+                      onClick={() => setShowPayment(true)}
+                      className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white"
+                    >
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Pagar R${proximaAula.valor}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" className="flex-1">
+                      <Navigation className="w-4 h-4 mr-2" />
+                      Ver Rota
+                    </Button>
+                    <Link to={`/aluno/validacao-aula?id=${proximaAula.id}`} className="flex-1">
+                      <Button className="w-full">
+                        Iniciar Aula
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="px-6 mt-6">
+          <div className="max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground">Próxima aula</h3>
+              <Link to="/aluno/agenda" className="text-sm text-primary font-medium">
+                Ver agenda
+              </Link>
+            </div>
+            <div className="bg-card rounded-2xl p-6 shadow-card border border-border/50 text-center">
+              <Car className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+              <p className="text-muted-foreground mb-4">Nenhuma aula agendada</p>
+              <Link to="/aluno/buscar">
+                <Button>Agendar aula prática</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Payment Checkout Modal */}
-      <PaymentCheckout
-        open={showPayment}
-        onClose={() => setShowPayment(false)}
-        onPaymentComplete={() => {
-          setShowPayment(false);
-          setIsPaid(true);
-          toast.success("Pagamento confirmado!");
-        }}
-        amount={100}
-        duration={60}
-        instructorName={nextLesson.instructor}
-        lessonDate={nextLesson.date}
-      />
+      {proximaAula && (
+        <PaymentCheckout
+          open={showPayment}
+          onClose={() => setShowPayment(false)}
+          onPaymentComplete={() => {
+            setShowPayment(false);
+            setIsPaid(true);
+            toast.success("Pagamento confirmado!");
+          }}
+          amount={proximaAula.valor}
+          duration={parseInt(proximaAula.duration) || 60}
+          instructorName={proximaAula.instructor}
+          lessonDate={proximaAula.date}
+        />
+      )}
 
       <BottomNav />
     </div>
