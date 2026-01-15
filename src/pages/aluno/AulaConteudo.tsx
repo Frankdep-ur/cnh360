@@ -311,7 +311,7 @@ export default function AulaConteudo() {
               <div className="space-y-3">
                 {/* Botão principal DETRAN */}
                 <Button
-                  onClick={() => openExternalLink('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica')}
+                  onClick={() => openExternalLink('https://www.detran.sp.gov.br/detransp/pb/servico/habilitacao/_iniciar_processo_primeira_habilitacao?id=carta_de_servico_iniciar_processo_primeira_habilitacao')}
                   className="w-full bg-[#00c853] hover:bg-[#00a843] h-14 text-base"
                 >
                   <ExternalLink className="w-5 h-5 mr-2" />
