@@ -4,7 +4,6 @@ import {
   ChevronRight, 
   BookOpen, 
   Car, 
-  ClipboardCheck, 
   Trophy,
   Clock,
   MapPin,
@@ -15,10 +14,7 @@ import {
   CreditCard,
   Navigation,
   Stethoscope,
-  Award,
-  ExternalLink,
-  Play,
-  Info
+  Award
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,10 +54,8 @@ export default function AlunoDashboard() {
   const [progressoRenach, setProgressoRenach] = useState<{
     exame_medico_concluido?: boolean;
     curso_teorico_conclusao?: string | null;
-    exame_teorico_resultado?: string | null;
     aulas_praticas_conclusao?: string | null;
     exame_pratico_resultado?: string | null;
-    prova_teorica_detran_aprovada?: boolean | null;
   } | null>(null);
   const [practicalHours, setPracticalHours] = useState(0);
   
@@ -87,7 +81,7 @@ export default function AlunoDashboard() {
             
             const { data: progresso } = await supabase
               .from('progresso_renach')
-              .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
+              .select('curso_teorico_conclusao, aulas_praticas_conclusao, exame_pratico_resultado')
               .eq('aluno_id', aluno.id)
               .maybeSingle();
             
@@ -157,13 +151,12 @@ export default function AlunoDashboard() {
   // Status derivados do progresso real
   const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
   const cursoTeoricoCompleto = !!progressoRenach?.curso_teorico_conclusao;
-  const exameTeoricoAprovado = progressoRenach?.prova_teorica_detran_aprovada ?? (progressoRenach?.exame_teorico_resultado === 'aprovado');
   const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
   const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
   
-  // Calcular progresso total baseado nas etapas
-  const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, exameTeoricoAprovado, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
-  const totalProgress = Math.round((completedSteps / 7) * 100);
+  // Calcular progresso total baseado nas etapas (5 etapas agora)
+  const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
+  const totalProgress = Math.round((completedSteps / 5) * 100);
 
   // Função para determinar status da etapa baseado nas anteriores
   const getStepStatus = (stepCompleted: boolean, previousCompleted: boolean): "completed" | "current" | "locked" => {
@@ -193,26 +186,16 @@ export default function AlunoDashboard() {
     },
     { 
       id: 3, 
-      name: "Exame Teórico (Prova DETRAN)", 
-      icon: ClipboardCheck, 
-      status: getStepStatus(exameTeoricoAprovado, cursoTeoricoCompleto),
-      progress: exameTeoricoAprovado ? 100 : 0,
-      detail: "30 questões · Mínimo 21 acertos (70%)",
-      showActions: cursoTeoricoCompleto && !exameTeoricoAprovado,
-      showUploadAction: cursoTeoricoCompleto && !exameTeoricoAprovado
+      name: "Aulas Práticas", 
+      icon: Car, 
+      status: getStepStatus(aulasPraticasCompletas, cursoTeoricoCompleto),
+      progress: Math.round((practicalHours / minRequiredHours) * 100), 
+      subtitle: cursoTeoricoCompleto && !aulasPraticasCompletas ? "Em andamento" : undefined,
+      detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
+      link: cursoTeoricoCompleto ? "/aluno/buscar" : undefined
     },
     { 
       id: 4, 
-      name: "Aulas Práticas", 
-      icon: Car, 
-      status: getStepStatus(aulasPraticasCompletas, exameTeoricoAprovado),
-      progress: Math.round((practicalHours / minRequiredHours) * 100), 
-      subtitle: exameTeoricoAprovado && !aulasPraticasCompletas ? "Em andamento" : undefined,
-      detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
-      link: exameTeoricoAprovado ? "/aluno/buscar" : undefined
-    },
-    { 
-      id: 5, 
       name: "Exame Prático", 
       icon: Trophy, 
       status: getStepStatus(examePraticoAprovado, aulasPraticasCompletas),
@@ -221,7 +204,7 @@ export default function AlunoDashboard() {
       detail: "Prova prática de direção veicular"
     },
     { 
-      id: 6, 
+      id: 5, 
       name: "Permissão para Dirigir (PPD)", 
       icon: FileText, 
       status: getStepStatus(false, examePraticoAprovado),
@@ -403,31 +386,6 @@ export default function AlunoDashboard() {
                           style={{ width: `${Math.min(step.progress, 100)}%` }}
                         />
                       </div>
-                    </div>
-                  )}
-                  {/* Botões de ação para Exame Teórico */}
-                  {'showActions' in step && step.showActions && (
-                    <div className="mt-3 pt-3 border-t border-border space-y-3">
-                      <div className="flex gap-2">
-                        <Link to="/aluno/simulado" className="flex-1">
-                          <Button variant="outline" size="sm" className="w-full">
-                            <Play className="w-4 h-4 mr-2" />
-                            Simular prova
-                          </Button>
-                        </Link>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="flex-1"
-                          onClick={() => {
-                            window.open('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica', '_blank');
-                          }}
-                        >
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          Agendar prova
-                        </Button>
-                      </div>
-                      
                     </div>
                   )}
                 </div>

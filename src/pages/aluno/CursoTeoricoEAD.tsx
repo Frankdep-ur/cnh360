@@ -150,8 +150,8 @@ export default function CursoTeoricoEAD() {
               <div>
                 <h4 className="font-medium text-foreground mb-1">Sobre esta Preparação</h4>
                 <p className="text-sm text-muted-foreground">
-                  Esta preparação é complemento para treinar. A prova oficial é feita no DETRAN-SP. 
-                  Após aprovação, volte aqui e envie o certificado para liberar as aulas práticas.
+                  Esta preparação é um complemento para treinar. A prova oficial é feita no site do DETRAN-SP 
+                  através do link disponível abaixo.
                 </p>
               </div>
             </div>
