@@ -190,8 +190,7 @@ export default function AlunoDashboard() {
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
       subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
-      detail: "Estudo completo + simulados de prova · EAD grátis · Certificado emitido · Treine aqui antes da prova oficial DETRAN",
-      infoText: "Esta preparação é complemento para treinar. A prova oficial é feita no DETRAN-SP. Após aprovação, volte aqui e envie o certificado para liberar as aulas práticas."
+      detail: "Estudo + simulados · EAD gratuito · Certificado incluso"
     },
     { 
       id: 3, 
@@ -404,17 +403,6 @@ export default function AlunoDashboard() {
                           className="h-full rounded-full transition-all duration-500 bg-primary"
                           style={{ width: `${Math.min(step.progress, 100)}%` }}
                         />
-                      </div>
-                    </div>
-                  )}
-                  {/* Texto explicativo para Preparação Teórica */}
-                  {'infoText' in step && step.infoText && isCurrent && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <div className="flex items-start gap-2 bg-muted/50 rounded-lg p-3">
-                        <Info className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-muted-foreground">
-                          {step.infoText}
-                        </p>
                       </div>
                     </div>
                   )}

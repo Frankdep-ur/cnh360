@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -12,7 +13,9 @@ import {
   Heart,
   Leaf,
   Wrench,
-  Scale
+  Scale,
+  Info,
+  ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -21,7 +24,16 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { useCursoTeorico } from "@/hooks/useCursoTeorico";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 const MODULOS_ICONS: Record<number, React.ElementType> = {
   1: Scale,
   2: Car,
@@ -30,12 +42,23 @@ const MODULOS_ICONS: Record<number, React.ElementType> = {
   5: Wrench,
 };
 
+const DETRAN_PROVA_URL = "https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica";
+
 export default function CursoTeoricoEAD() {
   const navigate = useNavigate();
   const { modulos, loading, progressoGeral } = useCursoTeorico();
+  const [showDetranAlert, setShowDetranAlert] = useState(false);
 
   const totalLessons = modulos.reduce((acc, m) => acc + m.totalAulas, 0);
   const completedLessons = modulos.reduce((acc, m) => acc + m.aulasCompletas, 0);
+
+  const handleDetranClick = () => {
+    if (progressoGeral < 100) {
+      setShowDetranAlert(true);
+    } else {
+      window.open(DETRAN_PROVA_URL, '_blank');
+    }
+  };
 
   const getModuloStatus = (modulo: typeof modulos[0], index: number) => {
     if (modulo.aulasCompletas === modulo.totalAulas && modulo.totalAulas > 0) {
@@ -117,6 +140,28 @@ export default function CursoTeoricoEAD() {
               <p className="text-sm font-medium text-primary">Conteúdo Oficial</p>
               <p className="text-xs text-muted-foreground">CTB • CONTRAN 789/2020 • 925/2022 • 1.020/2025</p>
             </div>
+          </div>
+
+          {/* Seção Sobre esta Preparação */}
+          <div className="mt-4 bg-muted/30 rounded-2xl p-4 border border-border">
+            <div className="flex items-start gap-3 mb-4">
+              <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-foreground mb-1">Sobre esta Preparação</h4>
+                <p className="text-sm text-muted-foreground">
+                  Esta preparação é complemento para treinar. A prova oficial é feita no DETRAN-SP. 
+                  Após aprovação, volte aqui e envie o certificado para liberar as aulas práticas.
+                </p>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={handleDetranClick}
+              className="w-full bg-[#00c853] hover:bg-[#00a843]"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Agendar Prova Oficial no DETRAN-SP
+            </Button>
           </div>
         </div>
       </div>
@@ -272,6 +317,25 @@ export default function CursoTeoricoEAD() {
           </Link>
         </div>
       </div>
+
+      {/* AlertDialog para verificação de conclusão */}
+      <AlertDialog open={showDetranAlert} onOpenChange={setShowDetranAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você ainda não concluiu as aulas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Recomendamos terminar o curso antes de agendar a prova oficial. 
+              Deseja concluir as aulas ou prosseguir para o site do DETRAN?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Concluir Aulas</AlertDialogCancel>
+            <AlertDialogAction onClick={() => window.open(DETRAN_PROVA_URL, '_blank')}>
+              Prosseguir para DETRAN
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
