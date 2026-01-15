@@ -44,7 +44,7 @@ const MODULOS_ICONS: Record<number, React.ElementType> = {
   5: Wrench,
 };
 
-const DETRAN_PROVA_URL = "https://www.detran.sp.gov.br/sac/pb/servico/habilitacao/_iniciar_processo_primeira_habilitacao?id=carta_de_servico_iniciar_processo_primeira_habilitacao";
+const DETRAN_PROVA_URL = "https://www.detran.sp.gov.br/detransp/pb/servico/habilitacao/_iniciar_processo_primeira_habilitacao?id=carta_de_servico_iniciar_processo_primeira_habilitacao";
 
 export default function CursoTeoricoEAD() {
   const navigate = useNavigate();
