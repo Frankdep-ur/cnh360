@@ -345,6 +345,17 @@ export function useCursoTeorico() {
     atualizarProgressoRenach();
   }, [progressoGeral, alunoId]);
 
+  // Pré-fetch do próximo módulo para performance
+  const prefetchProximoModulo = async (moduloAtualOrdem: number) => {
+    const proximoModulo = modulos.find(m => m.ordem === moduloAtualOrdem + 1);
+    if (proximoModulo) {
+      // Pré-carregar aulas do próximo módulo em background
+      buscarAulasDoModulo(proximoModulo.id).catch(() => {
+        // Silently fail - é apenas pré-fetch
+      });
+    }
+  };
+
   return {
     modulos,
     loading,
@@ -355,6 +366,7 @@ export function useCursoTeorico() {
     iniciarAula,
     atualizarTempo,
     enviarQuiz,
-    recarregar: carregarModulos
+    recarregar: carregarModulos,
+    prefetchProximoModulo
   };
 }

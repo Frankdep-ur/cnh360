@@ -1,6 +1,7 @@
 import { Home, Search, Calendar, MessageCircle, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { forwardRef, memo } from "react";
 
 interface NavItem {
   icon: React.ElementType;
@@ -16,7 +17,46 @@ const navItems: NavItem[] = [
   { icon: User, label: "Perfil", path: "/aluno/perfil" },
 ];
 
-export function BottomNav() {
+// Componente de item de navegação otimizado
+const NavItemComponent = memo(forwardRef<
+  HTMLAnchorElement,
+  { item: NavItem; isActive: boolean }
+>(({ item, isActive }, ref) => {
+  const Icon = item.icon;
+  
+  return (
+    <Link
+      ref={ref}
+      to={item.path}
+      className={cn(
+        "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200",
+        isActive 
+          ? "text-primary" 
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      <div className={cn(
+        "p-1.5 rounded-xl transition-all duration-200",
+        isActive && "bg-primary/10"
+      )}>
+        <Icon className={cn(
+          "h-5 w-5 transition-transform duration-200",
+          isActive && "scale-110"
+        )} />
+      </div>
+      <span className={cn(
+        "text-[10px] font-medium",
+        isActive && "font-semibold"
+      )}>
+        {item.label}
+      </span>
+    </Link>
+  );
+}));
+
+NavItemComponent.displayName = "NavItemComponent";
+
+export const BottomNav = memo(function BottomNav() {
   const location = useLocation();
 
   return (
@@ -25,38 +65,16 @@ export function BottomNav() {
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || 
             (item.path !== "/aluno" && location.pathname.startsWith(item.path));
-          const Icon = item.icon;
 
           return (
-            <Link
+            <NavItemComponent
               key={item.path}
-              to={item.path}
-              className={cn(
-                "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200",
-                isActive 
-                  ? "text-primary" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <div className={cn(
-                "p-1.5 rounded-xl transition-all duration-200",
-                isActive && "bg-primary/10"
-              )}>
-                <Icon className={cn(
-                  "h-5 w-5 transition-transform duration-200",
-                  isActive && "scale-110"
-                )} />
-              </div>
-              <span className={cn(
-                "text-[10px] font-medium",
-                isActive && "font-semibold"
-              )}>
-                {item.label}
-              </span>
-            </Link>
+              item={item}
+              isActive={isActive}
+            />
           );
         })}
       </div>
     </nav>
   );
-}
+});
