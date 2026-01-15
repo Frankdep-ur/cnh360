@@ -18,7 +18,6 @@ import {
   Award,
   ExternalLink,
   Play,
-  Upload,
   Info
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,7 +30,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { LocationShareButton } from "@/components/maps/LocationShareButton";
 import { RouteMapCard } from "@/components/maps/RouteMapCard";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
-import { UploadCertificadoModal } from "@/components/certificado/UploadCertificadoModal";
+
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -65,7 +64,7 @@ export default function AlunoDashboard() {
     prova_teorica_detran_aprovada?: boolean | null;
   } | null>(null);
   const [practicalHours, setPracticalHours] = useState(0);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  
 
   useEffect(() => {
     if (user) {
@@ -190,7 +189,7 @@ export default function AlunoDashboard() {
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
       subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
-      detail: "Estudo + simulados · EAD gratuito · Certificado incluso"
+      detail: "Estudo + simulados · EAD gratuito"
     },
     { 
       id: 3, 
@@ -429,18 +428,6 @@ export default function AlunoDashboard() {
                         </Button>
                       </div>
                       
-                      {/* Botão de upload de certificado */}
-                      {'showUploadAction' in step && step.showUploadAction && (
-                        <Button 
-                          variant="default" 
-                          size="sm" 
-                          className="w-full bg-[#00c853] hover:bg-[#00a843]"
-                          onClick={() => setShowUploadModal(true)}
-                        >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Já fui aprovado - Enviar certificado
-                        </Button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -610,35 +597,6 @@ export default function AlunoDashboard() {
         />
       )}
 
-      {/* Upload Certificado Modal */}
-      <UploadCertificadoModal
-        open={showUploadModal}
-        onOpenChange={setShowUploadModal}
-        onSuccess={() => {
-          // Recarregar dados do progresso
-          if (user) {
-            supabase
-              .from('alunos')
-              .select('id')
-              .eq('user_id', user.id)
-              .maybeSingle()
-              .then(async ({ data: aluno }) => {
-                if (aluno) {
-                  const { data: progresso } = await supabase
-                    .from('progresso_renach')
-                    .select('curso_teorico_conclusao, exame_teorico_resultado, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
-                    .eq('aluno_id', aluno.id)
-                    .maybeSingle();
-                  
-                  setProgressoRenach({
-                    exame_medico_concluido: true,
-                    ...progresso
-                  });
-                }
-              });
-          }
-        }}
-      />
 
       <BottomNav />
     </div>

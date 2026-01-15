@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, Award, ExternalLink, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, ExternalLink, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -9,7 +9,7 @@ import { useCursoTeorico } from '@/hooks/useCursoTeorico';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UploadCertificadoModal } from '@/components/certificado/UploadCertificadoModal';
+
 
 interface QuizPergunta {
   id: string;
@@ -338,26 +338,7 @@ export default function AulaConteudo() {
                   Enviar Comprovante de Aprovação
                 </Button>
 
-                {/* Certificado EAD */}
-                <Button
-                  onClick={() => navigate('/aluno/certificado-ead')}
-                  variant="ghost"
-                  className="w-full text-muted-foreground"
-                >
-                  <Award className="w-4 h-4 mr-2" />
-                  Baixar Certificado do Curso EAD
-                </Button>
               </div>
-
-              {/* Modal de upload */}
-              <UploadCertificadoModal
-                open={showUploadModal}
-                onOpenChange={setShowUploadModal}
-                onSuccess={() => {
-                  setMostrarConclusao(false);
-                  navigate('/aluno');
-                }}
-              />
             </div>
           ) : (
             // Curso incompleto - mostrar módulos pendentes

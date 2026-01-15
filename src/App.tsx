@@ -35,7 +35,7 @@ const ExamePratico = lazy(() => import("./pages/aluno/ExamePratico"));
 const ValidacaoAula = lazy(() => import("./pages/aluno/ValidacaoAula"));
 const SimuladoTeorico = lazy(() => import("./pages/aluno/SimuladoTeorico"));
 const SimuladoMecanica = lazy(() => import("./pages/aluno/SimuladoMecanica"));
-const CertificadoEAD = lazy(() => import("./pages/aluno/CertificadoEAD"));
+
 const AlunoAgenda = lazy(() => import("./pages/aluno/AlunoAgenda"));
 const AlunoChat = lazy(() => import("./pages/aluno/AlunoChat"));
 const RastrearInstrutor = lazy(() => import("./pages/aluno/RastrearInstrutor"));
@@ -190,11 +190,6 @@ const App = () => (
               <Route path="/aluno/rastrear/:aulaId" element={
                 <ProtectedRoute>
                   <RastrearInstrutor />
-                </ProtectedRoute>
-              } />
-              <Route path="/aluno/certificado-ead" element={
-                <ProtectedRoute>
-                  <CertificadoEAD />
                 </ProtectedRoute>
               } />
               <Route path="/aluno/agenda" element={
