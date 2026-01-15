@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { useCursoTeorico } from "@/hooks/useCursoTeorico";
 import { Skeleton } from "@/components/ui/skeleton";
+import { openExternalLink } from "@/lib/openExternalLink";
 import { PageTransition, StaggerContainer, StaggerItem } from "@/components/ui/page-transition";
 import {
   AlertDialog,
@@ -57,7 +58,7 @@ export default function CursoTeoricoEAD() {
     if (progressoGeral < 100) {
       setShowDetranAlert(true);
     } else {
-      window.open(DETRAN_PROVA_URL, '_blank');
+      openExternalLink(DETRAN_PROVA_URL);
     }
   };
 
@@ -311,7 +312,7 @@ export default function CursoTeoricoEAD() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Concluir Aulas</AlertDialogCancel>
-            <AlertDialogAction onClick={() => window.open(DETRAN_PROVA_URL, '_blank')}>
+            <AlertDialogAction onClick={() => openExternalLink(DETRAN_PROVA_URL)}>
               Prosseguir para DETRAN
             </AlertDialogAction>
           </AlertDialogFooter>

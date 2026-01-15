@@ -9,6 +9,7 @@ import { useCursoTeorico } from '@/hooks/useCursoTeorico';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { openExternalLink } from '@/lib/openExternalLink';
 
 
 interface QuizPergunta {
@@ -310,7 +311,7 @@ export default function AulaConteudo() {
               <div className="space-y-3">
                 {/* Botão principal DETRAN */}
                 <Button
-                  onClick={() => window.open('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica', '_blank')}
+                  onClick={() => openExternalLink('https://www.detran.sp.gov.br/wps/portal/portaldetran/cidadao/habilitacao/fichaservicos/agendarProvaTeorica')}
                   className="w-full bg-[#00c853] hover:bg-[#00a843] h-14 text-base"
                 >
                   <ExternalLink className="w-5 h-5 mr-2" />
