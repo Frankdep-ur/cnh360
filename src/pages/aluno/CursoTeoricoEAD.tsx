@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { useCursoTeorico } from "@/hooks/useCursoTeorico";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageTransition, StaggerContainer, StaggerItem } from "@/components/ui/page-transition";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,7 +84,7 @@ export default function CursoTeoricoEAD() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <PageTransition className="min-h-screen bg-background pb-24">
       <ComplianceBanner variant="full" />
       
       {/* Header */}
@@ -170,13 +171,15 @@ export default function CursoTeoricoEAD() {
       <div className="px-6">
         <div className="max-w-md mx-auto">
           <h3 className="font-semibold text-foreground mb-4">Módulos do Curso</h3>
-          <div className="space-y-3">
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-24 rounded-2xl" />
-              ))
-            ) : (
-              modulos.map((modulo, index) => {
+              ))}
+            </div>
+          ) : (
+            <StaggerContainer className="space-y-3" staggerDelay={0.08}>
+              {modulos.map((modulo, index) => {
                 const status = getModuloStatus(modulo, index);
                 const isCompleted = status === "completed";
                 const isCurrent = status === "current";
@@ -187,66 +190,67 @@ export default function CursoTeoricoEAD() {
                 const IconComponent = MODULOS_ICONS[modulo.ordem] || BookOpen;
 
                 return (
-                  <div
-                    key={modulo.id}
-                    onClick={() => handleModuleClick(modulo, status)}
-                    className={cn(
-                      "bg-card rounded-2xl p-4 border-2 transition-all",
-                      isCurrent && "border-secondary shadow-card cursor-pointer hover:bg-muted/50",
-                      isCompleted && "border-primary/30 cursor-pointer hover:bg-muted/50",
-                      isLocked && "border-border opacity-60 cursor-not-allowed"
-                    )}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
-                        isCompleted && "bg-primary text-primary-foreground",
-                        isCurrent && "bg-secondary/10 text-secondary",
-                        isLocked && "bg-muted text-muted-foreground"
-                      )}>
-                        {isCompleted ? (
-                          <CheckCircle2 className="w-6 h-6" />
-                        ) : isLocked ? (
-                          <Lock className="w-5 h-5" />
-                        ) : (
-                          <IconComponent className="w-6 h-6" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-medium text-foreground text-sm">{modulo.titulo}</h4>
-                          {isCompleted && (
-                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              Concluído
-                            </span>
+                  <StaggerItem key={modulo.id}>
+                    <div
+                      onClick={() => handleModuleClick(modulo, status)}
+                      className={cn(
+                        "bg-card rounded-2xl p-4 border-2 transition-all",
+                        isCurrent && "border-secondary shadow-card cursor-pointer hover:bg-muted/50",
+                        isCompleted && "border-primary/30 cursor-pointer hover:bg-muted/50",
+                        isLocked && "border-border opacity-60 cursor-not-allowed"
+                      )}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
+                          isCompleted && "bg-primary text-primary-foreground",
+                          isCurrent && "bg-secondary/10 text-secondary",
+                          isLocked && "bg-muted text-muted-foreground"
+                        )}>
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-6 h-6" />
+                          ) : isLocked ? (
+                            <Lock className="w-5 h-5" />
+                          ) : (
+                            <IconComponent className="w-6 h-6" />
                           )}
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3 h-3" />
-                            {modulo.totalAulas} aulas
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {modulo.duracao_estimada_minutos}min
-                          </span>
-                        </div>
-                        {(isCurrent || (isCompleted && moduleProgress < 100)) && modulo.totalAulas > 0 && (
-                          <div className="mt-2">
-                            <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="text-muted-foreground">{modulo.aulasCompletas}/{modulo.totalAulas} aulas</span>
-                              <span className="text-secondary font-medium">{moduleProgress}%</span>
-                            </div>
-                            <Progress value={moduleProgress} className="h-1.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-foreground text-sm">{modulo.titulo}</h4>
+                            {isCompleted && (
+                              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                Concluído
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <FileText className="w-3 h-3" />
+                              {modulo.totalAulas} aulas
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {modulo.duracao_estimada_minutos}min
+                            </span>
+                          </div>
+                          {(isCurrent || (isCompleted && moduleProgress < 100)) && modulo.totalAulas > 0 && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="text-muted-foreground">{modulo.aulasCompletas}/{modulo.totalAulas} aulas</span>
+                                <span className="text-secondary font-medium">{moduleProgress}%</span>
+                              </div>
+                              <Progress value={moduleProgress} className="h-1.5" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </StaggerItem>
                 );
-              })
-            )}
-          </div>
+              })}
+            </StaggerContainer>
+          )}
         </div>
       </div>
 
@@ -338,6 +342,6 @@ export default function CursoTeoricoEAD() {
       </AlertDialog>
 
       <BottomNav />
-    </div>
+    </PageTransition>
   );
 }
