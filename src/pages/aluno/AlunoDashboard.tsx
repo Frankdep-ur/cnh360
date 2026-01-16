@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   ChevronRight, 
   BookOpen, 
@@ -9,7 +9,6 @@ import {
   MapPin,
   Star,
   Shield,
-  Timer,
   FileText,
   CreditCard,
   Navigation,
@@ -26,6 +25,16 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { LocationShareButton } from "@/components/maps/LocationShareButton";
 import { RouteMapCard } from "@/components/maps/RouteMapCard";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -43,6 +52,7 @@ interface ProximaAula {
 }
 
 export default function AlunoDashboard() {
+  const navigate = useNavigate();
   const [showContent, setShowContent] = useState(true);
   const { user } = useAuth();
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
@@ -56,8 +66,10 @@ export default function AlunoDashboard() {
     curso_teorico_conclusao?: string | null;
     aulas_praticas_conclusao?: string | null;
     exame_pratico_resultado?: string | null;
+    prova_teorica_detran_aprovada?: boolean;
   } | null>(null);
   const [practicalHours, setPracticalHours] = useState(0);
+  const [showCertificadoAlert, setShowCertificadoAlert] = useState(false);
   
 
   useEffect(() => {
@@ -81,12 +93,13 @@ export default function AlunoDashboard() {
             
             const { data: progresso } = await supabase
               .from('progresso_renach')
-              .select('curso_teorico_conclusao, aulas_praticas_conclusao, exame_pratico_resultado')
+              .select('curso_teorico_conclusao, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
               .eq('aluno_id', aluno.id)
               .maybeSingle();
             
             setProgressoRenach({
               exame_medico_concluido: true,
+              prova_teorica_detran_aprovada: progresso?.prova_teorica_detran_aprovada ?? false,
               ...progresso
             });
 
@@ -154,9 +167,21 @@ export default function AlunoDashboard() {
   const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
   const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
   
+  // Status para certificado teórico do DETRAN
+  const certificadoTeoricoAprovado = progressoRenach?.prova_teorica_detran_aprovada ?? false;
+  
   // Calcular progresso total baseado nas etapas (5 etapas agora)
   const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
   const totalProgress = Math.round((completedSteps / 5) * 100);
+
+  // Handler para clique em "Aulas Práticas"
+  const handleAulasPraticasClick = () => {
+    if (certificadoTeoricoAprovado) {
+      navigate('/aluno/buscar');
+    } else {
+      setShowCertificadoAlert(true);
+    }
+  };
 
   // Função para determinar status da etapa baseado nas anteriores
   const getStepStatus = (stepCompleted: boolean, previousCompleted: boolean): "completed" | "current" | "locked" => {
@@ -192,7 +217,7 @@ export default function AlunoDashboard() {
       progress: Math.round((practicalHours / minRequiredHours) * 100), 
       subtitle: cursoTeoricoCompleto && !aulasPraticasCompletas ? "Em andamento" : undefined,
       detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
-      link: cursoTeoricoCompleto ? "/aluno/buscar" : undefined
+      onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined // Usa onClick em vez de link
     },
     { 
       id: 4, 
@@ -391,6 +416,19 @@ export default function AlunoDashboard() {
                 </div>
               );
 
+              // Prioridade: onClick > link
+              if (step.onClick && !isLocked) {
+                return (
+                  <div 
+                    key={step.id} 
+                    onClick={step.onClick}
+                    className="cursor-pointer"
+                  >
+                    {content}
+                  </div>
+                );
+              }
+
               if (step.link && !isLocked) {
                 return (
                   <Link key={step.id} to={step.link}>
@@ -555,6 +593,24 @@ export default function AlunoDashboard() {
         />
       )}
 
+      {/* AlertDialog para Certificado do Exame Teórico */}
+      <AlertDialog open={showCertificadoAlert} onOpenChange={setShowCertificadoAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Certificado do Exame Teórico</AlertDialogTitle>
+            <AlertDialogDescription>
+              Antes de iniciar as aulas práticas, é necessário enviar o certificado do exame teórico. 
+              Por favor, submeta o certificado para prosseguir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate('/aluno/enviar-certificado')}>
+              Enviar Certificado
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
