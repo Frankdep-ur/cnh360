@@ -1,5 +1,6 @@
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, MapPin, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,8 @@ import { InstructorListSkeleton } from "@/components/skeletons/InstructorCardSke
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { QUERY_KEYS } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const filters = [
   { id: "disponivel", label: "Disponível agora" },
@@ -127,15 +130,62 @@ const FilterButton = memo(function FilterButton({
 });
 
 export default function BuscarInstrutores() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [checkingCertificate, setCheckingCertificate] = useState(true);
+
+  // Check certificate status on mount
+  useEffect(() => {
+    async function checkCertificateStatus() {
+      if (!user) {
+        setCheckingCertificate(false);
+        return;
+      }
+
+      try {
+        // Get aluno_id
+        const { data: aluno } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!aluno) {
+          setCheckingCertificate(false);
+          return;
+        }
+
+        // Check certificate status
+        const { data: progresso } = await supabase
+          .from("progresso_renach")
+          .select("prova_teorica_detran_aprovada")
+          .eq("aluno_id", aluno.id)
+          .maybeSingle();
+
+        if (!progresso?.prova_teorica_detran_aprovada) {
+          toast.info("Envie o certificado do exame teórico para acessar as aulas práticas");
+          navigate("/aluno/enviar-certificado");
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking certificate status:", error);
+      } finally {
+        setCheckingCertificate(false);
+      }
+    }
+
+    checkCertificateStatus();
+  }, [user, navigate]);
 
   // Use React Query for data fetching with caching
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
     queryFn: fetchInstructorsWithVehicles,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !checkingCertificate,
   });
 
   const toggleFilter = (filterId: string) => {
