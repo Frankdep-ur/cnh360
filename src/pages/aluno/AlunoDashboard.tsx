@@ -206,7 +206,7 @@ export default function AlunoDashboard() {
       status: getStepStatus(cursoTeoricoCompleto, exameMedicoCompleto),
       progress: cursoTeoricoCompleto ? 100 : 0, 
       link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
-      subtitle: cursoTeoricoCompleto ? "Concluído" : undefined,
+      subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
       detail: "Estudo + simulados · EAD gratuito"
     },
     { 
