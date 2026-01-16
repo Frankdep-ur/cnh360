@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { StripePaymentModal } from "@/components/payment/StripePaymentModal";
 import { PixPaymentModal } from "@/components/payment/PixPaymentModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -264,6 +265,38 @@ export default function AgendarAula() {
     lng: number;
   } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'failed'>('idle');
+
+  // Check certificate status on mount
+  useEffect(() => {
+    async function checkCertificateStatus() {
+      if (!user) return;
+
+      try {
+        const { data: aluno } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!aluno) return;
+
+        const { data: progresso } = await supabase
+          .from("progresso_renach")
+          .select("prova_teorica_detran_aprovada")
+          .eq("aluno_id", aluno.id)
+          .maybeSingle();
+
+        if (!progresso?.prova_teorica_detran_aprovada) {
+          sonnerToast.info("Envie o certificado do exame teórico para agendar aulas práticas");
+          navigate("/aluno/enviar-certificado");
+        }
+      } catch (error) {
+        console.error("Error checking certificate status:", error);
+      }
+    }
+
+    checkCertificateStatus();
+  }, [user, navigate]);
 
   useEffect(() => {
     if (id) {

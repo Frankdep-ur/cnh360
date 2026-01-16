@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 // Default availability slots for display
 const defaultAvailability = [
@@ -58,10 +60,43 @@ interface InstructorData {
 export default function InstrutorPerfil() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [instructor, setInstructor] = useState<InstructorData | null>(null);
   const [selectedDay, setSelectedDay] = useState(defaultAvailability[0].day);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  // Check certificate status on mount
+  useEffect(() => {
+    async function checkCertificateStatus() {
+      if (!user) return;
+
+      try {
+        const { data: aluno } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!aluno) return;
+
+        const { data: progresso } = await supabase
+          .from("progresso_renach")
+          .select("prova_teorica_detran_aprovada")
+          .eq("aluno_id", aluno.id)
+          .maybeSingle();
+
+        if (!progresso?.prova_teorica_detran_aprovada) {
+          toast.info("Envie o certificado do exame teórico para acessar as aulas práticas");
+          navigate("/aluno/enviar-certificado");
+        }
+      } catch (error) {
+        console.error("Error checking certificate status:", error);
+      }
+    }
+
+    checkCertificateStatus();
+  }, [user, navigate]);
 
   useEffect(() => {
     if (id) {
