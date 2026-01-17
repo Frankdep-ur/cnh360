@@ -183,12 +183,23 @@ export function useCursoTeorico() {
 
     if (aulasError) throw aulasError;
 
-    if (!alunoId) return aulas || [];
+    // Buscar alunoId diretamente se não estiver no estado (evita race condition)
+    let currentAlunoId = alunoId;
+    if (!currentAlunoId && user) {
+      const { data: alunoData } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      currentAlunoId = alunoData?.id || null;
+    }
+
+    if (!currentAlunoId) return aulas || [];
 
     const { data: progresso } = await supabase
       .from('progresso_aulas')
       .select('*')
-      .eq('aluno_id', alunoId);
+      .eq('aluno_id', currentAlunoId);
 
     const progressoMap = new Map(
       (progresso || []).map(p => [p.aula_id, p])
