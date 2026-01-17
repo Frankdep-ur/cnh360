@@ -225,7 +225,6 @@ export default function AlunoDashboard() {
       icon: Trophy, 
       status: getStepStatus(examePraticoAprovado, aulasPraticasCompletas),
       progress: examePraticoAprovado ? 100 : 0, 
-      link: aulasPraticasCompletas ? "/aluno/exame-pratico" : undefined,
       detail: "Prova prática de direção veicular"
     },
     { 
