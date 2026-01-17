@@ -248,26 +248,33 @@ export function useCursoTeorico() {
 
   // Iniciar aula (registrar que começou)
   const iniciarAula = async (aulaId: string) => {
-    if (!alunoId) {
+    // Buscar alunoId diretamente se não estiver no estado (evita race condition)
+    let currentAlunoId = alunoId;
+    if (!currentAlunoId && user) {
+      const { data: alunoData } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      currentAlunoId = alunoData?.id || null;
+    }
+
+    if (!currentAlunoId) {
       toast.error('Faça login para acompanhar seu progresso');
       return;
     }
 
-    const { data: existente } = await supabase
+    // Usar upsert para garantir que o registro seja criado
+    await supabase
       .from('progresso_aulas')
-      .select('id')
-      .eq('aluno_id', alunoId)
-      .eq('aula_id', aulaId)
-      .single();
-
-    if (!existente) {
-      await supabase
-        .from('progresso_aulas')
-        .insert({
-          aluno_id: alunoId,
-          aula_id: aulaId
-        });
-    }
+      .upsert({
+        aluno_id: currentAlunoId,
+        aula_id: aulaId,
+        iniciada_em: new Date().toISOString()
+      }, {
+        onConflict: 'aluno_id,aula_id',
+        ignoreDuplicates: true
+      });
   };
 
   // Registrar tempo visualizado
@@ -283,9 +290,20 @@ export function useCursoTeorico() {
 
   // Enviar resposta do quiz
   const enviarQuiz = async (aulaId: string, respostas: { perguntaId: string; resposta: string }[]) => {
-    if (!alunoId) {
+    // Buscar alunoId diretamente se não estiver no estado (evita race condition)
+    let currentAlunoId = alunoId;
+    if (!currentAlunoId && user) {
+      const { data: alunoData } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      currentAlunoId = alunoData?.id || null;
+    }
+
+    if (!currentAlunoId) {
       toast.error('Faça login para responder o quiz');
-      return { aprovado: false, nota: 0 };
+      return { aprovado: false, nota: 0, acertos: 0, total: 0 };
     }
 
     // Buscar respostas corretas
@@ -295,7 +313,7 @@ export function useCursoTeorico() {
       .eq('aula_id', aulaId);
 
     if (!perguntas || perguntas.length === 0) {
-      return { aprovado: true, nota: 100 };
+      return { aprovado: true, nota: 100, acertos: 0, total: 0 };
     }
 
     // Calcular nota
@@ -314,23 +332,26 @@ export function useCursoTeorico() {
     const { data: progressoAtual } = await supabase
       .from('progresso_aulas')
       .select('tentativas_quiz')
-      .eq('aluno_id', alunoId)
+      .eq('aluno_id', currentAlunoId)
       .eq('aula_id', aulaId)
-      .single();
+      .maybeSingle();
 
     const tentativas = (progressoAtual?.tentativas_quiz || 0) + 1;
 
-    // Atualizar progresso
+    // UPSERT em vez de UPDATE - garante que o registro seja criado se não existir
     await supabase
       .from('progresso_aulas')
-      .update({
+      .upsert({
+        aluno_id: currentAlunoId,
+        aula_id: aulaId,
         quiz_nota: nota,
         quiz_aprovado: aprovado,
         tentativas_quiz: tentativas,
-        concluida_em: aprovado ? new Date().toISOString() : null
-      })
-      .eq('aluno_id', alunoId)
-      .eq('aula_id', aulaId);
+        concluida_em: aprovado ? new Date().toISOString() : null,
+        iniciada_em: new Date().toISOString()
+      }, {
+        onConflict: 'aluno_id,aula_id'
+      });
 
     // Recarregar módulos para atualizar progresso geral
     if (aprovado) {
