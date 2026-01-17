@@ -20,7 +20,13 @@ export default function Index() {
   }, [authLoading]);
 
   const handleLogout = async () => {
-    await signOut();
+    try {
+      await signOut();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Erro ao sair:", error);
+      window.location.href = "/";
+    }
   };
 
   const userTypes = [

@@ -106,8 +106,15 @@ export default function AutoescolaPerfil() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/");
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+      window.location.reload();
+    } catch (error) {
+      console.error("Erro ao sair:", error);
+      navigate("/", { replace: true });
+      window.location.reload();
+    }
   };
 
   // Check if autoescola is verified
