@@ -371,7 +371,7 @@ export default function AlunoDashboard() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-foreground">{step.name}</h4>
+                        <h4 className="font-semibold text-foreground">{step.name}</h4>
                         {step.subtitle ? (
                           <span className={cn(
                             "text-xs px-2 py-0.5 rounded-full font-semibold",
