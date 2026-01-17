@@ -15,8 +15,8 @@ export const questoesSimulado: QuestaoSimulado[] = [
     categoria: "Legislação de Trânsito",
     pergunta: "Qual é a velocidade máxima permitida em vias locais urbanas?",
     opcoes: ["30 km/h", "40 km/h", "60 km/h", "80 km/h"],
-    respostaCorreta: 1,
-    explicacao: "Conforme o CTB, a velocidade máxima em vias locais é de 30 km/h, salvo sinalização em contrário.",
+    respostaCorreta: 0,
+    explicacao: "Em vias locais urbanas, a velocidade máxima permitida é de 30 km/h, salvo sinalização em contrário. Conforme Art. 61, I, 'b' do CTB.",
     baseLegal: "Art. 61, I, b do CTB"
   },
   {
