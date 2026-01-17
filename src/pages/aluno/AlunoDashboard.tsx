@@ -210,15 +210,16 @@ export default function AlunoDashboard() {
       subtitle: "Em andamento",
       detail: "Estudo + simulados · EAD gratuito"
     },
-    { 
-      id: 3, 
-      name: "Aulas Práticas", 
-      icon: Car, 
-      status: "locked" as const,
-      progress: Math.round((practicalHours / minRequiredHours) * 100), 
-      detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
-      onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined
-    },
+{ 
+          id: 3, 
+          name: "Aulas Práticas", 
+          icon: Car, 
+          status: "locked" as const,
+          progress: Math.round((practicalHours / minRequiredHours) * 100), 
+          showGreenIcon: true,
+          detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
+          onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined
+        },
     { 
       id: 4, 
       name: "Exame Prático", 
