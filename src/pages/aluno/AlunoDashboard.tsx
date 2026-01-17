@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useCursoTeorico } from "@/hooks/useCursoTeorico";
 import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -55,6 +56,7 @@ export default function AlunoDashboard() {
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(true);
   const { user } = useAuth();
+  const { progressoGeral } = useCursoTeorico();
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
@@ -163,7 +165,7 @@ export default function AlunoDashboard() {
   
   // Status derivados do progresso real
   const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
-  const cursoTeoricoCompleto = !!progressoRenach?.curso_teorico_conclusao;
+  const cursoTeoricoCompleto = progressoGeral === 100 || !!progressoRenach?.curso_teorico_conclusao;
   const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
   const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
   
@@ -205,7 +207,7 @@ export default function AlunoDashboard() {
       name: "Preparação Teórica (EAD)", 
       icon: BookOpen, 
       status: "current" as const,
-      progress: cursoTeoricoCompleto ? 100 : 0, 
+      progress: progressoGeral, 
       link: "/aluno/curso-teorico",
       subtitle: "Em andamento",
       detail: "Estudo + simulados · EAD gratuito"
@@ -403,9 +405,13 @@ export default function AlunoDashboard() {
                       <ChevronRight className="w-5 h-5 text-muted-foreground" />
                     )}
                   </div>
-                  {/* Barra de progresso apenas para Aulas Práticas */}
-                  {step.name === "Aulas Práticas" && (isCurrent || isCompleted) && (
+                  {/* Barra de progresso para Aulas Práticas e Preparação Teórica */}
+                  {(step.name === "Aulas Práticas" || step.name === "Preparação Teórica (EAD)") && (isCurrent || isCompleted) && (
                     <div className="mt-3 pt-3 border-t border-border">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Progresso</span>
+                        <span className="font-medium text-foreground">{Math.min(step.progress, 100)}%</span>
+                      </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500 bg-primary"
