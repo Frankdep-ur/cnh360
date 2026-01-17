@@ -197,6 +197,7 @@ export default function AlunoDashboard() {
       icon: Stethoscope, 
       status: "locked" as const,
       progress: 0,
+      showGreenIcon: true,
       detail: "Avaliação médica e psicológica obrigatória"
     },
     { 
@@ -224,6 +225,7 @@ export default function AlunoDashboard() {
       icon: Trophy, 
       status: "locked" as const,
       progress: 0, 
+      showGreenIcon: true,
       detail: "Prova prática de direção veicular"
     },
     { 
@@ -360,9 +362,9 @@ export default function AlunoDashboard() {
                   <div className="flex items-center gap-4">
                     <div className={cn(
                       "w-12 h-12 rounded-xl flex items-center justify-center",
-                      isCompleted && "bg-primary text-primary-foreground",
-                      isCurrent && "bg-primary/10 text-primary",
-                      isLocked && "bg-muted text-muted-foreground"
+                      step.showGreenIcon && "bg-primary text-primary-foreground",
+                      !step.showGreenIcon && isCurrent && "bg-primary/10 text-primary",
+                      !step.showGreenIcon && isLocked && "bg-muted text-muted-foreground"
                     )}>
                       <Icon className="w-6 h-6" />
                     </div>
