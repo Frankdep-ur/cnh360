@@ -373,9 +373,9 @@ export default function AlunoDashboard() {
                         <h4 className="font-medium text-foreground">{step.name}</h4>
                         {step.subtitle ? (
                           <span className={cn(
-                            "text-xs px-2 py-0.5 rounded-full",
+                            "text-xs px-2 py-0.5 rounded-full font-semibold",
                             isCompleted && "bg-primary/10 text-primary",
-                            isCurrent && "bg-primary text-primary-foreground"
+                            isCurrent && "bg-green-500 text-white"
                           )}>
                             {step.subtitle}
                           </span>
@@ -387,7 +387,7 @@ export default function AlunoDashboard() {
                               </span>
                             )}
                             {isCurrent && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                              <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-green-500 text-white">
                                 Em andamento
                               </span>
                             )}
