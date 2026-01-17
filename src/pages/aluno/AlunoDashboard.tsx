@@ -161,7 +161,7 @@ export default function AlunoDashboard() {
     }
   }, [user]);
   
-  const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2024
+  const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2025
   
   // Status derivados do progresso real
   const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
@@ -219,7 +219,7 @@ export default function AlunoDashboard() {
           status: "locked" as const,
           progress: Math.round((practicalHours / minRequiredHours) * 100), 
           showGreenIcon: true,
-          detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
+          detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2025)`, 
           onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined
         },
     { 
