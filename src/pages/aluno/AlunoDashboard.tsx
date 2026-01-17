@@ -195,43 +195,42 @@ export default function AlunoDashboard() {
       id: 1, 
       name: "Exame Médico/Psicológico", 
       icon: Stethoscope, 
-      status: exameMedicoCompleto ? "completed" : "current" as const,
-      progress: exameMedicoCompleto ? 100 : 0,
+      status: "locked" as const,
+      progress: 0,
       detail: "Avaliação médica e psicológica obrigatória"
     },
     { 
       id: 2, 
       name: "Preparação Teórica (EAD)", 
       icon: BookOpen, 
-      status: getStepStatus(cursoTeoricoCompleto, exameMedicoCompleto),
+      status: "current" as const,
       progress: cursoTeoricoCompleto ? 100 : 0, 
-      link: exameMedicoCompleto ? "/aluno/curso-teorico" : undefined,
-      subtitle: cursoTeoricoCompleto ? "Concluído" : (exameMedicoCompleto ? "Concluir agora" : undefined),
+      link: "/aluno/curso-teorico",
+      subtitle: "Em andamento",
       detail: "Estudo + simulados · EAD gratuito"
     },
     { 
       id: 3, 
       name: "Aulas Práticas", 
       icon: Car, 
-      status: getStepStatus(aulasPraticasCompletas, cursoTeoricoCompleto),
+      status: "locked" as const,
       progress: Math.round((practicalHours / minRequiredHours) * 100), 
-      subtitle: cursoTeoricoCompleto && !aulasPraticasCompletas ? "Em andamento" : undefined,
       detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2024)`, 
-      onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined // Usa onClick em vez de link
+      onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined
     },
     { 
       id: 4, 
       name: "Exame Prático", 
       icon: Trophy, 
-      status: getStepStatus(examePraticoAprovado, aulasPraticasCompletas),
-      progress: examePraticoAprovado ? 100 : 0, 
+      status: "locked" as const,
+      progress: 0, 
       detail: "Prova prática de direção veicular"
     },
     { 
       id: 5, 
       name: "Permissão para Dirigir (PPD)", 
       icon: FileText, 
-      status: getStepStatus(false, examePraticoAprovado),
+      status: "current" as const,
       progress: 0,
       detail: "Válida por 12 meses após aprovação"
     },
@@ -345,9 +344,9 @@ export default function AlunoDashboard() {
           <div className="space-y-3">
             {steps.map((step, index) => {
               const Icon = step.icon;
-              const isCompleted = step.status === "completed";
               const isCurrent = step.status === "current";
               const isLocked = step.status === "locked";
+              const isCompleted = false; // Não mostramos "concluído" visualmente
 
               const content = (
                 <div
