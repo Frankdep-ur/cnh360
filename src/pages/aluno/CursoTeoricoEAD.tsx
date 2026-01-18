@@ -4,7 +4,6 @@ import {
   ArrowLeft, 
   BookOpen, 
   FileText, 
-  
   CheckCircle2, 
   Lock,
   Clock,
@@ -15,7 +14,9 @@ import {
   Wrench,
   Scale,
   Info,
-  ExternalLink
+  ExternalLink,
+  TrafficCone,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -36,12 +37,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
 const MODULOS_ICONS: Record<number, React.ElementType> = {
   1: Scale,
   2: Car,
   3: Heart,
   4: Leaf,
   5: Wrench,
+  6: TrafficCone,
+  7: AlertTriangle,
 };
 
 const DETRAN_PROVA_URL = "https://www.detran.sp.gov.br/detransp/pb/servico/habilitacao/_iniciar_processo_primeira_habilitacao?id=carta_de_servico_iniciar_processo_primeira_habilitacao";
