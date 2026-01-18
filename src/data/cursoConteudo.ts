@@ -1,5 +1,5 @@
 // Dados estáticos para UI - conteúdo real vem do banco de dados
-import { Scale, Shield, Heart, Leaf, Wrench, LucideIcon } from 'lucide-react';
+import { Scale, Shield, Heart, Leaf, Wrench, TrafficCone, AlertTriangle, LucideIcon } from 'lucide-react';
 
 export interface ModuloInfo {
   id: number;
@@ -18,8 +18,8 @@ export const MODULOS_INFO: ModuloInfo[] = [
     descricao: 'CTB, SNT, sinalização, infrações e penalidades',
     icone: Scale,
     cor: '#00c853',
-    totalAulas: 12,
-    duracaoEstimada: '2h30'
+    totalAulas: 20,
+    duracaoEstimada: '3h20'
   },
   {
     id: 2,
@@ -27,8 +27,8 @@ export const MODULOS_INFO: ModuloInfo[] = [
     descricao: 'Condução segura, condições adversas, prevenção',
     icone: Shield,
     cor: '#2196f3',
-    totalAulas: 10,
-    duracaoEstimada: '2h'
+    totalAulas: 15,
+    duracaoEstimada: '3h'
   },
   {
     id: 3,
@@ -36,8 +36,8 @@ export const MODULOS_INFO: ModuloInfo[] = [
     descricao: 'Emergências, sinalização, socorro às vítimas',
     icone: Heart,
     cor: '#f44336',
-    totalAulas: 8,
-    duracaoEstimada: '1h30'
+    totalAulas: 12,
+    duracaoEstimada: '2h27'
   },
   {
     id: 4,
@@ -45,8 +45,8 @@ export const MODULOS_INFO: ModuloInfo[] = [
     descricao: 'Poluição, cidadania, relações interpessoais',
     icone: Leaf,
     cor: '#4caf50',
-    totalAulas: 6,
-    duracaoEstimada: '1h'
+    totalAulas: 12,
+    duracaoEstimada: '2h12'
   },
   {
     id: 5,
@@ -54,10 +54,28 @@ export const MODULOS_INFO: ModuloInfo[] = [
     descricao: 'Motor, freios, suspensão, manutenção',
     icone: Wrench,
     cor: '#ff9800',
-    totalAulas: 5,
-    duracaoEstimada: '45min'
+    totalAulas: 11,
+    duracaoEstimada: '2h14'
+  },
+  {
+    id: 6,
+    titulo: 'Sinalização Avançada',
+    descricao: 'Placas especiais, obras, dispositivos e interpretação',
+    icone: TrafficCone,
+    cor: '#9c27b0',
+    totalAulas: 8,
+    duracaoEstimada: '1h36'
+  },
+  {
+    id: 7,
+    titulo: 'Situações Especiais de Direção',
+    descricao: 'Condições adversas, rotatórias, reboque e carga',
+    icone: AlertTriangle,
+    cor: '#607d8b',
+    totalAulas: 6,
+    duracaoEstimada: '1h12'
   }
 ];
 
-export const TOTAL_AULAS = 41;
+export const TOTAL_AULAS = 84;
 export const NOTA_MINIMA_APROVACAO = 70;
