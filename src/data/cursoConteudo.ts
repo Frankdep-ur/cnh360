@@ -11,6 +11,7 @@ export interface ModuloInfo {
   duracaoEstimada: string;
 }
 
+// Ordem pedagógica ideal: Legislação → Sinalização → Defensiva → Mecânica → Situações Especiais → Primeiros Socorros → Meio Ambiente
 export const MODULOS_INFO: ModuloInfo[] = [
   {
     id: 1,
@@ -19,46 +20,10 @@ export const MODULOS_INFO: ModuloInfo[] = [
     icone: Scale,
     cor: '#00c853',
     totalAulas: 20,
-    duracaoEstimada: '3h20'
+    duracaoEstimada: '4h11'
   },
   {
     id: 2,
-    titulo: 'Direção Defensiva',
-    descricao: 'Condução segura, condições adversas, prevenção',
-    icone: Shield,
-    cor: '#2196f3',
-    totalAulas: 15,
-    duracaoEstimada: '3h'
-  },
-  {
-    id: 3,
-    titulo: 'Primeiros Socorros',
-    descricao: 'Emergências, sinalização, socorro às vítimas',
-    icone: Heart,
-    cor: '#f44336',
-    totalAulas: 12,
-    duracaoEstimada: '2h27'
-  },
-  {
-    id: 4,
-    titulo: 'Meio Ambiente e Cidadania',
-    descricao: 'Poluição, cidadania, relações interpessoais',
-    icone: Leaf,
-    cor: '#4caf50',
-    totalAulas: 12,
-    duracaoEstimada: '2h12'
-  },
-  {
-    id: 5,
-    titulo: 'Mecânica Básica',
-    descricao: 'Motor, freios, suspensão, manutenção',
-    icone: Wrench,
-    cor: '#ff9800',
-    totalAulas: 11,
-    duracaoEstimada: '2h14'
-  },
-  {
-    id: 6,
     titulo: 'Sinalização Avançada',
     descricao: 'Placas especiais, obras, dispositivos e interpretação',
     icone: TrafficCone,
@@ -67,13 +32,49 @@ export const MODULOS_INFO: ModuloInfo[] = [
     duracaoEstimada: '1h36'
   },
   {
-    id: 7,
+    id: 3,
+    titulo: 'Direção Defensiva',
+    descricao: 'Condução segura, condições adversas, prevenção',
+    icone: Shield,
+    cor: '#2196f3',
+    totalAulas: 15,
+    duracaoEstimada: '3h'
+  },
+  {
+    id: 4,
+    titulo: 'Mecânica Básica',
+    descricao: 'Motor, freios, suspensão, manutenção',
+    icone: Wrench,
+    cor: '#ff9800',
+    totalAulas: 11,
+    duracaoEstimada: '2h09'
+  },
+  {
+    id: 5,
     titulo: 'Situações Especiais de Direção',
     descricao: 'Condições adversas, rotatórias, reboque e carga',
     icone: AlertTriangle,
     cor: '#607d8b',
     totalAulas: 6,
     duracaoEstimada: '1h12'
+  },
+  {
+    id: 6,
+    titulo: 'Primeiros Socorros',
+    descricao: 'Emergências, sinalização, socorro às vítimas',
+    icone: Heart,
+    cor: '#f44336',
+    totalAulas: 12,
+    duracaoEstimada: '2h21'
+  },
+  {
+    id: 7,
+    titulo: 'Meio Ambiente e Cidadania',
+    descricao: 'Poluição, cidadania, relações interpessoais',
+    icone: Leaf,
+    cor: '#4caf50',
+    totalAulas: 12,
+    duracaoEstimada: '2h06'
   }
 ];
 
