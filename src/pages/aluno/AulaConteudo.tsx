@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, ExternalLink, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -538,6 +539,10 @@ export default function AulaConteudo() {
                         value={respostas[pergunta.id] || ''}
                         onValueChange={(value) => {
                           if (!quizEnviado) {
+                            // Vibração tátil em dispositivos móveis
+                            if (navigator.vibrate) {
+                              navigator.vibrate(10);
+                            }
                             setRespostas(prev => ({ ...prev, [pergunta.id]: value }));
                           }
                         }}
@@ -557,27 +562,52 @@ export default function AulaConteudo() {
                           }
                           
                           return (
-                            <div 
+                            <motion.div 
                               key={opcao.letra} 
-                              className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${optionClass}`}
+                              className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${optionClass} ${
+                                isSelected && !quizEnviado ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : ''
+                              }`}
+                              initial={false}
+                              animate={isSelected && !mostrarExplicacoes ? { 
+                                scale: [1, 1.02, 1],
+                                transition: { duration: 0.2 }
+                              } : {}}
+                              whileTap={!quizEnviado ? { scale: 0.98 } : {}}
                             >
                               <RadioGroupItem 
                                 value={opcao.letra} 
                                 id={`${pergunta.id}-${opcao.letra}`}
+                                className="mt-0.5"
                               />
                               <Label 
                                 htmlFor={`${pergunta.id}-${opcao.letra}`}
-                                className="flex-1 cursor-pointer text-sm"
+                                className="flex-1 cursor-pointer text-sm leading-relaxed"
                               >
-                                <span className="font-medium">{opcao.letra})</span> {opcao.texto}
+                                <span className="font-semibold text-primary">{opcao.letra})</span> {opcao.texto}
                               </Label>
-                              {mostrarExplicacoes && isCorrect && (
-                                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                              )}
-                              {mostrarExplicacoes && isSelected && !isCorrect && (
-                                <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                              )}
-                            </div>
+                              <AnimatePresence>
+                                {mostrarExplicacoes && isCorrect && (
+                                  <motion.div
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                  >
+                                    <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                  </motion.div>
+                                )}
+                                {mostrarExplicacoes && isSelected && !isCorrect && (
+                                  <motion.div
+                                    initial={{ scale: 0, opacity: 0, rotate: -90 }}
+                                    animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                  >
+                                    <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </motion.div>
                           );
                         })}
                       </RadioGroup>
