@@ -171,7 +171,7 @@ export function PremiumActivationModal({
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            🔒 Cobrança segura via Stripe
+            🔒 Cobrança segura via Pagar.me
           </p>
         </div>
       </DialogContent>
