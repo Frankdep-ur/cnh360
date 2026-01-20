@@ -5,6 +5,9 @@ export const PAGARME_PUBLIC_KEY = import.meta.env.VITE_PAGARME_PUBLIC_KEY || "";
 // API base URL
 export const PAGARME_API_URL = "https://api.pagar.me/core/v5";
 
+// Payment discount for PIX
+export const PIX_DISCOUNT_PERCENTAGE = 5; // 5% discount for PIX payments
+
 // Checkout configuration
 export const PAGARME_CHECKOUT_CONFIG = {
   expiresIn: 3600, // 1 hour
