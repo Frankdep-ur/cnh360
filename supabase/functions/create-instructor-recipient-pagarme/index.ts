@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +9,30 @@ const corsHeaders = {
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-RECIPIENT] ${step}${detailsStr}`);
+};
+
+// Lista de bancos suportados pela Pagar.me para saques automáticos
+// Bancos digitais como PicPay (380), Stone (197), Neon (655) NÃO são suportados
+const SUPPORTED_BANKS = [
+  "001", // Banco do Brasil
+  "033", // Santander
+  "104", // Caixa Econômica
+  "237", // Bradesco
+  "341", // Itaú
+  "260", // Nubank
+  "077", // Inter
+  "336", // C6 Bank
+  "756", // Sicoob
+  "748", // Sicredi
+  "422", // Safra
+  "212", // Banco Original
+  "290", // PagBank
+];
+
+const UNSUPPORTED_BANKS: Record<string, string> = {
+  "380": "PicPay",
+  "197": "Stone",
+  "655": "Neon",
 };
 
 serve(async (req) => {
@@ -32,8 +56,13 @@ serve(async (req) => {
     const pagarmeApiKey = Deno.env.get("PAGARME_API_KEY");
 
     if (!pagarmeApiKey) {
+      logStep("PAGARME_API_KEY not found in environment");
       throw new Error("PAGARME_API_KEY not configured");
     }
+
+    // Log key format (apenas primeiros caracteres para debug)
+    const keyPreview = pagarmeApiKey.substring(0, 10) + "...";
+    logStep("API Key loaded", { keyPreview, keyLength: pagarmeApiKey.length });
 
     // Verify user
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
@@ -44,13 +73,21 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    logStep("User authenticated", { userId: user.id });
+    logStep("User authenticated", { userId: user.id, email: user.email });
 
     // Parse request body
     const body = await req.json();
+    logStep("Request body received", { 
+      type: body.type,
+      hasBankCode: !!body.bankCode,
+      bankCode: body.bankCode,
+      hasAgencia: !!body.agencia,
+      hasConta: !!body.conta
+    });
+
     const {
-      type, // "individual" or "company"
-      documentNumber, // CPF or CNPJ
+      type,
+      documentNumber,
       name,
       email,
       bankCode,
@@ -58,8 +95,7 @@ serve(async (req) => {
       agenciaDv,
       conta,
       contaDv,
-      accountType, // "checking" or "savings"
-      pixKey, // NOTA: PIX não é suportado para transferências automáticas na Pagar.me V5
+      accountType,
     } = body;
 
     // Validate required fields
@@ -67,33 +103,42 @@ serve(async (req) => {
       throw new Error("Preencha todos os campos obrigatórios: tipo, documento, nome e e-mail");
     }
 
-    // CRÍTICO: Pagar.me V5 NÃO suporta chave PIX em default_bank_account
-    // Transferências automáticas só funcionam com conta bancária real
     if (!bankCode || !agencia || !conta || !accountType) {
-      if (pixKey) {
-        throw new Error("A Pagar.me não suporta saques automáticos via chave PIX. Por favor, cadastre os dados da sua conta bancária (banco, agência e conta) para receber seus pagamentos automaticamente.");
-      }
       throw new Error("Dados bancários incompletos. Informe banco, agência, conta e tipo de conta.");
     }
 
-    // Validate bank code format
-    const cleanBankCode = bankCode.replace(/\D/g, "");
-    if (!cleanBankCode || cleanBankCode.length < 1 || cleanBankCode.length > 3) {
-      throw new Error("Código do banco inválido");
+    // Validate bank code
+    const cleanBankCode = bankCode.replace(/\D/g, "").padStart(3, "0");
+    
+    // Check if bank is explicitly unsupported
+    if (UNSUPPORTED_BANKS[cleanBankCode]) {
+      throw new Error(`O banco ${UNSUPPORTED_BANKS[cleanBankCode]} (${cleanBankCode}) não é suportado para saques automáticos. Por favor, escolha um banco tradicional como Itaú, Bradesco, Nubank, etc.`);
     }
 
     logStep("Building recipient payload", { 
       type, 
       documentNumber: documentNumber.slice(0, 4) + "***",
       bankCode: cleanBankCode,
-      hasPixKey: !!pixKey 
+      agencia,
+      accountType
     });
 
-    // Build recipient payload - SEMPRE com conta bancária real
-    const recipientPayload: any = {
+    // Clean document number
+    const cleanDocument = documentNumber.replace(/\D/g, "");
+    
+    // Validate CPF/CNPJ length
+    if (type === "individual" && cleanDocument.length !== 11) {
+      throw new Error("CPF deve ter 11 dígitos");
+    }
+    if (type === "company" && cleanDocument.length !== 14) {
+      throw new Error("CNPJ deve ter 14 dígitos");
+    }
+
+    // Build recipient payload for Pagar.me V5
+    const recipientPayload = {
       register_information: {
-        type: type, // "individual" or "company"
-        document_number: documentNumber.replace(/\D/g, ""),
+        type: type,
+        document_number: cleanDocument,
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone_numbers: [
@@ -116,23 +161,32 @@ serve(async (req) => {
         delay: null
       },
       code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`,
-      // Conta bancária REAL obrigatória para transferências automáticas
       default_bank_account: {
         holder_name: name.trim(),
         holder_type: type,
-        holder_document: documentNumber.replace(/\D/g, ""),
-        bank: cleanBankCode.padStart(3, "0"),
+        holder_document: cleanDocument,
+        bank: cleanBankCode,
         branch_number: agencia.replace(/\D/g, ""),
         branch_check_digit: agenciaDv?.replace(/\D/g, "") || "",
         account_number: conta.replace(/\D/g, ""),
         account_check_digit: contaDv || "",
-        type: accountType // "checking" or "savings"
+        type: accountType
       }
     };
 
-    logStep("Creating recipient in Pagar.me");
+    logStep("Recipient payload built", {
+      code: recipientPayload.code,
+      bankAccount: {
+        bank: recipientPayload.default_bank_account.bank,
+        branch: recipientPayload.default_bank_account.branch_number,
+        account: recipientPayload.default_bank_account.account_number,
+        type: recipientPayload.default_bank_account.type
+      }
+    });
 
-    // Create recipient in Pagar.me
+    logStep("Calling Pagar.me API");
+
+    // Create recipient in Pagar.me V5
     const pagarmeResponse = await fetch("https://api.pagar.me/core/v5/recipients", {
       method: "POST",
       headers: {
@@ -142,23 +196,56 @@ serve(async (req) => {
       body: JSON.stringify(recipientPayload),
     });
 
-    const pagarmeData = await pagarmeResponse.json();
+    const responseStatus = pagarmeResponse.status;
+    const responseText = await pagarmeResponse.text();
+    
+    logStep("Pagar.me response received", { 
+      status: responseStatus,
+      statusText: pagarmeResponse.statusText
+    });
+
+    let pagarmeData: any;
+    try {
+      pagarmeData = JSON.parse(responseText);
+    } catch {
+      logStep("Failed to parse response as JSON", { responseText: responseText.slice(0, 500) });
+      throw new Error("Resposta inválida da Pagar.me");
+    }
 
     if (!pagarmeResponse.ok) {
-      logStep("Pagar.me error", pagarmeData);
+      logStep("Pagar.me API error", { 
+        status: responseStatus,
+        message: pagarmeData.message,
+        errors: pagarmeData.errors,
+        fullResponse: pagarmeData
+      });
       
       // Map common errors to user-friendly messages
       let errorMessage = "Erro ao criar recebedor na Pagar.me";
       
       if (pagarmeData.message) {
-        if (pagarmeData.message.includes("document")) {
+        const msg = pagarmeData.message.toLowerCase();
+        
+        if (msg.includes("authorization") || msg.includes("denied") || msg.includes("unauthorized")) {
+          errorMessage = "Erro de autenticação com a Pagar.me. Entre em contato com o suporte.";
+          logStep("Auth error - API Key may be invalid or expired");
+        } else if (msg.includes("document")) {
           errorMessage = "CPF/CNPJ inválido ou já cadastrado";
-        } else if (pagarmeData.message.includes("bank")) {
-          errorMessage = "Dados bancários inválidos";
-        } else if (pagarmeData.message.includes("email")) {
+        } else if (msg.includes("bank") || msg.includes("branch") || msg.includes("account")) {
+          errorMessage = "Dados bancários inválidos. Verifique banco, agência e conta.";
+        } else if (msg.includes("email")) {
           errorMessage = "E-mail inválido";
         } else {
           errorMessage = pagarmeData.message;
+        }
+      }
+      
+      // Check for specific errors array
+      if (pagarmeData.errors && Array.isArray(pagarmeData.errors)) {
+        const errorDetails = pagarmeData.errors.map((e: any) => e.message || e.description).join("; ");
+        logStep("Error details from API", { errorDetails });
+        if (errorDetails) {
+          errorMessage = errorDetails;
         }
       }
       
@@ -166,7 +253,7 @@ serve(async (req) => {
     }
 
     const recipientId = pagarmeData.id;
-    logStep("Recipient created", { recipientId });
+    logStep("Recipient created successfully", { recipientId, status: pagarmeData.status });
 
     // Update instructor with recipient_id
     const supabaseService = createClient(supabaseUrl, supabaseServiceKey);
@@ -177,11 +264,11 @@ serve(async (req) => {
       .eq("user_id", user.id);
 
     if (updateError) {
-      logStep("Failed to save recipient_id", { error: updateError.message });
-      throw new Error("Recebedor criado mas falhou ao salvar no banco");
+      logStep("Failed to save recipient_id to database", { error: updateError.message });
+      throw new Error("Recebedor criado mas falhou ao salvar no banco de dados");
     }
 
-    logStep("Recipient ID saved to database");
+    logStep("Recipient ID saved to database successfully");
 
     return new Response(
       JSON.stringify({
@@ -196,7 +283,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    logStep("Error", { message: error.message });
+    logStep("Final error", { message: error.message, stack: error.stack?.slice(0, 200) });
     return new Response(
       JSON.stringify({ error: error.message }),
       {
