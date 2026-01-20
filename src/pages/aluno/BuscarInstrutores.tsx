@@ -64,11 +64,13 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
   const instructorIds = cacheData.map((inst) => inst.id);
 
   // Fetch all vehicles at once (single query instead of N queries)
-  const { data: allVehicles } = await supabase
+  const { data: allVehicles, error: vehiclesError } = await supabase
     .from("veiculos")
     .select("instrutor_id, modelo, transmissao")
     .in("instrutor_id", instructorIds)
     .eq("ativo", true);
+
+  console.log("Vehicles fetched:", allVehicles, "Error:", vehiclesError);
 
   // Create a map for quick vehicle lookup
   const vehicleMap = new Map<string, { modelo: string; transmissao: string }>();
@@ -83,7 +85,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
     const veiculo = vehicleMap.get(inst.id);
     const carType = veiculo
       ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
-      : "Veículo não informado";
+      : "Veículo a combinar";
 
     return {
       id: inst.id,
@@ -142,7 +144,7 @@ export default function BuscarInstrutores() {
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
     queryFn: fetchInstructorsWithVehicles,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // Force fresh fetch to get vehicle data with new RLS policy
     enabled: true,
   });
 
