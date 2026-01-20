@@ -59,21 +59,37 @@ serve(async (req) => {
       conta,
       contaDv,
       accountType, // "checking" or "savings"
-      pixKey, // Optional - if provided, use PIX instead of bank account
+      pixKey, // NOTA: PIX não é suportado para transferências automáticas na Pagar.me V5
     } = body;
 
     // Validate required fields
     if (!type || !documentNumber || !name || !email) {
-      throw new Error("Missing required fields: type, documentNumber, name, email");
+      throw new Error("Preencha todos os campos obrigatórios: tipo, documento, nome e e-mail");
     }
 
-    if (!pixKey && (!bankCode || !agencia || !conta || !accountType)) {
-      throw new Error("Either pixKey or bank account details are required");
+    // CRÍTICO: Pagar.me V5 NÃO suporta chave PIX em default_bank_account
+    // Transferências automáticas só funcionam com conta bancária real
+    if (!bankCode || !agencia || !conta || !accountType) {
+      if (pixKey) {
+        throw new Error("A Pagar.me não suporta saques automáticos via chave PIX. Por favor, cadastre os dados da sua conta bancária (banco, agência e conta) para receber seus pagamentos automaticamente.");
+      }
+      throw new Error("Dados bancários incompletos. Informe banco, agência, conta e tipo de conta.");
     }
 
-    logStep("Building recipient payload", { type, documentNumber: documentNumber.slice(0, 4) + "***" });
+    // Validate bank code format
+    const cleanBankCode = bankCode.replace(/\D/g, "");
+    if (!cleanBankCode || cleanBankCode.length < 1 || cleanBankCode.length > 3) {
+      throw new Error("Código do banco inválido");
+    }
 
-    // Build recipient payload
+    logStep("Building recipient payload", { 
+      type, 
+      documentNumber: documentNumber.slice(0, 4) + "***",
+      bankCode: cleanBankCode,
+      hasPixKey: !!pixKey 
+    });
+
+    // Build recipient payload - SEMPRE com conta bancária real
     const recipientPayload: any = {
       register_information: {
         type: type, // "individual" or "company"
@@ -99,38 +115,20 @@ serve(async (req) => {
         volume_percentage: 100,
         delay: null
       },
-      code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`
-    };
-
-    // Add bank account or PIX
-    if (pixKey) {
-      recipientPayload.default_bank_account = {
+      code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`,
+      // Conta bancária REAL obrigatória para transferências automáticas
+      default_bank_account: {
         holder_name: name.trim(),
         holder_type: type,
         holder_document: documentNumber.replace(/\D/g, ""),
-        bank: "000", // PIX uses special bank code
-        branch_number: "0001",
-        branch_check_digit: "0",
-        account_number: "0000000",
-        account_check_digit: "0",
-        type: "checking",
-        metadata: {
-          pix_key: pixKey
-        }
-      };
-    } else {
-      recipientPayload.default_bank_account = {
-        holder_name: name.trim(),
-        holder_type: type,
-        holder_document: documentNumber.replace(/\D/g, ""),
-        bank: bankCode.padStart(3, "0"),
-        branch_number: agencia,
-        branch_check_digit: agenciaDv || "",
-        account_number: conta,
+        bank: cleanBankCode.padStart(3, "0"),
+        branch_number: agencia.replace(/\D/g, ""),
+        branch_check_digit: agenciaDv?.replace(/\D/g, "") || "",
+        account_number: conta.replace(/\D/g, ""),
         account_check_digit: contaDv || "",
         type: accountType // "checking" or "savings"
-      };
-    }
+      }
+    };
 
     logStep("Creating recipient in Pagar.me");
 
