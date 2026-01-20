@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.create-instructor-recipient-pagarme]
 verify_jwt = true
+
+[functions.get-instructor-balance-pagarme]
+verify_jwt = true

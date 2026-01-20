@@ -1,0 +1,203 @@
+import { useState } from "react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+interface BalanceData {
+  available: number;
+  waitingFunds: number;
+  transferred: number;
+  currency: string;
+}
+
+interface InstructorBalanceCardProps {
+  hasRecipient: boolean;
+  onSetupClick?: () => void;
+}
+
+export function InstructorBalanceCard({ hasRecipient, onSetupClick }: InstructorBalanceCardProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [balance, setBalance] = useState<BalanceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const formatCurrency = (value: number, currency: string = "BRL") => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency,
+    }).format(value);
+  };
+
+  const fetchBalance = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        "get-instructor-balance-pagarme"
+      );
+
+      if (invokeError) {
+        throw new Error("Erro ao consultar saldo");
+      }
+
+      if (data?.error) {
+        if (data.needsSetup) {
+          setError("Configure seus dados bancários para ver o saldo");
+        } else {
+          throw new Error(data.error);
+        }
+        return;
+      }
+
+      if (data?.balance) {
+        setBalance(data.balance);
+        setLastUpdated(new Date());
+      }
+    } catch (err: any) {
+      console.error("[InstructorBalanceCard] Error:", err);
+      setError("Saldo não disponível agora");
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: err.message || "Não foi possível consultar o saldo",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // If no recipient configured, show setup prompt
+  if (!hasRecipient) {
+    return (
+      <div className="bg-card rounded-2xl shadow-card p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+            <Wallet className="w-5 h-5 text-secondary" />
+          </div>
+          <h3 className="font-semibold text-foreground">Saldo</h3>
+        </div>
+        
+        <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-900/20">
+          <AlertCircle className="w-4 h-4 text-amber-600" />
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            Configure seus dados bancários para visualizar seu saldo e receber pagamentos.
+          </AlertDescription>
+        </Alert>
+        
+        {onSetupClick && (
+          <Button 
+            variant="outline" 
+            className="w-full mt-3"
+            onClick={onSetupClick}
+          >
+            Configurar dados bancários
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card rounded-2xl shadow-card p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+            <Wallet className="w-5 h-5 text-secondary" />
+          </div>
+          <h3 className="font-semibold text-foreground">Saldo</h3>
+        </div>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={fetchBalance}
+          disabled={loading}
+          className="h-8 w-8"
+        >
+          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+        </Button>
+      </div>
+
+      {/* Content */}
+      {!balance && !loading && !error && (
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={fetchBalance}
+        >
+          <Wallet className="w-4 h-4 mr-2" />
+          Consultar saldo
+        </Button>
+      )}
+
+      {loading && (
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-32" />
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+          </div>
+        </div>
+      )}
+
+      {error && !loading && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertCircle className="w-4 h-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {balance && !loading && (
+        <div className="space-y-4">
+          {/* Available Balance - Main */}
+          <div className="bg-gradient-to-br from-secondary/10 to-secondary/5 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+              <TrendingUp className="w-4 h-4" />
+              Disponível para saque
+            </div>
+            <div className="text-2xl font-bold text-secondary">
+              {formatCurrency(balance.available, balance.currency)}
+            </div>
+          </div>
+
+          {/* Secondary Stats */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-muted/50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <Clock className="w-3 h-3" />
+                A receber
+              </div>
+              <div className="font-semibold text-foreground">
+                {formatCurrency(balance.waitingFunds, balance.currency)}
+              </div>
+            </div>
+            
+            <div className="bg-muted/50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <ArrowUpRight className="w-3 h-3" />
+                Já transferido
+              </div>
+              <div className="font-semibold text-foreground">
+                {formatCurrency(balance.transferred, balance.currency)}
+              </div>
+            </div>
+          </div>
+
+          {/* Last Updated */}
+          {lastUpdated && (
+            <p className="text-xs text-center text-muted-foreground">
+              Atualizado {lastUpdated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

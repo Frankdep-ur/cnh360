@@ -11,6 +11,7 @@ import { NotificationSettings } from "@/components/notifications/NotificationSet
 import { ProfilePhotoUpload } from "@/components/profile/ProfilePhotoUpload";
 import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
 import { BankAccountSetup } from "@/components/instrutor/BankAccountSetup";
+import { InstructorBalanceCard } from "@/components/instrutor/InstructorBalanceCard";
 import { validateRealName, isTestAccountName } from "@/lib/nameValidation";
 import { cn } from "@/lib/utils";
 
@@ -456,6 +457,14 @@ export default function InstrutorPerfil() {
               </div>
             </div>
           )}
+
+          {/* Balance Card */}
+          <div className="mt-4">
+            <InstructorBalanceCard 
+              hasRecipient={!!instrutorData?.pagarme_recipient_id}
+              onSetupClick={() => setShowBankSetup(true)}
+            />
+          </div>
 
           {/* Notification Settings */}
           <div className="mt-4">
