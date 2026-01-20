@@ -25,6 +25,7 @@ import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { LocationShareButton } from "@/components/maps/LocationShareButton";
 import { RouteMapCard } from "@/components/maps/RouteMapCard";
+import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +60,7 @@ export default function AlunoDashboard() {
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [proximaAula, setProximaAula] = useState<ProximaAula | null>(null);
   const [progressoRenach, setProgressoRenach] = useState<{
@@ -537,11 +539,11 @@ export default function AlunoDashboard() {
                       Reagendar
                     </Button>
                     <Button 
-                      onClick={() => navigate(`/aluno/aula-confirmada/${proximaAula.id}`)}
+                      onClick={() => setShowPayment(true)}
                       className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white"
                     >
                       <CreditCard className="w-4 h-4 mr-2" />
-                      Ver detalhes
+                      Pagar R${proximaAula.valor}
                     </Button>
                   </>
                 ) : (
@@ -581,8 +583,24 @@ export default function AlunoDashboard() {
         </div>
       )}
 
+      {/* Payment Checkout Modal */}
+      {proximaAula && (
+        <PaymentCheckout
+          open={showPayment}
+          onClose={() => setShowPayment(false)}
+          onPaymentComplete={() => {
+            setShowPayment(false);
+            setIsPaid(true);
+            toast.success("Pagamento confirmado!");
+          }}
+          amount={proximaAula.valor}
+          lessonId={proximaAula.id}
+          instructorName={proximaAula.instructor}
+          lessonDate={`${proximaAula.date} às ${proximaAula.time}`}
+        />
+      )}
 
-      {/* AlertDialog para Certificado do Exame Teórico */}
+
       <AlertDialog open={showCertificadoAlert} onOpenChange={setShowCertificadoAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
