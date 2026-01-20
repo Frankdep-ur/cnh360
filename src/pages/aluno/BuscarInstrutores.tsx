@@ -70,9 +70,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
     .in("instrutor_id", instructorIds)
     .eq("ativo", true);
 
-  console.log("Vehicles fetched:", allVehicles, "Error:", vehiclesError);
-
-  // Create a map for quick vehicle lookup
+   // Create a map for quick vehicle lookup
   const vehicleMap = new Map<string, { modelo: string; transmissao: string }>();
   allVehicles?.forEach((v) => {
     if (!vehicleMap.has(v.instrutor_id)) {
@@ -137,15 +135,47 @@ export default function BuscarInstrutores() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  // TEMPORÁRIO: Verificação de certificado desabilitada para testes de pagamento
-  // TODO: Restaurar após testes - ver código original em git history
+  // Verificar se aluno tem certificado teórico aprovado
+  const [certificadoAprovado, setCertificadoAprovado] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkCertificado() {
+      if (!user) return;
+      
+      const { data: aluno } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (!aluno) return;
+      
+      const { data: progresso } = await supabase
+        .from('progresso_renach')
+        .select('prova_teorica_detran_aprovada')
+        .eq('aluno_id', aluno.id)
+        .maybeSingle();
+      
+      const aprovado = progresso?.prova_teorica_detran_aprovada ?? false;
+      setCertificadoAprovado(aprovado);
+      
+      if (!aprovado) {
+        toast.warning(
+          "É necessário enviar o certificado de aprovação no exame teórico do DETRAN antes de agendar aulas práticas.",
+          { duration: 6000 }
+        );
+        navigate('/aluno/enviar-certificado');
+      }
+    }
+    checkCertificado();
+  }, [user, navigate]);
 
   // Use React Query for data fetching with caching
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
     queryFn: fetchInstructorsWithVehicles,
-    staleTime: 0, // Force fresh fetch to get vehicle data with new RLS policy
-    enabled: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    enabled: certificadoAprovado === true,
   });
 
   const toggleFilter = (filterId: string) => {

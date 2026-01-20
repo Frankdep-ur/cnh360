@@ -66,7 +66,32 @@ export default function InstrutorPerfil() {
   const [selectedDay, setSelectedDay] = useState(defaultAvailability[0].day);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  // Certificate check temporarily disabled for testing (see memory: bypass-certificado-teorico-jan2026)
+  // Verificar certificado teórico antes de permitir acesso
+  useEffect(() => {
+    async function checkCertificado() {
+      if (!user) return;
+      
+      const { data: aluno } = await supabase
+        .from('alunos')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (!aluno) return;
+      
+      const { data: progresso } = await supabase
+        .from('progresso_renach')
+        .select('prova_teorica_detran_aprovada')
+        .eq('aluno_id', aluno.id)
+        .maybeSingle();
+      
+      if (!progresso?.prova_teorica_detran_aprovada) {
+        toast.warning("Envie seu certificado teórico antes de agendar aulas.");
+        navigate('/aluno/enviar-certificado');
+      }
+    }
+    checkCertificado();
+  }, [user, navigate]);
 
   useEffect(() => {
     if (id) {
