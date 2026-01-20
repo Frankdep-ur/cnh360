@@ -135,57 +135,15 @@ export default function BuscarInstrutores() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [checkingCertificate, setCheckingCertificate] = useState(true);
-
-  // Check certificate status on mount
-  useEffect(() => {
-    async function checkCertificateStatus() {
-      if (!user) {
-        setCheckingCertificate(false);
-        return;
-      }
-
-      try {
-        // Get aluno_id
-        const { data: aluno } = await supabase
-          .from("alunos")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (!aluno) {
-          setCheckingCertificate(false);
-          return;
-        }
-
-        // Check certificate status
-        const { data: progresso } = await supabase
-          .from("progresso_renach")
-          .select("prova_teorica_detran_aprovada")
-          .eq("aluno_id", aluno.id)
-          .maybeSingle();
-
-        if (!progresso?.prova_teorica_detran_aprovada) {
-          toast.info("Envie o certificado do exame teórico para acessar as aulas práticas");
-          navigate("/aluno/enviar-certificado");
-          return;
-        }
-      } catch (error) {
-        console.error("Error checking certificate status:", error);
-      } finally {
-        setCheckingCertificate(false);
-      }
-    }
-
-    checkCertificateStatus();
-  }, [user, navigate]);
+  // TEMPORÁRIO: Verificação de certificado desabilitada para testes de pagamento
+  // TODO: Restaurar após testes - ver código original em git history
 
   // Use React Query for data fetching with caching
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
     queryFn: fetchInstructorsWithVehicles,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled: !checkingCertificate,
+    enabled: true,
   });
 
   const toggleFilter = (filterId: string) => {
