@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
-import { Building2, Check, Loader2, Landmark, CreditCard, AlertTriangle, Key } from "lucide-react";
+import { Building2, Check, Loader2, Landmark, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 
 interface BankAccountSetupProps {
   open: boolean;
@@ -41,7 +39,6 @@ type Status = "idle" | "loading" | "success" | "error";
 export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId }: BankAccountSetupProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"bank" | "pix">("pix");
   
   // Form data
   const [holderType, setHolderType] = useState<"individual" | "company">("individual");
@@ -49,16 +46,13 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [holderName, setHolderName] = useState("");
   const [email, setEmail] = useState("");
   
-  // Bank account
+  // Bank account - OBRIGATÓRIO para saques automáticos
   const [bankCode, setBankCode] = useState("");
   const [agencia, setAgencia] = useState("");
   const [agenciaDv, setAgenciaDv] = useState("");
   const [conta, setConta] = useState("");
   const [contaDv, setContaDv] = useState("");
   const [accountType, setAccountType] = useState<"checking" | "savings">("checking");
-  
-  // PIX
-  const [pixKey, setPixKey] = useState("");
 
   // Load user data on mount
   useEffect(() => {
@@ -115,33 +109,23 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
-      if (paymentMethod === "bank") {
-        if (!bankCode || !agencia || !conta) {
-          throw new Error("Preencha os dados bancários completos");
-        }
-      } else {
-        if (!pixKey) {
-          throw new Error("Informe a chave PIX");
-        }
+      // Validar dados bancários - OBRIGATÓRIOS
+      if (!bankCode || !agencia || !conta || !contaDv) {
+        throw new Error("Preencha todos os dados bancários obrigatórios");
       }
 
-      const payload: any = {
+      const payload = {
         type: holderType,
         documentNumber: documentNumber.replace(/\D/g, ""),
         name: holderName.trim(),
         email: email.trim().toLowerCase(),
+        bankCode,
+        agencia,
+        agenciaDv,
+        conta,
+        contaDv,
+        accountType,
       };
-
-      if (paymentMethod === "pix") {
-        payload.pixKey = pixKey.trim();
-      } else {
-        payload.bankCode = bankCode;
-        payload.agencia = agencia;
-        payload.agenciaDv = agenciaDv;
-        payload.conta = conta;
-        payload.contaDv = contaDv;
-        payload.accountType = accountType;
-      }
 
       const { data, error } = await supabase.functions.invoke("create-instructor-recipient-pagarme", {
         body: payload,
@@ -253,110 +237,96 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
             />
           </div>
 
-          {/* Payment Method Tabs */}
-          <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "bank" | "pix")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="pix" className="flex items-center gap-2">
-                <Key className="w-4 h-4" />
-                Chave PIX
-              </TabsTrigger>
-              <TabsTrigger value="bank" className="flex items-center gap-2">
-                <Building2 className="w-4 h-4" />
-                Conta Bancária
-              </TabsTrigger>
-            </TabsList>
+          {/* Aviso importante sobre PIX */}
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-amber-700">
+              <p className="font-medium">Importante: Conta bancária obrigatória</p>
+              <p className="mt-1">
+                A Pagar.me exige conta bancária completa para saques automáticos. 
+                Chave PIX não é suportada para transferências automáticas.
+              </p>
+            </div>
+          </div>
 
-            <TabsContent value="pix" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>Chave PIX</Label>
+          {/* Dados bancários - Obrigatório */}
+          <div className="space-y-4">
+
+            {/* Bank */}
+            <div className="space-y-2">
+              <Label>Banco *</Label>
+              <Select value={bankCode} onValueChange={setBankCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o banco" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BRAZILIAN_BANKS.map((bank) => (
+                    <SelectItem key={bank.code} value={bank.code}>
+                      {bank.code} - {bank.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Agency */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-2">
+                <Label>Agência *</Label>
                 <Input
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  placeholder="CPF, e-mail, telefone ou chave aleatória"
+                  value={agencia}
+                  onChange={(e) => setAgencia(e.target.value.replace(/\D/g, ""))}
+                  placeholder="0000"
+                  maxLength={5}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Usaremos esta chave para transferir seus ganhos
-                </p>
               </div>
-            </TabsContent>
-
-            <TabsContent value="bank" className="space-y-4 mt-4">
-              {/* Bank */}
               <div className="space-y-2">
-                <Label>Banco</Label>
-                <Select value={bankCode} onValueChange={setBankCode}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o banco" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRAZILIAN_BANKS.map((bank) => (
-                      <SelectItem key={bank.code} value={bank.code}>
-                        {bank.code} - {bank.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Dígito</Label>
+                <Input
+                  value={agenciaDv}
+                  onChange={(e) => setAgenciaDv(e.target.value.replace(/\D/g, ""))}
+                  placeholder="0"
+                  maxLength={1}
+                />
               </div>
+            </div>
 
-              {/* Agency */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2 space-y-2">
-                  <Label>Agência</Label>
-                  <Input
-                    value={agencia}
-                    onChange={(e) => setAgencia(e.target.value.replace(/\D/g, ""))}
-                    placeholder="0000"
-                    maxLength={5}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Dígito</Label>
-                  <Input
-                    value={agenciaDv}
-                    onChange={(e) => setAgenciaDv(e.target.value.replace(/\D/g, ""))}
-                    placeholder="0"
-                    maxLength={1}
-                  />
-                </div>
+            {/* Account */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 space-y-2">
+                <Label>Conta *</Label>
+                <Input
+                  value={conta}
+                  onChange={(e) => setConta(e.target.value.replace(/\D/g, ""))}
+                  placeholder="00000000"
+                  maxLength={12}
+                />
               </div>
-
-              {/* Account */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2 space-y-2">
-                  <Label>Conta</Label>
-                  <Input
-                    value={conta}
-                    onChange={(e) => setConta(e.target.value.replace(/\D/g, ""))}
-                    placeholder="00000000"
-                    maxLength={12}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Dígito</Label>
-                  <Input
-                    value={contaDv}
-                    onChange={(e) => setContaDv(e.target.value)}
-                    placeholder="0"
-                    maxLength={2}
-                  />
-                </div>
-              </div>
-
-              {/* Account Type */}
               <div className="space-y-2">
-                <Label>Tipo de conta</Label>
-                <Select value={accountType} onValueChange={(v) => setAccountType(v as "checking" | "savings")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="checking">Conta Corrente</SelectItem>
-                    <SelectItem value="savings">Conta Poupança</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Dígito *</Label>
+                <Input
+                  value={contaDv}
+                  onChange={(e) => setContaDv(e.target.value)}
+                  placeholder="0"
+                  maxLength={2}
+                />
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+
+            {/* Account Type */}
+            <div className="space-y-2">
+              <Label>Tipo de conta *</Label>
+              <Select value={accountType} onValueChange={(v) => setAccountType(v as "checking" | "savings")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Conta Corrente</SelectItem>
+                  <SelectItem value="savings">Conta Poupança</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           {/* Error Message */}
           {status === "error" && errorMessage && (
