@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock, AlertTriangle } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,7 @@ import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { NotificationSettings } from "@/components/notifications/NotificationSettings";
 import { ProfilePhotoUpload } from "@/components/profile/ProfilePhotoUpload";
 import { VerifiedBadge } from "@/components/profile/VerifiedBadge";
+import { BankAccountSetup } from "@/components/instrutor/BankAccountSetup";
 import { validateRealName, isTestAccountName } from "@/lib/nameValidation";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ interface InstrutorData {
   preco_hora: number;
   nota_media: number;
   total_aulas: number;
+  pagarme_recipient_id: string | null;
 }
 
 interface VeiculoData {
@@ -54,6 +56,7 @@ export default function InstrutorPerfil() {
   });
   const [instrutorData, setInstrutorData] = useState<InstrutorData | null>(null);
   const [veiculoData, setVeiculoData] = useState<VeiculoData | null>(null);
+  const [showBankSetup, setShowBankSetup] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -96,6 +99,7 @@ export default function InstrutorPerfil() {
           preco_hora: Number(instrutorResult.preco_hora) || 80,
           nota_media: Number(instrutorResult.nota_media) || 5,
           total_aulas: instrutorResult.total_aulas || 0,
+          pagarme_recipient_id: instrutorResult.pagarme_recipient_id || null,
         });
 
         const { data: veiculoResult, error: veiculoError } = await supabase
@@ -460,12 +464,29 @@ export default function InstrutorPerfil() {
 
           {/* Actions */}
           <div className="mt-4 space-y-3">
-            <button className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card">
+            <button 
+              onClick={() => setShowBankSetup(true)}
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
+            >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-secondary" />
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center",
+                  instrutorData?.pagarme_recipient_id ? "bg-[#4CAF50]/10" : "bg-secondary/10"
+                )}>
+                  {instrutorData?.pagarme_recipient_id ? (
+                    <Check className="w-5 h-5 text-[#4CAF50]" />
+                  ) : (
+                    <CreditCard className="w-5 h-5 text-secondary" />
+                  )}
                 </div>
-                <span className="font-medium text-foreground">Dados bancários</span>
+                <div className="text-left">
+                  <span className="font-medium text-foreground block">Dados bancários</span>
+                  {instrutorData?.pagarme_recipient_id ? (
+                    <span className="text-xs text-[#4CAF50]">Configurado ✓</span>
+                  ) : (
+                    <span className="text-xs text-amber-500">Pendente - configure para receber</span>
+                  )}
+                </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
@@ -491,6 +512,13 @@ export default function InstrutorPerfil() {
           </div>
         </div>
       </div>
+
+      <BankAccountSetup
+        open={showBankSetup}
+        onClose={() => setShowBankSetup(false)}
+        onSuccess={() => fetchProfile()}
+        existingRecipientId={instrutorData?.pagarme_recipient_id}
+      />
 
       <InstructorBottomNav />
     </div>

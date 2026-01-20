@@ -115,7 +115,7 @@ export default function PoliticaPrivacidade() {
               </ul>
               <p className="text-sm text-muted-foreground mt-2">
                 <strong>Nota:</strong> Não armazenamos dados de cartão de crédito. Estes são processados 
-                diretamente por nossos parceiros de pagamento (Stripe, Mercado Pago) em conformidade 
+                diretamente por nosso parceiro de pagamento (Pagar.me / Stone) em conformidade 
                 com o padrão PCI-DSS.
               </p>
 
@@ -216,9 +216,8 @@ export default function PoliticaPrivacidade() {
 
               <h3 className="text-lg font-semibold mt-4">6.2 Parceiros de Pagamento</h3>
               <ul>
-                <li><strong>Stripe:</strong> processamento de pagamentos com cartão</li>
-                <li><strong>Mercado Pago:</strong> processamento de pagamentos</li>
-                <li><strong>Instituições financeiras:</strong> para transações Pix</li>
+                <li><strong>Pagar.me (Stone):</strong> processamento de pagamentos com cartão de crédito e PIX</li>
+                <li><strong>Instituições financeiras:</strong> para transferências bancárias</li>
               </ul>
 
               <h3 className="text-lg font-semibold mt-4">6.3 Provedores de Infraestrutura</h3>

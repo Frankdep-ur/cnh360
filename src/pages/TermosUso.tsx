@@ -185,9 +185,8 @@ export default function TermosUso() {
               <h3 className="text-lg font-semibold mt-4">5.1 Formas de Pagamento</h3>
               <p>Aceitamos os seguintes métodos de pagamento:</p>
               <ul>
-                <li><strong>Cartão de crédito:</strong> processado via Stripe</li>
-                <li><strong>Cartão de débito:</strong> processado via Mercado Pago</li>
-                <li><strong>Pix:</strong> transferência instantânea</li>
+                <li><strong>Cartão de crédito:</strong> processado via Pagar.me (Stone)</li>
+                <li><strong>Pix:</strong> transferência instantânea via Pagar.me</li>
               </ul>
 
               <h3 className="text-lg font-semibold mt-4">5.2 Valores e Taxas</h3>

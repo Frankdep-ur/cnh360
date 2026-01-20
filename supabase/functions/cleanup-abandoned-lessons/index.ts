@@ -47,9 +47,9 @@ serve(async (req) => {
     // Find and delete pending lessons without payment that are older than 30 minutes
     const { data: abandonedLessons, error: selectError } = await supabase
       .from('aulas')
-      .select('id, created_at, payment_intent_id')
+      .select('id, created_at, transaction_id')
       .eq('status', 'pendente')
-      .is('payment_intent_id', null)
+      .is('transaction_id', null)
       .lt('created_at', cutoffTime);
 
     if (selectError) {

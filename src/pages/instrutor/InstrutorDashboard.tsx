@@ -50,7 +50,7 @@ const aulaDemostracao = {
   usa_carro_aluno: false,
   status: "pendente" as const,
   created_at: new Date().toISOString(),
-  payment_intent_id: null as string | null,
+  transaction_id: null as string | null,
 };
 
 export default function InstrutorDashboard() {
