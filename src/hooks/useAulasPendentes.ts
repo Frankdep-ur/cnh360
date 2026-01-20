@@ -15,7 +15,7 @@ export interface AulaPendente {
   usa_carro_aluno: boolean;
   status: string;
   created_at: string;
-  payment_intent_id: string | null;
+  transaction_id: string | null;
 }
 
 export function useAulasPendentes() {
@@ -82,7 +82,7 @@ export function useAulasPendentes() {
           usa_carro_aluno,
           status,
           created_at,
-          payment_intent_id
+          transaction_id
         `)
         .eq("instrutor_id", instrutorData.id)
         .in("status", ["pendente", "confirmada"])
@@ -136,14 +136,14 @@ export function useAulasPendentes() {
       // Get aula data first
       const { data: aulaData, error: aulaFetchError } = await supabase
         .from("aulas")
-        .select("aluno_id, data_hora, duracao_minutos, ponto_encontro, valor, payment_intent_id")
+        .select("aluno_id, data_hora, duracao_minutos, ponto_encontro, valor, transaction_id")
         .eq("id", aulaId)
         .single();
 
       if (aulaFetchError) throw aulaFetchError;
 
       // CRITICAL: Verify payment exists before accepting
-      if (!aulaData.payment_intent_id) {
+      if (!aulaData.transaction_id) {
         toast({
           title: "⚠️ Aula sem pagamento",
           description: "O aluno não completou o pagamento. A aula será aceita mas sem garantia de pagamento.",
@@ -151,14 +151,14 @@ export function useAulasPendentes() {
         });
         // Still allow accepting but warn the instructor
       } else {
-        // If there's a payment_intent_id, capture the payment
+        // If there's a transaction_id, capture the payment via Pagar.me
         toast({
           title: "Processando pagamento...",
           description: "Capturando o pagamento do aluno.",
         });
 
         const { data: captureData, error: captureError } = await supabase.functions.invoke(
-          "capture-payment",
+          "capture-payment-pagarme",
           {
             body: { aulaId },
           }
@@ -216,7 +216,7 @@ export function useAulasPendentes() {
 
       toast({
         title: "Aula aceita!",
-        description: aulaData.payment_intent_id 
+        description: aulaData.transaction_id 
           ? "Pagamento capturado. O aluno foi notificado." 
           : "O aluno foi notificado.",
       });
@@ -237,21 +237,21 @@ export function useAulasPendentes() {
       // Get aula data first
       const { data: aulaData, error: aulaFetchError } = await supabase
         .from("aulas")
-        .select("aluno_id, data_hora, payment_intent_id")
+        .select("aluno_id, data_hora, transaction_id")
         .eq("id", aulaId)
         .single();
 
       if (aulaFetchError) throw aulaFetchError;
 
-      // If there's a payment_intent_id, cancel the payment (release hold)
-      if (aulaData.payment_intent_id) {
+      // If there's a transaction_id, cancel the payment (release hold)
+      if (aulaData.transaction_id) {
         toast({
           title: "Liberando pagamento...",
           description: "Cancelando a autorização do cartão do aluno.",
         });
 
         const { data: cancelData, error: cancelError } = await supabase.functions.invoke(
-          "cancel-payment",
+          "cancel-payment-pagarme",
           {
             body: { aulaId, reason: "instructor_declined" },
           }
@@ -301,7 +301,7 @@ export function useAulasPendentes() {
         await supabase.from("notifications").insert({
           user_id: alunoData.user_id,
           title: "Aula não confirmada",
-          body: aulaData.payment_intent_id
+          body: aulaData.transaction_id
             ? `${instrutorNome} não pôde aceitar sua aula para ${dataFormatada}. O valor foi liberado no seu cartão.`
             : `${instrutorNome} não pôde aceitar sua aula agendada para ${dataFormatada}. Busque outro instrutor disponível.`,
           type: "aula_recusada",
@@ -311,7 +311,7 @@ export function useAulasPendentes() {
 
       toast({
         title: "Aula recusada",
-        description: aulaData.payment_intent_id 
+        description: aulaData.transaction_id 
           ? "O hold foi liberado e o aluno foi notificado." 
           : "O aluno foi notificado.",
       });

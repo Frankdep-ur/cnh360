@@ -10,7 +10,6 @@ import {
   Loader2,
   Shield,
   CreditCard,
-  Smartphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,22 +18,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { StripePaymentModal } from "@/components/payment/StripePaymentModal";
 import { PixPaymentModal } from "@/components/payment/PixPaymentModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
-import { WalletPaymentButtons } from "@/components/payment/WalletPaymentButtons";
-import { STRIPE_PUBLISHABLE_KEY } from "@/lib/stripe";
-
-// Initialize Stripe with centralized key
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 const paymentMethods = [
-  { id: "apple_pay", label: "Apple Pay", icon: "🍎", discount: 0, isWallet: true },
-  { id: "google_pay", label: "Google Pay", icon: "🔴", discount: 0, isWallet: true },
   { id: "credit", label: "Cartão de Crédito/Débito", icon: "💳", discount: 0 },
-  { id: "pix", label: "PIX", icon: "💰", discount: 5, disabled: false },
+  { id: "pix", label: "PIX", icon: "💰", discount: 5 },
   { id: "wallet", label: "Saldo CNH 360", icon: "👛", discount: 0, balance: 150, disabled: true, note: "Em breve" },
 ];
 
@@ -48,7 +37,7 @@ interface InstructorData {
   email: string | null;
 }
 
-// Payment Step Content Component (inside Elements provider)
+// Payment Step Content Component
 interface PaymentStepContentProps {
   duration: number;
   basePrice: number;
@@ -57,10 +46,6 @@ interface PaymentStepContentProps {
   totalPrice: number;
   selectedPayment: string | null;
   setSelectedPayment: (id: string) => void;
-  walletClientSecret: string | null;
-  onWalletPaymentSuccess: () => void;
-  onWalletAvailabilityChange: (available: boolean, type: 'applePay' | 'googlePay' | null) => void;
-  walletAvailable: { applePay: boolean; googlePay: boolean };
 }
 
 function PaymentStepContent({
@@ -71,23 +56,7 @@ function PaymentStepContent({
   totalPrice,
   selectedPayment,
   setSelectedPayment,
-  walletClientSecret,
-  onWalletPaymentSuccess,
-  onWalletAvailabilityChange,
-  walletAvailable,
 }: PaymentStepContentProps) {
-  // Filter payment methods based on wallet availability
-  const availableMethods = paymentMethods.filter(method => {
-    if (method.id === 'apple_pay') return walletAvailable.applePay;
-    if (method.id === 'google_pay') return walletAvailable.googlePay;
-    return true;
-  });
-
-  const handleWalletPayment = (event: any) => {
-    console.log("[PaymentStep] Wallet payment completed:", event);
-    onWalletPaymentSuccess();
-  };
-
   return (
     <div className="animate-fade-in space-y-6">
       <div>
@@ -131,25 +100,9 @@ function PaymentStepContent({
         </div>
       </div>
 
-      {/* Native Wallet Button (Apple Pay / Google Pay) */}
-      {(walletAvailable.applePay || walletAvailable.googlePay) && walletClientSecret && (
-        <div className="space-y-2">
-          <WalletPaymentButtons
-            amount={totalPrice}
-            label="Aula de Direção"
-            onPaymentMethod={handleWalletPayment}
-            onAvailabilityChange={onWalletAvailabilityChange}
-            clientSecret={walletClientSecret}
-          />
-        </div>
-      )}
-
       {/* Payment Methods */}
       <div className="space-y-3">
-        {availableMethods.map((method) => {
-          // Skip wallet methods in list if they have native button above
-          const isWalletMethod = method.id === 'apple_pay' || method.id === 'google_pay';
-          
+        {paymentMethods.map((method) => {
           return (
             <button
               key={method.id}
@@ -178,11 +131,6 @@ function PaymentStepContent({
                       {method.note}
                     </span>
                   )}
-                  {isWalletMethod && (
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
-                      Disponível
-                    </span>
-                  )}
                 </div>
                 {method.balance !== undefined && (
                   <p className="text-sm text-muted-foreground">Saldo: R$ {method.balance.toFixed(2)}</p>
@@ -199,18 +147,6 @@ function PaymentStepContent({
         <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
           <CreditCard className="w-4 h-4" />
           <span>Aceitamos Visa, Mastercard, Elo, Amex e mais</span>
-        </div>
-      )}
-
-      {/* Hidden wallet availability check (only when no client secret yet) */}
-      {!walletClientSecret && (
-        <div className="hidden">
-          <WalletPaymentButtons
-            amount={totalPrice}
-            label="Aula de Direção"
-            onPaymentMethod={() => {}}
-            onAvailabilityChange={onWalletAvailabilityChange}
-          />
         </div>
       )}
     </div>
@@ -243,21 +179,8 @@ export default function AgendarAula() {
     email: null,
   });
 
-  // Stripe payment state
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [createdAulaId, setCreatedAulaId] = useState<string | null>(null);
-  
   // PIX payment state
   const [showPixModal, setShowPixModal] = useState(false);
-  
-  // Wallet availability state
-  const [walletAvailable, setWalletAvailable] = useState<{
-    applePay: boolean;
-    googlePay: boolean;
-  }>({ applePay: false, googlePay: false });
-  const [walletClientSecret, setWalletClientSecret] = useState<string | null>(null);
-  const [isPreparingWallet, setIsPreparingWallet] = useState(false);
 
   // Location state - captured early for better UX
   const [studentLocation, setStudentLocation] = useState<{
@@ -265,6 +188,9 @@ export default function AgendarAula() {
     lng: number;
   } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'failed'>('idle');
+  
+  // Scheduled date for PIX modal
+  const [scheduledDate, setScheduledDate] = useState<string>("");
 
   // Check certificate status on mount
   useEffect(() => {
@@ -307,7 +233,6 @@ export default function AgendarAula() {
   async function fetchInstructorData() {
     try {
       if (id?.startsWith("mock-")) {
-        // Mock instructors não são mais suportados - redirecionar para busca
         navigate("/aluno/buscar");
         return;
       }
@@ -361,9 +286,9 @@ export default function AgendarAula() {
     return false;
   };
 
-  // Capture location function - can be called manually or automatically
+  // Capture location function
   const captureLocation = async (): Promise<boolean> => {
-    if (studentLocation) return true; // Already captured
+    if (studentLocation) return true;
     
     setLocationStatus('loading');
     console.log("[AgendarAula] Iniciando captura de localização...");
@@ -397,14 +322,11 @@ export default function AgendarAula() {
           lng: position.coords.longitude,
         });
         setLocationStatus('success');
-        console.log("[AgendarAula] Localização capturada com sucesso:", {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+        console.log("[AgendarAula] Localização capturada com sucesso");
         return true;
       } else {
         setLocationStatus('failed');
-        console.log("[AgendarAula] Falha ao capturar localização após tentativas");
+        console.log("[AgendarAula] Falha ao capturar localização");
         return false;
       }
     } catch (err) {
@@ -421,9 +343,25 @@ export default function AgendarAula() {
     }
   }, [meetingPoint]);
 
+  // Calculate scheduled date
+  const calculateScheduledDate = (): string => {
+    const calculatedDate = new Date();
+    const [hours, minutes] = time.split(":").map(Number);
+    calculatedDate.setHours(hours, minutes, 0, 0);
+    
+    const daysMap: { [key: string]: number } = {
+      "Dom": 0, "Seg": 1, "Ter": 2, "Qua": 3, "Qui": 4, "Sex": 5, "Sáb": 6
+    };
+    const targetDay = daysMap[day] ?? 1;
+    const currentDay = calculatedDate.getDay();
+    const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
+    calculatedDate.setDate(calculatedDate.getDate() + daysToAdd);
+    
+    return calculatedDate.toISOString();
+  };
+
   const handleNext = async () => {
     if (step < 2) {
-      // Try to capture location before moving to payment step
       if (locationStatus === 'idle') {
         captureLocation();
       }
@@ -451,63 +389,56 @@ export default function AgendarAula() {
       totalPrice,
       instructorId: instructor.id,
       studentLocation,
-      locationStatus,
     });
     
     try {
-      // Calculate scheduled date/time
-      const scheduledDate = new Date();
-      const [hours, minutes] = time.split(":").map(Number);
-      scheduledDate.setHours(hours, minutes, 0, 0);
+      const calculatedScheduledDate = calculateScheduledDate();
+      setScheduledDate(calculatedScheduledDate);
       
-      const daysMap: { [key: string]: number } = {
-        "Dom": 0, "Seg": 1, "Ter": 2, "Qua": 3, "Qui": 4, "Sex": 5, "Sáb": 6
-      };
-      const targetDay = daysMap[day] ?? 1;
-      const currentDay = scheduledDate.getDay();
-      const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
-      scheduledDate.setDate(scheduledDate.getDate() + daysToAdd);
-
-      // Use already captured location or try one more time
       let studentLat: number | null = studentLocation?.lat || null;
       let studentLng: number | null = studentLocation?.lng || null;
       
-      // If location not captured yet, try one more time
       if (!studentLocation && locationStatus !== 'loading') {
-        console.log("[AgendarAula] Tentando capturar localização uma última vez...");
-        const success = await captureLocation();
-        if (success && studentLocation) {
+        console.log("[AgendarAula] Tentando capturar localização...");
+        await captureLocation();
+        if (studentLocation) {
           studentLat = studentLocation.lat;
           studentLng = studentLocation.lng;
         }
       }
       
-      // Show warning if location still not available (but don't block)
       if (!studentLat || !studentLng) {
         console.log("[AgendarAula] Localização não disponível, continuando sem ela");
         toast({
           title: "Localização não capturada",
           description: "O instrutor pode ter dificuldade em encontrá-lo. Informe um ponto de encontro detalhado.",
         });
-      } else {
-        console.log("[AgendarAula] Usando localização:", { studentLat, studentLng });
       }
 
-      // For card payments (including Apple Pay/Google Pay), create PaymentIntent and lesson atomically
-      if (selectedPayment === "credit" || selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
+      // For PIX payments, show PIX modal
+      if (selectedPayment === "pix") {
+        setShowPixModal(true);
+        setLoading(false);
+        return;
+      }
+
+      // For card payments, redirect to Pagar.me checkout
+      if (selectedPayment === "credit") {
+        toast({
+          title: "Criando pagamento...",
+          description: "Você será redirecionado para o checkout seguro.",
+        });
+
         const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
-          "create-lesson-payment",
+          "create-lesson-payment-pagarme",
           {
             body: {
               amount: totalPrice,
-              duration: duration * 60,
-              instructorName: instructor.name,
+              duration,
               instructorId: instructor.id,
-              paymentMethod: selectedPayment === "credit" ? "card" : selectedPayment,
-              // Lesson data - created atomically in the edge function
-              scheduledDate: scheduledDate.toISOString(),
-              meetingPoint,
               useOwnCar,
+              meetingPoint,
+              scheduledDate: calculatedScheduledDate,
               studentLat,
               studentLng,
             },
@@ -516,67 +447,17 @@ export default function AgendarAula() {
 
         if (paymentError) {
           console.error("Error creating payment:", paymentError);
-          throw new Error("Erro ao criar pagamento");
+          throw new Error("Erro ao criar pagamento. Tente novamente.");
         }
 
-        if (!paymentData?.aulaId || !paymentData?.clientSecret) {
-          throw new Error("Erro ao processar pagamento - dados incompletos");
+        if (!paymentData?.checkoutUrl) {
+          throw new Error("Erro ao processar pagamento - URL do checkout não gerada");
         }
 
-        console.log("Payment and lesson created:", paymentData);
-        setCreatedAulaId(paymentData.aulaId);
-
-        // For Apple Pay/Google Pay, set wallet client secret for inline payment
-        if (selectedPayment === "apple_pay" || selectedPayment === "google_pay") {
-          setWalletClientSecret(paymentData.clientSecret);
-          setIsPreparingWallet(false);
-          toast({
-            title: "Pronto para pagar!",
-            description: "Toque no botão de pagamento para confirmar.",
-          });
-          setLoading(false);
-          return;
-        }
+        console.log("Payment created, redirecting to checkout:", paymentData);
         
-        // For regular credit card, show modal
-        setClientSecret(paymentData.clientSecret);
-        setShowPaymentModal(true);
-        setLoading(false);
-        return;
-      }
-
-      // For PIX payments, also create lesson atomically via edge function
-      if (selectedPayment === "pix") {
-        const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
-          "create-lesson-payment",
-          {
-            body: {
-              amount: totalPrice,
-              duration: duration * 60,
-              instructorName: instructor.name,
-              instructorId: instructor.id,
-              paymentMethod: "pix",
-              scheduledDate: scheduledDate.toISOString(),
-              meetingPoint,
-              useOwnCar,
-              studentLat,
-              studentLng,
-            },
-          }
-        );
-
-        if (paymentError) {
-          console.error("Error creating PIX payment:", paymentError);
-          throw new Error("Erro ao criar pagamento PIX");
-        }
-
-        if (!paymentData?.aulaId) {
-          throw new Error("Erro ao processar pagamento PIX - dados incompletos");
-        }
-
-        setCreatedAulaId(paymentData.aulaId);
-        setShowPixModal(true);
-        setLoading(false);
+        // Redirect to Pagar.me checkout
+        window.location.href = paymentData.checkoutUrl;
         return;
       }
 
@@ -598,15 +479,13 @@ export default function AgendarAula() {
     }
   }
 
-  const handlePaymentSuccess = () => {
+  const handlePixSuccess = (aulaId: string) => {
     toast({
-      title: "Pagamento autorizado!",
-      description: "Seu cartão foi pré-autorizado. Aguardando confirmação do instrutor.",
+      title: "Pagamento PIX confirmado!",
+      description: "Aguardando confirmação do instrutor.",
     });
-    setShowPaymentModal(false);
-    if (createdAulaId) {
-      navigate(`/aluno/aula-solicitada/${createdAulaId}`);
-    }
+    setShowPixModal(false);
+    navigate(`/aluno/aula-solicitada/${aulaId}`);
   };
 
   return (
@@ -801,27 +680,15 @@ export default function AgendarAula() {
 
           {/* Step 2: Payment */}
           {step === 2 && (
-            <Elements stripe={stripePromise}>
-              <PaymentStepContent
-                duration={duration}
-                basePrice={basePrice}
-                carDiscount={carDiscount}
-                paymentDiscount={paymentDiscount}
-                totalPrice={totalPrice}
-                selectedPayment={selectedPayment}
-                setSelectedPayment={setSelectedPayment}
-                walletClientSecret={walletClientSecret}
-                onWalletPaymentSuccess={handlePaymentSuccess}
-                onWalletAvailabilityChange={(available, type) => {
-                  if (type === 'applePay') {
-                    setWalletAvailable(prev => ({ ...prev, applePay: available }));
-                  } else if (type === 'googlePay') {
-                    setWalletAvailable(prev => ({ ...prev, googlePay: available }));
-                  }
-                }}
-                walletAvailable={walletAvailable}
-              />
-            </Elements>
+            <PaymentStepContent
+              duration={duration}
+              basePrice={basePrice}
+              carDiscount={carDiscount}
+              paymentDiscount={paymentDiscount}
+              totalPrice={totalPrice}
+              selectedPayment={selectedPayment}
+              setSelectedPayment={setSelectedPayment}
+            />
           )}
         </div>
       </div>
@@ -847,28 +714,22 @@ export default function AgendarAula() {
         </div>
       </div>
 
-      {/* Stripe Payment Modal */}
-      <StripePaymentModal
-        open={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        clientSecret={clientSecret}
-        amount={totalPrice}
-        instructorName={instructor.name}
-        onSuccess={handlePaymentSuccess}
-      />
-
       {/* PIX Payment Modal */}
-      {createdAulaId && (
-        <PixPaymentModal
-          open={showPixModal}
-          onClose={() => setShowPixModal(false)}
-          amount={totalPrice * 0.95} // Value in reais with 5% discount
-          originalAmount={totalPrice} // Original value in reais
-          instructorName={instructor.name}
-          aulaId={createdAulaId}
-          onSuccess={handlePaymentSuccess}
-        />
-      )}
+      <PixPaymentModal
+        open={showPixModal}
+        onClose={() => setShowPixModal(false)}
+        amount={totalPrice * 0.95}
+        originalAmount={totalPrice}
+        instructorName={instructor.name}
+        instructorId={instructor.id}
+        duration={duration}
+        useOwnCar={useOwnCar}
+        meetingPoint={meetingPoint}
+        scheduledDate={scheduledDate || calculateScheduledDate()}
+        studentLat={studentLocation?.lat || null}
+        studentLng={studentLocation?.lng || null}
+        onSuccess={handlePixSuccess}
+      />
     </div>
   );
 }
