@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { validateCPF, validateCNPJ } from "@/lib/validations";
 
 interface BankAccountSetupProps {
   open: boolean;
@@ -38,9 +39,21 @@ const UNSUPPORTED_BANKS = ["380", "197", "655"]; // PicPay, Stone, Neon
 
 type Status = "idle" | "loading" | "success" | "error";
 
+// Interface para erros específicos de campo
+interface FieldErrors {
+  documentNumber?: string;
+  agencia?: string;
+  conta?: string;
+  contaDv?: string;
+  holderName?: string;
+  email?: string;
+  bankCode?: string;
+}
+
 export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId }: BankAccountSetupProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   
   // Form data
   const [holderType, setHolderType] = useState<"individual" | "company">("individual");
@@ -62,8 +75,16 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       loadUserData();
       setStatus("idle");
       setErrorMessage("");
+      setFieldErrors({});
     }
   }, [open]);
+
+  // Clear field error when user types
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
 
   const loadUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -104,41 +125,54 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   };
 
   const validateForm = (): string | null => {
+    const errors: FieldErrors = {};
+    
     // Validate holder info
     if (!holderName || holderName.trim().length < 3) {
-      return "Nome do titular deve ter pelo menos 3 caracteres";
+      errors.holderName = "Nome deve ter pelo menos 3 caracteres";
     }
 
     const cleanDoc = documentNumber.replace(/\D/g, "");
-    if (holderType === "individual" && cleanDoc.length !== 11) {
-      return "CPF deve ter 11 dígitos";
-    }
-    if (holderType === "company" && cleanDoc.length !== 14) {
-      return "CNPJ deve ter 14 dígitos";
+    if (holderType === "individual") {
+      if (cleanDoc.length !== 11) {
+        errors.documentNumber = "CPF deve ter 11 dígitos";
+      } else if (!validateCPF(cleanDoc)) {
+        errors.documentNumber = "CPF inválido. Verifique os números digitados.";
+      }
+    } else {
+      if (cleanDoc.length !== 14) {
+        errors.documentNumber = "CNPJ deve ter 14 dígitos";
+      } else if (!validateCNPJ(cleanDoc)) {
+        errors.documentNumber = "CNPJ inválido. Verifique os números digitados.";
+      }
     }
 
     if (!email || !email.includes("@")) {
-      return "E-mail inválido";
+      errors.email = "E-mail inválido";
     }
 
     // Validate bank data
     if (!bankCode) {
-      return "Selecione o banco";
+      errors.bankCode = "Selecione o banco";
     }
 
     if (!agencia || agencia.length < 1) {
-      return "Informe a agência";
+      errors.agencia = "Informe a agência";
     }
 
     if (!conta || conta.length < 1) {
-      return "Informe o número da conta";
+      errors.conta = "Informe o número da conta";
     }
 
     if (!contaDv) {
-      return "Informe o dígito verificador da conta";
+      errors.contaDv = "Informe o dígito";
     }
 
-    return null;
+    setFieldErrors(errors);
+    
+    // Return first error message for general display
+    const firstError = Object.values(errors)[0];
+    return firstError || null;
   };
 
   const handleSubmit = async () => {
@@ -202,14 +236,38 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       setStatus("error");
       
       let friendlyMessage = error.message;
+      const newFieldErrors: FieldErrors = {};
       
-      // Map technical errors to user-friendly messages
-      if (error.message.includes("Authorization") || error.message.includes("denied")) {
+      // Map technical errors to user-friendly messages with field highlighting
+      const errorLower = error.message.toLowerCase();
+      
+      if (errorLower.includes("authorization") || errorLower.includes("denied") || errorLower.includes("autenticação")) {
         friendlyMessage = "Erro de configuração do sistema. Por favor, entre em contato com o suporte.";
-      } else if (error.message.includes("Edge Function")) {
+      } else if (errorLower.includes("edge function") || errorLower.includes("conexão")) {
         friendlyMessage = "Erro de conexão. Tente novamente em alguns segundos.";
+      } else if (errorLower.includes("agência") || errorLower.includes("branch")) {
+        friendlyMessage = "Número da agência inválido. Verifique se digitou corretamente.";
+        newFieldErrors.agencia = friendlyMessage;
+      } else if (errorLower.includes("dígito") && (errorLower.includes("conta") || errorLower.includes("account"))) {
+        friendlyMessage = "Dígito verificador da conta incorreto. Verifique no seu extrato ou cartão.";
+        newFieldErrors.contaDv = friendlyMessage;
+      } else if (errorLower.includes("conta") || errorLower.includes("account_number")) {
+        friendlyMessage = "Número da conta inválido. Verifique se digitou corretamente.";
+        newFieldErrors.conta = friendlyMessage;
+      } else if (errorLower.includes("cpf") || errorLower.includes("cnpj") || errorLower.includes("document")) {
+        friendlyMessage = "CPF/CNPJ inválido ou não corresponde ao titular da conta bancária.";
+        newFieldErrors.documentNumber = friendlyMessage;
+      } else if (errorLower.includes("já está") || errorLower.includes("already") || errorLower.includes("exists")) {
+        friendlyMessage = "Esta conta bancária já está vinculada a outro recebedor.";
+      } else if (errorLower.includes("banco") || errorLower.includes("bank")) {
+        friendlyMessage = "Código do banco inválido ou não suportado.";
+        newFieldErrors.bankCode = friendlyMessage;
+      } else if (errorLower.includes("titular") || errorLower.includes("holder")) {
+        friendlyMessage = "Nome do titular não confere com os dados da conta bancária.";
+        newFieldErrors.holderName = friendlyMessage;
       }
       
+      setFieldErrors(prev => ({ ...prev, ...newFieldErrors }));
       setErrorMessage(friendlyMessage);
       toast.error("Erro ao configurar", {
         description: friendlyMessage,
@@ -272,10 +330,20 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
             <Label>{holderType === "individual" ? "CPF *" : "CNPJ *"}</Label>
             <Input
               value={documentNumber}
-              onChange={(e) => setDocumentNumber(formatDocument(e.target.value, holderType))}
+              onChange={(e) => {
+                setDocumentNumber(formatDocument(e.target.value, holderType));
+                clearFieldError("documentNumber");
+              }}
               placeholder={holderType === "individual" ? "000.000.000-00" : "00.000.000/0000-00"}
               maxLength={holderType === "individual" ? 14 : 18}
+              className={fieldErrors.documentNumber ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {fieldErrors.documentNumber && (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {fieldErrors.documentNumber}
+              </p>
+            )}
           </div>
 
           {/* Name */}
@@ -345,9 +413,13 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 <Label>Agência *</Label>
                 <Input
                   value={agencia}
-                  onChange={(e) => setAgencia(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    setAgencia(e.target.value.replace(/\D/g, ""));
+                    clearFieldError("agencia");
+                  }}
                   placeholder="0000"
                   maxLength={5}
+                  className={fieldErrors.agencia ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
               <div className="space-y-2">
@@ -360,6 +432,12 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 />
               </div>
             </div>
+            {fieldErrors.agencia && (
+              <p className="text-xs text-destructive flex items-center gap-1 -mt-2">
+                <AlertTriangle className="w-3 h-3" />
+                {fieldErrors.agencia}
+              </p>
+            )}
 
             {/* Account */}
             <div className="grid grid-cols-3 gap-2">
@@ -367,21 +445,35 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 <Label>Conta *</Label>
                 <Input
                   value={conta}
-                  onChange={(e) => setConta(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    setConta(e.target.value.replace(/\D/g, ""));
+                    clearFieldError("conta");
+                  }}
                   placeholder="00000000"
                   maxLength={12}
+                  className={fieldErrors.conta ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Dígito *</Label>
                 <Input
                   value={contaDv}
-                  onChange={(e) => setContaDv(e.target.value)}
+                  onChange={(e) => {
+                    setContaDv(e.target.value);
+                    clearFieldError("contaDv");
+                  }}
                   placeholder="0"
                   maxLength={2}
+                  className={fieldErrors.contaDv ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
             </div>
+            {(fieldErrors.conta || fieldErrors.contaDv) && (
+              <p className="text-xs text-destructive flex items-center gap-1 -mt-2">
+                <AlertTriangle className="w-3 h-3" />
+                {fieldErrors.conta || fieldErrors.contaDv}
+              </p>
+            )}
 
             {/* Account Type */}
             <div className="space-y-2">
