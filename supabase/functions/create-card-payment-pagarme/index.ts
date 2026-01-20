@@ -52,6 +52,8 @@ serve(async (req) => {
     const { 
       cardHash,
       card, // Legacy support (will be deprecated)
+      walletToken, // Google Pay / Apple Pay token
+      walletType, // "google_pay" | "apple_pay"
       lessonId,
       amount,
     } = await req.json();
@@ -60,14 +62,15 @@ serve(async (req) => {
       throw new Error("Dados incompletos: lessonId e amount são obrigatórios");
     }
 
-    // Validate payment method: prefer cardHash (secure), fallback to card data (legacy)
+    // Determine payment method
+    const useWallet = !!walletToken;
     const useCardHash = !!cardHash;
     
-    if (!useCardHash && !card) {
-      throw new Error("Dados do cartão não fornecidos. Use cardHash para pagamento seguro.");
+    if (!useWallet && !useCardHash && !card) {
+      throw new Error("Dados de pagamento não fornecidos. Use cardHash, walletToken ou card.");
     }
 
-    if (!useCardHash && card) {
+    if (!useWallet && !useCardHash && card) {
       // Legacy validation for raw card data (will be deprecated)
       if (!card.number || !card.holder_name || !card.exp_month || !card.exp_year || !card.cvv) {
         throw new Error("Dados do cartão incompletos");
@@ -81,8 +84,10 @@ serve(async (req) => {
       amount, 
       amountCents,
       lessonId,
+      useWallet,
+      walletType: walletType || null,
       useCardHash,
-      cardLastFour: useCardHash ? "tokenized" : card?.number?.slice(-4),
+      cardLastFour: useWallet ? "wallet" : useCardHash ? "tokenized" : card?.number?.slice(-4),
     });
 
     // Get lesson details
@@ -125,10 +130,20 @@ serve(async (req) => {
       .eq("id", user.id)
       .single();
 
-    // Build credit_card payment object based on whether we have cardHash or raw card data
+    // Build credit_card payment object based on payment method
     let creditCardPayment: any;
 
-    if (useCardHash) {
+    if (useWallet) {
+      // Digital wallet payment (Google Pay / Apple Pay)
+      // Pagar.me uses the wallet token as a payment token
+      creditCardPayment = {
+        card_token: walletToken,
+        installments: 1,
+        capture: false, // Pre-authorization
+        statement_descriptor: "CNH360",
+      };
+      logStep(`Using ${walletType} wallet payment`);
+    } else if (useCardHash) {
       // Secure method: use encrypted card_hash from frontend SDK
       creditCardPayment = {
         card_hash: cardHash,
@@ -161,7 +176,7 @@ serve(async (req) => {
 
     // Create card order in Pagar.me
     const orderPayload: any = {
-      code: `card-${Date.now()}`,
+      code: `${useWallet ? walletType : "card"}-${Date.now()}`,
       customer: {
         email: user.email,
         name: profile?.full_name || (card?.holder_name ? card.holder_name : "Cliente CNH360"),
@@ -192,8 +207,8 @@ serve(async (req) => {
         user_id: user.id,
         instrutor_id: aula.instrutor_id,
         lesson_id: lessonId,
-        payment_type: "credit_card",
-        tokenized: useCardHash,
+        payment_type: useWallet ? walletType : "credit_card",
+        tokenized: useCardHash || useWallet,
       },
     };
 
