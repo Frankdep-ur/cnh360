@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Building2, Check, Loader2, Landmark, AlertTriangle } from "lucide-react";
+import { Building2, Check, Loader2, Landmark, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,9 @@ interface BankAccountSetupProps {
   existingRecipientId?: string | null;
 }
 
-const BRAZILIAN_BANKS = [
+// Bancos SUPORTADOS pela Pagar.me para saques automáticos
+// NOTA: Bancos digitais como PicPay, Stone e Neon NÃO são suportados
+const SUPPORTED_BANKS = [
   { code: "001", name: "Banco do Brasil" },
   { code: "033", name: "Santander" },
   { code: "104", name: "Caixa Econômica" },
@@ -25,14 +27,14 @@ const BRAZILIAN_BANKS = [
   { code: "077", name: "Inter" },
   { code: "336", name: "C6 Bank" },
   { code: "290", name: "PagBank" },
-  { code: "380", name: "PicPay" },
   { code: "756", name: "Sicoob" },
   { code: "748", name: "Sicredi" },
   { code: "422", name: "Safra" },
   { code: "212", name: "Banco Original" },
-  { code: "655", name: "Neon" },
-  { code: "197", name: "Stone" },
 ];
+
+// Bancos NÃO suportados (para exibir aviso se usuário mencionar)
+const UNSUPPORTED_BANKS = ["380", "197", "655"]; // PicPay, Stone, Neon
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -58,6 +60,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   useEffect(() => {
     if (open) {
       loadUserData();
+      setStatus("idle");
+      setErrorMessage("");
     }
   }, [open]);
 
@@ -69,7 +73,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, cpf")
+      .select("full_name, cpf, phone")
       .eq("id", user?.id)
       .maybeSingle();
 
@@ -99,19 +103,53 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
     }
   };
 
+  const validateForm = (): string | null => {
+    // Validate holder info
+    if (!holderName || holderName.trim().length < 3) {
+      return "Nome do titular deve ter pelo menos 3 caracteres";
+    }
+
+    const cleanDoc = documentNumber.replace(/\D/g, "");
+    if (holderType === "individual" && cleanDoc.length !== 11) {
+      return "CPF deve ter 11 dígitos";
+    }
+    if (holderType === "company" && cleanDoc.length !== 14) {
+      return "CNPJ deve ter 14 dígitos";
+    }
+
+    if (!email || !email.includes("@")) {
+      return "E-mail inválido";
+    }
+
+    // Validate bank data
+    if (!bankCode) {
+      return "Selecione o banco";
+    }
+
+    if (!agencia || agencia.length < 1) {
+      return "Informe a agência";
+    }
+
+    if (!conta || conta.length < 1) {
+      return "Informe o número da conta";
+    }
+
+    if (!contaDv) {
+      return "Informe o dígito verificador da conta";
+    }
+
+    return null;
+  };
+
   const handleSubmit = async () => {
     setStatus("loading");
     setErrorMessage("");
 
     try {
-      // Validate fields
-      if (!documentNumber || !holderName || !email) {
-        throw new Error("Preencha todos os campos obrigatórios");
-      }
-
-      // Validar dados bancários - OBRIGATÓRIOS
-      if (!bankCode || !agencia || !conta || !contaDv) {
-        throw new Error("Preencha todos os dados bancários obrigatórios");
+      // Validate form
+      const validationError = validateForm();
+      if (validationError) {
+        throw new Error(validationError);
       }
 
       const payload = {
@@ -120,19 +158,32 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         name: holderName.trim(),
         email: email.trim().toLowerCase(),
         bankCode,
-        agencia,
-        agenciaDv,
-        conta,
-        contaDv,
+        agencia: agencia.replace(/\D/g, ""),
+        agenciaDv: agenciaDv?.replace(/\D/g, "") || "",
+        conta: conta.replace(/\D/g, ""),
+        contaDv: contaDv || "",
         accountType,
       };
+
+      console.log("[BankAccountSetup] Submitting payload:", { 
+        ...payload, 
+        documentNumber: payload.documentNumber.slice(0, 4) + "***" 
+      });
 
       const { data, error } = await supabase.functions.invoke("create-instructor-recipient-pagarme", {
         body: payload,
       });
 
-      if (error || data?.error) {
-        throw new Error(data?.error || error?.message || "Erro ao configurar dados bancários");
+      console.log("[BankAccountSetup] Response:", { data, error });
+
+      if (error) {
+        console.error("[BankAccountSetup] Invoke error:", error);
+        throw new Error(error.message || "Erro ao configurar dados bancários");
+      }
+
+      if (data?.error) {
+        console.error("[BankAccountSetup] API error:", data.error);
+        throw new Error(data.error);
       }
 
       setStatus("success");
@@ -147,10 +198,21 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       }, 1500);
 
     } catch (error: any) {
+      console.error("[BankAccountSetup] Error:", error);
       setStatus("error");
-      setErrorMessage(error.message);
+      
+      let friendlyMessage = error.message;
+      
+      // Map technical errors to user-friendly messages
+      if (error.message.includes("Authorization") || error.message.includes("denied")) {
+        friendlyMessage = "Erro de configuração do sistema. Por favor, entre em contato com o suporte.";
+      } else if (error.message.includes("Edge Function")) {
+        friendlyMessage = "Erro de conexão. Tente novamente em alguns segundos.";
+      }
+      
+      setErrorMessage(friendlyMessage);
       toast.error("Erro ao configurar", {
-        description: error.message,
+        description: friendlyMessage,
       });
     }
   };
@@ -178,7 +240,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Landmark className="w-5 h-5 text-secondary" />
+            <Landmark className="w-5 h-5 text-primary" />
             Configurar Recebimento
           </DialogTitle>
         </DialogHeader>
@@ -207,7 +269,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
           {/* Document */}
           <div className="space-y-2">
-            <Label>{holderType === "individual" ? "CPF" : "CNPJ"}</Label>
+            <Label>{holderType === "individual" ? "CPF *" : "CNPJ *"}</Label>
             <Input
               value={documentNumber}
               onChange={(e) => setDocumentNumber(formatDocument(e.target.value, holderType))}
@@ -218,7 +280,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
           {/* Name */}
           <div className="space-y-2">
-            <Label>Nome {holderType === "company" ? "da empresa" : "completo"}</Label>
+            <Label>Nome {holderType === "company" ? "da empresa *" : "completo *"}</Label>
             <Input
               value={holderName}
               onChange={(e) => setHolderName(e.target.value)}
@@ -228,7 +290,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
           {/* Email */}
           <div className="space-y-2">
-            <Label>E-mail</Label>
+            <Label>E-mail *</Label>
             <Input
               type="email"
               value={email}
@@ -240,7 +302,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
           {/* Aviso importante sobre PIX */}
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-amber-700">
+            <div className="text-xs text-amber-700 dark:text-amber-300">
               <p className="font-medium">Importante: Conta bancária obrigatória</p>
               <p className="mt-1">
                 A Pagar.me exige conta bancária completa para saques automáticos. 
@@ -250,7 +312,11 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
           </div>
 
           {/* Dados bancários - Obrigatório */}
-          <div className="space-y-4">
+          <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Building2 className="w-4 h-4" />
+              Dados Bancários
+            </div>
 
             {/* Bank */}
             <div className="space-y-2">
@@ -260,13 +326,17 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                   <SelectValue placeholder="Selecione o banco" />
                 </SelectTrigger>
                 <SelectContent>
-                  {BRAZILIAN_BANKS.map((bank) => (
+                  {SUPPORTED_BANKS.map((bank) => (
                     <SelectItem key={bank.code} value={bank.code}>
                       {bank.code} - {bank.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                PicPay, Stone e Neon não são suportados para saques
+              </p>
             </div>
 
             {/* Agency */}
@@ -330,8 +400,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
           {/* Error Message */}
           {status === "error" && errorMessage && (
-            <div className="p-3 bg-destructive/10 rounded-lg flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-destructive" />
+            <div className="p-3 bg-destructive/10 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
               <span className="text-sm text-destructive">{errorMessage}</span>
             </div>
           )}
