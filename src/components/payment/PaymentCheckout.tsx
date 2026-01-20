@@ -6,9 +6,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2, CreditCard, AlertCircle } from "lucide-react";
+import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2, CreditCard, AlertCircle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { usePagarmeToken } from "@/hooks/usePagarmeToken";
 import { 
   PIX_DISCOUNT_PERCENTAGE, 
   formatCardNumber, 
@@ -65,6 +66,9 @@ export function PaymentCheckout({
   });
   const [cardErrors, setCardErrors] = useState<string[]>([]);
   const [cardLoading, setCardLoading] = useState(false);
+
+  // Pagar.me tokenization hook
+  const { tokenize, isReady: sdkReady, hasPublicKey } = usePagarmeToken();
 
   const pixAmount = amount * (1 - PIX_DISCOUNT_PERCENTAGE / 100);
   const discount = amount - pixAmount;
@@ -225,17 +229,26 @@ export function PaymentCheckout({
         return;
       }
 
-      console.log("[PaymentCheckout] Processing card payment for lesson:", lessonId);
+      // Check if SDK is ready
+      if (!sdkReady || !hasPublicKey) {
+        throw new Error("SDK de pagamento não está pronto. Tente novamente.");
+      }
 
+      console.log("[PaymentCheckout] Tokenizing card for lesson:", lessonId);
+
+      // Tokenize card using Pagar.me SDK (card data never leaves browser unencrypted)
+      const tokenResult = await tokenize(cardData);
+      
+      if (!tokenResult.success || !tokenResult.cardHash) {
+        throw new Error(tokenResult.error || "Erro ao tokenizar cartão");
+      }
+
+      console.log("[PaymentCheckout] Card tokenized, sending to backend");
+
+      // Send only the encrypted card_hash to backend (PCI compliant)
       const { data, error: invokeError } = await supabase.functions.invoke("create-card-payment-pagarme", {
         body: {
-          card: {
-            number: cardData.number.replace(/\s/g, ""),
-            holder_name: cardData.holder_name,
-            exp_month: cardData.exp_month,
-            exp_year: cardData.exp_year,
-            cvv: cardData.cvv,
-          },
+          cardHash: tokenResult.cardHash,
           lessonId,
           amount,
         },
@@ -585,9 +598,10 @@ export function PaymentCheckout({
               </Button>
 
               {/* Security Note */}
-              <p className="text-xs text-center text-muted-foreground">
-                🔒 Pagamento seguro processado pela Pagar.me
-              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Shield className="w-3 h-3 text-green-600" />
+                <span>Dados criptografados via Pagar.me SDK</span>
+              </div>
             </TabsContent>
           </Tabs>
         )}

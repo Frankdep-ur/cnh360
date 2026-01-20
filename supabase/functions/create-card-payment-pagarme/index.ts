@@ -50,18 +50,29 @@ serve(async (req) => {
 
     // Parse request body
     const { 
-      card,
+      cardHash,
+      card, // Legacy support (will be deprecated)
       lessonId,
       amount,
     } = await req.json();
 
-    if (!card || !lessonId || !amount) {
-      throw new Error("Dados incompletos: card, lessonId e amount são obrigatórios");
+    if (!lessonId || !amount) {
+      throw new Error("Dados incompletos: lessonId e amount são obrigatórios");
     }
 
-    // Validate card data
-    if (!card.number || !card.holder_name || !card.exp_month || !card.exp_year || !card.cvv) {
-      throw new Error("Dados do cartão incompletos");
+    // Validate payment method: prefer cardHash (secure), fallback to card data (legacy)
+    const useCardHash = !!cardHash;
+    
+    if (!useCardHash && !card) {
+      throw new Error("Dados do cartão não fornecidos. Use cardHash para pagamento seguro.");
+    }
+
+    if (!useCardHash && card) {
+      // Legacy validation for raw card data (will be deprecated)
+      if (!card.number || !card.holder_name || !card.exp_month || !card.exp_year || !card.cvv) {
+        throw new Error("Dados do cartão incompletos");
+      }
+      logStep("Warning: Using legacy raw card data - should migrate to cardHash");
     }
 
     const amountCents = Math.round(amount * 100);
@@ -70,7 +81,8 @@ serve(async (req) => {
       amount, 
       amountCents,
       lessonId,
-      cardLastFour: card.number.slice(-4),
+      useCardHash,
+      cardLastFour: useCardHash ? "tokenized" : card?.number?.slice(-4),
     });
 
     // Get lesson details
@@ -113,18 +125,46 @@ serve(async (req) => {
       .eq("id", user.id)
       .single();
 
-    // Format expiration date
-    const expMonth = card.exp_month.toString().padStart(2, '0');
-    const expYear = card.exp_year.toString().length === 2 
-      ? `20${card.exp_year}` 
-      : card.exp_year.toString();
+    // Build credit_card payment object based on whether we have cardHash or raw card data
+    let creditCardPayment: any;
+
+    if (useCardHash) {
+      // Secure method: use encrypted card_hash from frontend SDK
+      creditCardPayment = {
+        card_hash: cardHash,
+        installments: 1,
+        capture: false, // Pre-authorization - will be captured when instructor accepts
+        statement_descriptor: "CNH360",
+      };
+      logStep("Using secure card_hash tokenization");
+    } else {
+      // Legacy method: raw card data (should be deprecated)
+      const expMonth = card.exp_month.toString().padStart(2, '0');
+      const expYear = card.exp_year.toString().length === 2 
+        ? `20${card.exp_year}` 
+        : card.exp_year.toString();
+
+      creditCardPayment = {
+        card: {
+          number: card.number.replace(/\s/g, ""),
+          holder_name: card.holder_name.toUpperCase(),
+          exp_month: parseInt(expMonth),
+          exp_year: parseInt(expYear),
+          cvv: card.cvv,
+        },
+        installments: 1,
+        capture: false, // Pre-authorization
+        statement_descriptor: "CNH360",
+      };
+      logStep("Using legacy raw card data (deprecated)");
+    }
 
     // Create card order in Pagar.me
     const orderPayload: any = {
       code: `card-${Date.now()}`,
       customer: {
         email: user.email,
-        name: profile?.full_name || card.holder_name || "Cliente CNH360",
+        name: profile?.full_name || (card?.holder_name ? card.holder_name : "Cliente CNH360"),
         type: "individual",
         document: profile?.cpf || undefined,
         phones: profile?.phone ? {
@@ -145,18 +185,7 @@ serve(async (req) => {
       payments: [
         {
           payment_method: "credit_card",
-          credit_card: {
-            card: {
-              number: card.number.replace(/\s/g, ""),
-              holder_name: card.holder_name.toUpperCase(),
-              exp_month: parseInt(expMonth),
-              exp_year: parseInt(expYear),
-              cvv: card.cvv,
-            },
-            installments: 1,
-            capture: false, // Pre-authorization - will be captured when instructor accepts
-            statement_descriptor: "CNH360",
-          },
+          credit_card: creditCardPayment,
         },
       ],
       metadata: {
@@ -164,6 +193,7 @@ serve(async (req) => {
         instrutor_id: aula.instrutor_id,
         lesson_id: lessonId,
         payment_type: "credit_card",
+        tokenized: useCardHash,
       },
     };
 
