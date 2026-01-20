@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
+import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
+import { BankAccountSetup } from "@/components/instrutor/BankAccountSetup";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Wallet, 
   TrendingUp, 
@@ -20,16 +23,56 @@ import {
   ChevronRight,
   QrCode,
   Banknote,
-  Car
+  Car,
+  Loader2
 } from "lucide-react";
 
 export default function InstrutorGanhos() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showBankSetup, setShowBankSetup] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  
+  // Real balance from Pagar.me
+  const [balance, setBalance] = useState<{ available: number; waitingFunds: number } | null>(null);
+  const [hasRecipient, setHasRecipient] = useState(false);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+
+  // Fetch real balance from Pagar.me
+  const fetchBalance = async () => {
+    setLoadingBalance(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get-instructor-balance-pagarme");
+      
+      if (error) {
+        console.error("Error fetching balance:", error);
+        setHasRecipient(false);
+        return;
+      }
+
+      if (data?.needsSetup) {
+        setHasRecipient(false);
+      } else if (data?.balance) {
+        setBalance({
+          available: data.balance.available,
+          waitingFunds: data.balance.waitingFunds,
+        });
+        setHasRecipient(true);
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBalance();
+  }, []);
 
   const saldo = {
-    disponivel: 1037,
-    pendente: 480,
+    disponivel: balance?.available ?? 1037,
+    pendente: balance?.waitingFunds ?? 480,
     totalMes: 4850,
     taxaPaga: 1358,
     taxaAtual: isPremium ? 18 : 28,
@@ -120,10 +163,24 @@ export default function InstrutorGanhos() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm opacity-90">Saldo Disponível</p>
-                <p className="text-3xl font-bold mt-1">R$ {saldo.disponivel.toLocaleString()}</p>
+                <p className="text-3xl font-bold mt-1">
+                  {loadingBalance ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    </span>
+                  ) : (
+                    `R$ ${saldo.disponivel.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                  )}
+                </p>
                 <p className="text-xs opacity-80 mt-1">Liberado para saque</p>
               </div>
-              <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="bg-white/20 hover:bg-white/30 text-white border-0"
+                onClick={() => setShowWithdrawModal(true)}
+                disabled={loadingBalance}
+              >
                 <ArrowUpRight className="w-4 h-4 mr-1" />
                 Sacar
               </Button>
@@ -135,7 +192,13 @@ export default function InstrutorGanhos() {
               <Clock className="w-4 h-4 text-amber-500" />
               <span className="text-sm text-muted-foreground">Pendente</span>
             </div>
-            <p className="text-xl font-bold text-foreground">R$ {saldo.pendente}</p>
+            <p className="text-xl font-bold text-foreground">
+              {loadingBalance ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                `R$ ${saldo.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+              )}
+            </p>
             <p className="text-xs text-muted-foreground">Liberação em 24h</p>
           </Card>
           
@@ -345,6 +408,31 @@ export default function InstrutorGanhos() {
         onActivate={() => setIsPremium(true)}
         currentTax={28}
         taxPaidThisMonth={saldo.taxaPaga}
+      />
+
+      {/* Withdraw Modal */}
+      <WithdrawModal
+        open={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        availableBalance={saldo.disponivel}
+        hasRecipient={hasRecipient}
+        onSetupBank={() => {
+          setShowWithdrawModal(false);
+          setShowBankSetup(true);
+        }}
+        onSuccess={() => {
+          fetchBalance();
+        }}
+      />
+
+      {/* Bank Setup Modal */}
+      <BankAccountSetup
+        open={showBankSetup}
+        onClose={() => setShowBankSetup(false)}
+        onSuccess={() => {
+          setHasRecipient(true);
+          fetchBalance();
+        }}
       />
 
       <InstructorBottomNav />
