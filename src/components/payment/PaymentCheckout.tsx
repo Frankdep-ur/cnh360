@@ -4,10 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2, CreditCard, Smartphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2, CreditCard, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { PIX_DISCOUNT_PERCENTAGE } from "@/lib/pagarme";
+import { 
+  PIX_DISCOUNT_PERCENTAGE, 
+  formatCardNumber, 
+  formatExpMonth, 
+  formatExpYear, 
+  formatCVV, 
+  validateCard, 
+  getCardBrand,
+  type CardData 
+} from "@/lib/pagarme";
 
 interface PaymentCheckoutProps {
   open: boolean;
@@ -44,8 +55,20 @@ export function PaymentCheckout({
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "pending" | "processing" | "success" | "expired">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Card form state
+  const [cardData, setCardData] = useState<CardData>({
+    number: "",
+    holder_name: "",
+    exp_month: "",
+    exp_year: "",
+    cvv: "",
+  });
+  const [cardErrors, setCardErrors] = useState<string[]>([]);
+  const [cardLoading, setCardLoading] = useState(false);
+
   const pixAmount = amount * (1 - PIX_DISCOUNT_PERCENTAGE / 100);
   const discount = amount - pixAmount;
+  const cardBrand = getCardBrand(cardData.number);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -54,6 +77,9 @@ export function PaymentCheckout({
       setPixData(null);
       setError(null);
       setLoading(false);
+      setCardData({ number: "", holder_name: "", exp_month: "", exp_year: "", cvv: "" });
+      setCardErrors([]);
+      setCardLoading(false);
     }
   }, [open]);
 
@@ -147,7 +173,7 @@ export function PaymentCheckout({
           scheduledDate: aula.data_hora,
           studentLat: aula.latitude_aluno,
           studentLng: aula.longitude_aluno,
-          existingLessonId: lessonId, // Use existing lesson instead of creating new
+          aulaId: lessonId,
         },
       });
 
@@ -185,6 +211,71 @@ export function PaymentCheckout({
     }
   }
 
+  async function processCardPayment() {
+    setCardLoading(true);
+    setCardErrors([]);
+    setError(null);
+
+    try {
+      // Validate card data
+      const validation = validateCard(cardData);
+      if (!validation.valid) {
+        setCardErrors(validation.errors);
+        setCardLoading(false);
+        return;
+      }
+
+      console.log("[PaymentCheckout] Processing card payment for lesson:", lessonId);
+
+      const { data, error: invokeError } = await supabase.functions.invoke("create-card-payment-pagarme", {
+        body: {
+          card: {
+            number: cardData.number.replace(/\s/g, ""),
+            holder_name: cardData.holder_name,
+            exp_month: cardData.exp_month,
+            exp_year: cardData.exp_year,
+            cvv: cardData.cvv,
+          },
+          lessonId,
+          amount,
+        },
+      });
+
+      if (invokeError) {
+        console.error("[PaymentCheckout] Error processing card:", invokeError);
+        throw new Error("Erro ao processar cartão");
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      // Check payment status
+      if (data?.status === "authorized" || data?.status === "paid" || data?.status === "pending") {
+        setPaymentStatus("success");
+        toast({
+          title: "Pagamento autorizado!",
+          description: data.message || "Sua aula está confirmada.",
+        });
+        setTimeout(() => {
+          onPaymentComplete();
+        }, 2000);
+      } else {
+        throw new Error("Pagamento não autorizado");
+      }
+    } catch (err: any) {
+      console.error("[PaymentCheckout] Card error:", err);
+      setCardErrors([err.message || "Erro ao processar pagamento"]);
+      toast({
+        title: "Erro no pagamento",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCardLoading(false);
+    }
+  }
+
   const copyPixCode = async () => {
     if (!pixData?.qrCode) return;
 
@@ -206,6 +297,14 @@ export function PaymentCheckout({
       onPaymentComplete();
     } else {
       onClose();
+    }
+  };
+
+  const updateCardField = (field: keyof CardData, value: string) => {
+    setCardData(prev => ({ ...prev, [field]: value }));
+    // Clear errors when user starts typing
+    if (cardErrors.length > 0) {
+      setCardErrors([]);
     }
   };
 
@@ -376,29 +475,119 @@ export function PaymentCheckout({
                   <span className="text-primary">R$ {amount.toFixed(2)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Sem desconto no cartão de crédito
+                  Pague com PIX e ganhe {PIX_DISCOUNT_PERCENTAGE}% de desconto
                 </p>
               </div>
 
-              {/* Card Payment Notice */}
-              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
-                <Smartphone className="w-8 h-8 mx-auto text-amber-600 mb-2" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Pagamento por cartão em breve!
-                </p>
-                <p className="text-xs text-amber-600 dark:text-amber-300 mt-1">
-                  Por enquanto, use o PIX para um desconto de {PIX_DISCOUNT_PERCENTAGE}%
-                </p>
+              {/* Card Form */}
+              <div className="space-y-4">
+                {/* Card Number */}
+                <div className="space-y-2">
+                  <Label htmlFor="card-number">Número do cartão</Label>
+                  <div className="relative">
+                    <Input
+                      id="card-number"
+                      placeholder="0000 0000 0000 0000"
+                      value={cardData.number}
+                      onChange={(e) => updateCardField("number", formatCardNumber(e.target.value))}
+                      maxLength={19}
+                      className="pr-12"
+                    />
+                    {cardBrand !== "unknown" && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium uppercase text-muted-foreground">
+                        {cardBrand}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Holder Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="holder-name">Nome no cartão</Label>
+                  <Input
+                    id="holder-name"
+                    placeholder="NOME COMO ESTÁ NO CARTÃO"
+                    value={cardData.holder_name}
+                    onChange={(e) => updateCardField("holder_name", e.target.value.toUpperCase())}
+                    maxLength={50}
+                  />
+                </div>
+
+                {/* Expiry + CVV */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="exp-month">Mês</Label>
+                    <Input
+                      id="exp-month"
+                      placeholder="MM"
+                      value={cardData.exp_month}
+                      onChange={(e) => updateCardField("exp_month", formatExpMonth(e.target.value))}
+                      maxLength={2}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="exp-year">Ano</Label>
+                    <Input
+                      id="exp-year"
+                      placeholder="AA"
+                      value={cardData.exp_year}
+                      onChange={(e) => updateCardField("exp_year", formatExpYear(e.target.value))}
+                      maxLength={2}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cvv">CVV</Label>
+                    <Input
+                      id="cvv"
+                      placeholder="000"
+                      value={cardData.cvv}
+                      onChange={(e) => updateCardField("cvv", formatCVV(e.target.value))}
+                      maxLength={4}
+                      type="password"
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
               </div>
 
+              {/* Card Errors */}
+              {cardErrors.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <AlertDescription>
+                    {cardErrors.map((err, i) => (
+                      <div key={i}>{err}</div>
+                    ))}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Submit Button */}
               <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => setPaymentMethod("pix")}
+                onClick={processCardPayment} 
+                disabled={cardLoading} 
+                className="w-full" 
+                size="lg"
               >
-                <QrCode className="w-4 h-4 mr-2" />
-                Pagar com PIX ({PIX_DISCOUNT_PERCENTAGE}% off)
+                {cardLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Pagar R$ {amount.toFixed(2)}
+                  </>
+                )}
               </Button>
+
+              {/* Security Note */}
+              <p className="text-xs text-center text-muted-foreground">
+                🔒 Pagamento seguro processado pela Pagar.me
+              </p>
             </TabsContent>
           </Tabs>
         )}

@@ -21,6 +21,9 @@ verify_jwt = true
 [functions.create-pix-payment-pagarme]
 verify_jwt = true
 
+[functions.create-card-payment-pagarme]
+verify_jwt = true
+
 [functions.capture-payment-pagarme]
 verify_jwt = true
 
