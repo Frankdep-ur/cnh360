@@ -220,35 +220,95 @@ serve(async (req) => {
         fullResponse: pagarmeData
       });
       
-      // Map common errors to user-friendly messages
-      let errorMessage = "Erro ao criar recebedor na Pagar.me";
+      // Mapeamento detalhado de erros para mensagens amigáveis
+      const errorMappings: Record<string, string> = {
+        // Erros de agência
+        "branch_number": "Número da agência inválido. Verifique se digitou corretamente.",
+        "branch_check_digit": "Dígito da agência incorreto.",
+        "branch": "Agência não encontrada para este banco.",
+        
+        // Erros de conta
+        "account_number": "Número da conta inválido. Verifique se digitou corretamente.",
+        "account_check_digit": "Dígito verificador da conta incorreto. Confira no seu cartão ou extrato.",
+        "account": "Conta bancária inválida.",
+        
+        // Erros de documento
+        "holder_document": "CPF/CNPJ do titular não confere com a conta bancária.",
+        "document_number": "CPF/CNPJ inválido na Receita Federal.",
+        "document": "CPF/CNPJ inválido ou já cadastrado.",
+        
+        // Erros de banco
+        "bank": "Código do banco inválido ou não suportado.",
+        "bank_code": "Banco não suportado para saques automáticos.",
+        
+        // Erros de titular
+        "holder_name": "Nome do titular inválido ou não confere.",
+        "holder_type": "Tipo de pessoa (física/jurídica) inválido.",
+        
+        // Erros de duplicidade
+        "already exists": "Esta conta bancária já está vinculada a outro recebedor.",
+        "recipient already exists": "Já existe um recebedor cadastrado com esses dados.",
+        "duplicate": "Dados já cadastrados no sistema.",
+        
+        // Erros de autenticação
+        "authorization": "Erro de autenticação. Entre em contato com o suporte.",
+        "unauthorized": "Erro de autenticação. Entre em contato com o suporte.",
+        "denied": "Acesso negado. Entre em contato com o suporte.",
+        
+        // Erros genéricos
+        "email": "E-mail inválido.",
+        "phone": "Telefone inválido.",
+      };
       
-      if (pagarmeData.message) {
+      let errorMessage = "Erro ao criar recebedor na Pagar.me";
+      let foundSpecificError = false;
+      
+      // Primeiro, verificar os erros específicos no array de errors
+      if (pagarmeData.errors && Array.isArray(pagarmeData.errors)) {
+        for (const err of pagarmeData.errors) {
+          const errMsg = (err.message || err.description || "").toLowerCase();
+          const errParam = (err.parameter || err.field || "").toLowerCase();
+          
+          logStep("Processing error", { errMsg, errParam });
+          
+          // Procurar match no mapeamento
+          for (const [key, friendlyMsg] of Object.entries(errorMappings)) {
+            if (errMsg.includes(key) || errParam.includes(key)) {
+              errorMessage = friendlyMsg;
+              foundSpecificError = true;
+              break;
+            }
+          }
+          
+          if (foundSpecificError) break;
+        }
+        
+        // Se não encontrou no mapeamento, usar a mensagem original traduzida
+        if (!foundSpecificError && pagarmeData.errors[0]) {
+          const firstErr = pagarmeData.errors[0];
+          errorMessage = firstErr.message || firstErr.description || errorMessage;
+        }
+      }
+      
+      // Se não encontrou nos errors, verificar na mensagem principal
+      if (!foundSpecificError && pagarmeData.message) {
         const msg = pagarmeData.message.toLowerCase();
         
-        if (msg.includes("authorization") || msg.includes("denied") || msg.includes("unauthorized")) {
-          errorMessage = "Erro de autenticação com a Pagar.me. Entre em contato com o suporte.";
-          logStep("Auth error - API Key may be invalid or expired");
-        } else if (msg.includes("document")) {
-          errorMessage = "CPF/CNPJ inválido ou já cadastrado";
-        } else if (msg.includes("bank") || msg.includes("branch") || msg.includes("account")) {
-          errorMessage = "Dados bancários inválidos. Verifique banco, agência e conta.";
-        } else if (msg.includes("email")) {
-          errorMessage = "E-mail inválido";
-        } else {
+        for (const [key, friendlyMsg] of Object.entries(errorMappings)) {
+          if (msg.includes(key)) {
+            errorMessage = friendlyMsg;
+            foundSpecificError = true;
+            break;
+          }
+        }
+        
+        // Se ainda não encontrou, usar a mensagem original
+        if (!foundSpecificError) {
           errorMessage = pagarmeData.message;
         }
       }
       
-      // Check for specific errors array
-      if (pagarmeData.errors && Array.isArray(pagarmeData.errors)) {
-        const errorDetails = pagarmeData.errors.map((e: any) => e.message || e.description).join("; ");
-        logStep("Error details from API", { errorDetails });
-        if (errorDetails) {
-          errorMessage = errorDetails;
-        }
-      }
-      
+      logStep("Final error message", { errorMessage, foundSpecificError });
       throw new Error(errorMessage);
     }
 
