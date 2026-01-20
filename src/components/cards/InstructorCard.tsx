@@ -45,11 +45,19 @@ function InstructorCardComponent({
         <div className="flex gap-4">
           {/* Photo */}
           <div className="relative">
-            <OptimizedImage
-              src={photo}
-              alt={name}
-              className="w-20 h-20 rounded-xl object-cover"
-            />
+            {photo ? (
+              <OptimizedImage
+                src={photo}
+                alt={name}
+                className="w-20 h-20 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-xl bg-primary/20 flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary">
+                  {name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                </span>
+              </div>
+            )}
             {verified && (
               <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground p-1 rounded-full">
                 <Shield className="w-3 h-3" />
