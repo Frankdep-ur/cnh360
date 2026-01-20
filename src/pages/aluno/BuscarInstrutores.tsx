@@ -85,7 +85,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
     const veiculo = vehicleMap.get(inst.id);
     const carType = veiculo
       ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
-      : "Veículo a combinar";
+      : "";
 
     return {
       id: inst.id,
