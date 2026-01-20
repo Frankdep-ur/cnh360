@@ -132,7 +132,7 @@ export default function InstrutorPerfil() {
       setInstructor({
         id: id!,
         name: cacheData.nome || "Instrutor",
-        photo: cacheData.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
+        photo: cacheData.foto || "",
         rating: Number(cacheData.nota_media) || 5.0,
         reviews: cacheData.total_avaliacoes || 0,
         price: Number(cacheData.preco_hora) || 80,
@@ -166,11 +166,19 @@ export default function InstrutorPerfil() {
     <div className="min-h-screen bg-background pb-32">
       {/* Header Image */}
       <div className="relative h-72">
-        <img
-          src={instructor.photo}
-          alt={instructor.name}
-          className="w-full h-full object-cover"
-        />
+        {instructor.photo ? (
+          <img
+            src={instructor.photo}
+            alt={instructor.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
+            <span className="text-6xl font-bold text-primary">
+              {instructor.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+            </span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
         
         {/* Back Button */}
