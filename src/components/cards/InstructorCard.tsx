@@ -102,7 +102,7 @@ function InstructorCardComponent({
               </div>
               <div className="flex items-center gap-1">
                 <Car className="w-3 h-3" />
-                <span>{carType}</span>
+                {carType && <span>{carType}</span>}
               </div>
             </div>
 
