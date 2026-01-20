@@ -15,25 +15,22 @@ verify_jwt = true
 [functions.calculate-route]
 verify_jwt = true
 
-[functions.create-lesson-payment]
+[functions.create-lesson-payment-pagarme]
 verify_jwt = true
 
-[functions.create-pix-payment]
+[functions.create-pix-payment-pagarme]
 verify_jwt = true
 
-[functions.verify-payment]
-verify_jwt = false
+[functions.capture-payment-pagarme]
+verify_jwt = true
 
-[functions.check-payment-status]
+[functions.cancel-payment-pagarme]
+verify_jwt = true
+
+[functions.check-payment-status-pagarme]
 verify_jwt = false
 
 [functions.generate-static-map]
-verify_jwt = true
-
-[functions.capture-payment]
-verify_jwt = true
-
-[functions.cancel-payment]
 verify_jwt = true
 
 [functions.get-mapbox-token]

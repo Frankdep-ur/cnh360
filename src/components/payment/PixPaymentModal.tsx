@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Copy, Check, Clock, QrCode, ExternalLink, Loader2, CheckCircle2 } from "lucide-react";
+import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -13,16 +13,22 @@ interface PixPaymentModalProps {
   amount: number;
   originalAmount: number;
   instructorName: string;
-  aulaId: string;
-  onSuccess: () => void;
+  instructorId: string;
+  duration: number;
+  useOwnCar: boolean;
+  meetingPoint: string;
+  scheduledDate: string;
+  studentLat: number | null;
+  studentLng: number | null;
+  onSuccess: (aulaId: string) => void;
 }
 
 interface PixData {
   qrCode: string;
-  expiresAt: number;
-  hostedInstructionsUrl?: string;
-  imageUrlPng?: string;
-  imageUrlSvg?: string;
+  qrCodeUrl: string;
+  expiresAt: string;
+  transactionId: string;
+  aulaId: string;
 }
 
 export function PixPaymentModal({
@@ -31,7 +37,13 @@ export function PixPaymentModal({
   amount,
   originalAmount,
   instructorName,
-  aulaId,
+  instructorId,
+  duration,
+  useOwnCar,
+  meetingPoint,
+  scheduledDate,
+  studentLat,
+  studentLng,
   onSuccess,
 }: PixPaymentModalProps) {
   const { toast } = useToast();
@@ -41,7 +53,6 @@ export function PixPaymentModal({
   const [timeLeft, setTimeLeft] = useState<string>("");
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "processing" | "success" | "expired">("pending");
   const [error, setError] = useState<string | null>(null);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   const discount = originalAmount - amount;
   const discountPercentage = Math.round((discount / originalAmount) * 100);
@@ -53,14 +64,14 @@ export function PixPaymentModal({
     }
   }, [open]);
 
-  // Poll for payment status using the new check-payment-status function
+  // Poll for payment status
   useEffect(() => {
-    if (!paymentIntentId || paymentStatus !== "pending") return;
+    if (!pixData?.transactionId || paymentStatus !== "pending") return;
 
     const interval = setInterval(async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("check-payment-status", {
-          body: { paymentIntentId },
+        const { data, error } = await supabase.functions.invoke("check-payment-status-pagarme", {
+          body: { transactionId: pixData.transactionId, aulaId: pixData.aulaId },
         });
 
         if (error) {
@@ -70,7 +81,7 @@ export function PixPaymentModal({
 
         console.log("[PixModal] Payment status:", data);
 
-        if (data?.status === "succeeded" || data?.status === "processing") {
+        if (data?.status === "succeeded" || data?.status === "paid") {
           setPaymentStatus("success");
           clearInterval(interval);
           
@@ -80,24 +91,25 @@ export function PixPaymentModal({
           });
           
           setTimeout(() => {
-            onSuccess();
+            onSuccess(pixData.aulaId);
           }, 2000);
         }
       } catch (err) {
         console.error("[PixModal] Error polling payment:", err);
       }
-    }, 3000); // Check every 3 seconds
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [paymentIntentId, paymentStatus]);
+  }, [pixData, paymentStatus]);
 
   // Update countdown timer
   useEffect(() => {
     if (!pixData?.expiresAt) return;
 
     const updateTimer = () => {
-      const now = Math.floor(Date.now() / 1000);
-      const remaining = pixData.expiresAt - now;
+      const now = new Date().getTime();
+      const expiresAt = new Date(pixData.expiresAt).getTime();
+      const remaining = Math.floor((expiresAt - now) / 1000);
 
       if (remaining <= 0) {
         setTimeLeft("Expirado");
@@ -120,36 +132,40 @@ export function PixPaymentModal({
     setError(null);
 
     try {
-      console.log("[PixModal] Generating PIX payment...", { amount, originalAmount, aulaId });
+      console.log("[PixModal] Generating PIX payment via Pagar.me...", { amount, instructorId });
       
-      // amount and originalAmount are already in REAIS (not cents)
-      const { data, error: invokeError } = await supabase.functions.invoke("create-pix-payment", {
+      const { data, error: invokeError } = await supabase.functions.invoke("create-pix-payment-pagarme", {
         body: {
-          amount: originalAmount, // Already in reais
-          duration: 60,
-          instructorName,
-          aulaId,
+          amount: originalAmount,
+          duration,
+          instructorId,
+          useOwnCar,
+          meetingPoint,
+          scheduledDate,
+          studentLat,
+          studentLng,
         },
       });
 
       if (invokeError) {
         console.error("[PixModal] Error generating PIX:", invokeError);
-        // Mensagem amigável para o usuário
-        const friendlyMessage = getFriendlyErrorMessage(invokeError.message);
-        throw new Error(friendlyMessage);
+        throw new Error(getFriendlyErrorMessage(invokeError.message));
       }
 
       console.log("[PixModal] PIX generated:", data);
 
       if (data?.error) {
-        // Handle error returned in the response body
-        const friendlyMessage = getFriendlyErrorMessage(data.error);
-        throw new Error(friendlyMessage);
+        throw new Error(getFriendlyErrorMessage(data.error));
       }
 
-      if (data?.pix) {
-        setPixData(data.pix);
-        setPaymentIntentId(data.paymentIntentId);
+      if (data?.qrCode) {
+        setPixData({
+          qrCode: data.qrCode,
+          qrCodeUrl: data.qrCodeUrl,
+          expiresAt: data.expiresAt,
+          transactionId: data.transactionId,
+          aulaId: data.aulaId,
+        });
       } else {
         throw new Error("Não foi possível gerar o QR Code PIX. Tente novamente.");
       }
@@ -167,24 +183,20 @@ export function PixPaymentModal({
     }
   }
 
-  // Função para converter mensagens técnicas em mensagens amigáveis
   function getFriendlyErrorMessage(technicalError: string): string {
     const errorMap: Record<string, string> = {
       "Edge Function returned a non-2xx status code": "Não foi possível processar o pagamento. Tente novamente em instantes.",
-      "pix payment method is not enabled": "O pagamento via PIX não está disponível no momento. Por favor, escolha outro método de pagamento.",
-      "STRIPE_SECRET_KEY is not set": "Sistema de pagamento temporariamente indisponível. Tente novamente mais tarde.",
+      "PAGARME_API_KEY não configurada": "Sistema de pagamento temporariamente indisponível. Tente novamente mais tarde.",
       "User not authenticated": "Faça login para continuar com o pagamento.",
-      "Aula não encontrada": "Não foi possível encontrar os dados da aula. Tente novamente.",
+      "Aluno não encontrado": "Complete seu cadastro para agendar aulas.",
     };
 
-    // Verifica se alguma chave está contida na mensagem de erro
     for (const [key, friendlyMsg] of Object.entries(errorMap)) {
       if (technicalError.toLowerCase().includes(key.toLowerCase())) {
         return friendlyMsg;
       }
     }
 
-    // Se não encontrar correspondência, retorna uma mensagem genérica
     if (technicalError.includes("non-2xx") || technicalError.includes("500") || technicalError.includes("error")) {
       return "Não foi possível processar o pagamento. Tente novamente em instantes.";
     }
@@ -209,8 +221,8 @@ export function PixPaymentModal({
   };
 
   const handleClose = () => {
-    if (paymentStatus === "success") {
-      onSuccess();
+    if (paymentStatus === "success" && pixData?.aulaId) {
+      onSuccess(pixData.aulaId);
     } else {
       onClose();
     }
@@ -293,15 +305,9 @@ export function PixPaymentModal({
 
             {/* QR Code */}
             <div className="flex flex-col items-center gap-4">
-              {pixData?.imageUrlPng ? (
+              {pixData?.qrCodeUrl ? (
                 <img 
-                  src={pixData.imageUrlPng} 
-                  alt="QR Code PIX" 
-                  className="w-48 h-48 rounded-lg border border-border"
-                />
-              ) : pixData?.imageUrlSvg ? (
-                <img 
-                  src={pixData.imageUrlSvg} 
+                  src={pixData.qrCodeUrl} 
                   alt="QR Code PIX" 
                   className="w-48 h-48 rounded-lg border border-border"
                 />
@@ -333,23 +339,10 @@ export function PixPaymentModal({
                 ) : (
                   <>
                     <Copy className="w-4 h-4 mr-2" />
-                    Copiar código PIX
+                    Copiar código PIX (Copia e Cola)
                   </>
                 )}
               </Button>
-            )}
-
-            {/* Instructions Link */}
-            {pixData?.hostedInstructionsUrl && (
-              <a
-                href={pixData.hostedInstructionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-sm text-primary hover:underline"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Ver instruções de pagamento
-              </a>
             )}
 
             {/* Instructions */}

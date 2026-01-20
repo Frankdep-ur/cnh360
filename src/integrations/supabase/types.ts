@@ -78,9 +78,9 @@ export type Database = {
           longitude_aluno: number | null
           longitude_encontro: number | null
           observacoes: string | null
-          payment_intent_id: string | null
           ponto_encontro: string | null
           status: Database["public"]["Enums"]["status_aula"]
+          transaction_id: string | null
           updated_at: string
           usa_carro_aluno: boolean | null
           validada_em: string | null
@@ -102,9 +102,9 @@ export type Database = {
           longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
-          payment_intent_id?: string | null
           ponto_encontro?: string | null
           status?: Database["public"]["Enums"]["status_aula"]
+          transaction_id?: string | null
           updated_at?: string
           usa_carro_aluno?: boolean | null
           validada_em?: string | null
@@ -126,9 +126,9 @@ export type Database = {
           longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
-          payment_intent_id?: string | null
           ponto_encontro?: string | null
           status?: Database["public"]["Enums"]["status_aula"]
+          transaction_id?: string | null
           updated_at?: string
           usa_carro_aluno?: boolean | null
           validada_em?: string | null
@@ -476,6 +476,7 @@ export type Database = {
           is_mei_autonomo: boolean | null
           mei_cnpj: string | null
           nota_media: number | null
+          pagarme_recipient_id: string | null
           preco_hora: number
           raio_atendimento_km: number | null
           total_aulas: number | null
@@ -496,6 +497,7 @@ export type Database = {
           is_mei_autonomo?: boolean | null
           mei_cnpj?: string | null
           nota_media?: number | null
+          pagarme_recipient_id?: string | null
           preco_hora?: number
           raio_atendimento_km?: number | null
           total_aulas?: number | null
@@ -516,6 +518,7 @@ export type Database = {
           is_mei_autonomo?: boolean | null
           mei_cnpj?: string | null
           nota_media?: number | null
+          pagarme_recipient_id?: string | null
           preco_hora?: number
           raio_atendimento_km?: number | null
           total_aulas?: number | null

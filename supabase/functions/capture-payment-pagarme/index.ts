@@ -1,0 +1,180 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const logStep = (step: string, details?: any) => {
+  console.log(`[capture-payment-pagarme] ${step}`, details ? JSON.stringify(details) : "");
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const pagarmeApiKey = Deno.env.get("PAGARME_API_KEY");
+    if (!pagarmeApiKey) {
+      throw new Error("PAGARME_API_KEY não configurada");
+    }
+
+    // Auth
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const authHeader = req.headers.get("Authorization")!;
+    const token = authHeader.replace("Bearer ", "");
+    
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+    
+    if (userError || !userData.user) {
+      throw new Error("Usuário não autenticado");
+    }
+    const user = userData.user;
+    logStep("User authenticated", { userId: user.id });
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { aulaId } = await req.json();
+    logStep("Capture request", { aulaId });
+
+    // Get lesson data
+    const { data: aulaData, error: aulaError } = await supabase
+      .from("aulas")
+      .select("*, instrutores!inner(user_id)")
+      .eq("id", aulaId)
+      .single();
+
+    if (aulaError || !aulaData) {
+      throw new Error("Aula não encontrada");
+    }
+
+    // Verify the user is the instructor
+    if (aulaData.instrutores.user_id !== user.id) {
+      throw new Error("Apenas o instrutor pode capturar o pagamento");
+    }
+
+    const transactionId = aulaData.transaction_id;
+
+    // If no transaction_id, it's a wallet payment or PIX already confirmed
+    if (!transactionId) {
+      logStep("No transaction_id, assuming already paid");
+      return new Response(
+        JSON.stringify({ success: true, message: "Pagamento já processado" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get order from Pagar.me to find charge_id
+    const orderResponse = await fetch(
+      `https://api.pagar.me/core/v5/orders/${transactionId}`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+        },
+      }
+    );
+
+    if (!orderResponse.ok) {
+      throw new Error("Erro ao buscar pedido no Pagar.me");
+    }
+
+    const orderData = await orderResponse.json();
+    logStep("Order fetched", { status: orderData.status });
+
+    // Check if already captured/paid
+    if (orderData.status === "paid") {
+      logStep("Order already paid");
+      return new Response(
+        JSON.stringify({ success: true, message: "Pagamento já capturado" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get charge_id for capture
+    const chargeId = orderData.charges?.[0]?.id;
+    if (!chargeId) {
+      throw new Error("Charge não encontrado no pedido");
+    }
+
+    // Capture the charge
+    const captureResponse = await fetch(
+      `https://api.pagar.me/core/v5/charges/${chargeId}/capture`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: `capture-${aulaId}`,
+        }),
+      }
+    );
+
+    if (!captureResponse.ok) {
+      const errorData = await captureResponse.json();
+      logStep("Capture error", errorData);
+      throw new Error(errorData.message || "Erro ao capturar pagamento");
+    }
+
+    const captureData = await captureResponse.json();
+    logStep("Payment captured", { chargeId, status: captureData.status });
+
+    // Calculate amounts for payment record
+    const valorBruto = Number(aulaData.valor);
+    const taxaPlataforma = valorBruto * 0.50; // 50% test split
+    const valorInstrutor = valorBruto - taxaPlataforma;
+
+    // Record payment in database
+    const { error: pagamentoError } = await supabase
+      .from("pagamentos")
+      .insert({
+        aula_id: aulaId,
+        aluno_id: aulaData.aluno_id,
+        instrutor_id: aulaData.instrutor_id,
+        valor_bruto: valorBruto,
+        taxa_plataforma: taxaPlataforma,
+        valor_instrutor: valorInstrutor,
+        metodo: "cartao_credito",
+        status: "aprovado",
+        external_id: transactionId,
+        pago_em: new Date().toISOString(),
+      });
+
+    if (pagamentoError) {
+      logStep("Error recording payment", pagamentoError);
+      // Don't throw - payment was captured, just log the error
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        chargeId,
+        amount: valorBruto,
+        platformFee: taxaPlataforma,
+        instructorAmount: valorInstrutor,
+      }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      }
+    );
+
+  } catch (error: any) {
+    logStep("Error", { message: error.message });
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
+  }
+});
