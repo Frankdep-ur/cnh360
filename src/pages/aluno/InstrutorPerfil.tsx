@@ -66,37 +66,7 @@ export default function InstrutorPerfil() {
   const [selectedDay, setSelectedDay] = useState(defaultAvailability[0].day);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  // Check certificate status on mount
-  useEffect(() => {
-    async function checkCertificateStatus() {
-      if (!user) return;
-
-      try {
-        const { data: aluno } = await supabase
-          .from("alunos")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (!aluno) return;
-
-        const { data: progresso } = await supabase
-          .from("progresso_renach")
-          .select("prova_teorica_detran_aprovada")
-          .eq("aluno_id", aluno.id)
-          .maybeSingle();
-
-        if (!progresso?.prova_teorica_detran_aprovada) {
-          toast.info("Envie o certificado do exame teórico para acessar as aulas práticas");
-          navigate("/aluno/enviar-certificado");
-        }
-      } catch (error) {
-        console.error("Error checking certificate status:", error);
-      }
-    }
-
-    checkCertificateStatus();
-  }, [user, navigate]);
+  // Certificate check temporarily disabled for testing (see memory: bypass-certificado-teorico-jan2026)
 
   useEffect(() => {
     if (id) {

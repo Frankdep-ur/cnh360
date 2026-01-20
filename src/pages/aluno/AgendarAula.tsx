@@ -173,7 +173,7 @@ export default function AgendarAula() {
     id: "",
     user_id: "",
     name: "Instrutor",
-    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+    photo: "",
     price: 80,
     car: "Veículo não informado",
     email: null,
@@ -192,37 +192,7 @@ export default function AgendarAula() {
   // Scheduled date for PIX modal
   const [scheduledDate, setScheduledDate] = useState<string>("");
 
-  // Check certificate status on mount
-  useEffect(() => {
-    async function checkCertificateStatus() {
-      if (!user) return;
-
-      try {
-        const { data: aluno } = await supabase
-          .from("alunos")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (!aluno) return;
-
-        const { data: progresso } = await supabase
-          .from("progresso_renach")
-          .select("prova_teorica_detran_aprovada")
-          .eq("aluno_id", aluno.id)
-          .maybeSingle();
-
-        if (!progresso?.prova_teorica_detran_aprovada) {
-          sonnerToast.info("Envie o certificado do exame teórico para agendar aulas práticas");
-          navigate("/aluno/enviar-certificado");
-        }
-      } catch (error) {
-        console.error("Error checking certificate status:", error);
-      }
-    }
-
-    checkCertificateStatus();
-  }, [user, navigate]);
+  // Certificate check temporarily disabled for testing (see memory: bypass-certificado-teorico-jan2026)
 
   useEffect(() => {
     if (id) {
@@ -265,7 +235,7 @@ export default function AgendarAula() {
         id: id!,
         user_id: id!,
         name: cacheData.nome || "Instrutor",
-        photo: cacheData.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+        photo: cacheData.foto || "",
         price: Number(cacheData.preco_hora) || 80,
         car: carType,
         email: null,
