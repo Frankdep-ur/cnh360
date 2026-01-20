@@ -176,9 +176,12 @@ export default function AlunoDashboard() {
   const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
   const totalProgress = Math.round((completedSteps / 5) * 100);
 
-  // TEMPORÁRIO: Navegação direta para testes de pagamento
-  // TODO: Restaurar verificação de certificado após testes
+  // Navegação para aulas práticas com verificação de certificado teórico
   const handleAulasPraticasClick = () => {
+    if (!certificadoTeoricoAprovado) {
+      setShowCertificadoAlert(true);
+      return;
+    }
     navigate('/aluno/buscar');
   };
 
