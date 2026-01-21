@@ -56,7 +56,10 @@ export default function AlunoDashboard() {
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(true);
   const { user } = useAuth();
-  const { progressoGeral } = useCursoTeorico();
+  const { progressoGeral, loading: cursoLoading } = useCursoTeorico();
+  
+  // Debug log para verificar valores
+  console.log('[AlunoDashboard] progressoGeral:', progressoGeral, 'cursoLoading:', cursoLoading);
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
