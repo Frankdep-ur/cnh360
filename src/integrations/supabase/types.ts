@@ -78,6 +78,7 @@ export type Database = {
           longitude_aluno: number | null
           longitude_encontro: number | null
           observacoes: string | null
+          payment_confirmed: boolean | null
           ponto_encontro: string | null
           status: Database["public"]["Enums"]["status_aula"]
           transaction_id: string | null
@@ -102,6 +103,7 @@ export type Database = {
           longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
+          payment_confirmed?: boolean | null
           ponto_encontro?: string | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null
@@ -126,6 +128,7 @@ export type Database = {
           longitude_aluno?: number | null
           longitude_encontro?: number | null
           observacoes?: string | null
+          payment_confirmed?: boolean | null
           ponto_encontro?: string | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null
