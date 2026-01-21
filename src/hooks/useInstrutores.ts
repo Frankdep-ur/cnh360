@@ -66,7 +66,7 @@ async function fetchInstrutores(): Promise<Instrutor[]> {
     email: null,
     nota_media: Number(inst.nota_media) || 5.0,
     total_avaliacoes: inst.total_avaliacoes || 0,
-    preco_hora: Number(inst.preco_hora) || 80,
+    preco_hora: Number(inst.preco_hora) || 20,
     bio: inst.bio,
     is_mei_autonomo: true,
     aceita_carro_proprio: true,

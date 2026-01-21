@@ -90,7 +90,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
       photo: inst.foto || "",
       rating: Number(inst.nota_media) || 5.0,
       reviews: inst.total_avaliacoes || 0,
-      price: Number(inst.preco_hora) || 80,
+      price: Number(inst.preco_hora) || 20,
       distance: `${inst.raio_atendimento_km || 10} km`,
       carType,
       available: true,
