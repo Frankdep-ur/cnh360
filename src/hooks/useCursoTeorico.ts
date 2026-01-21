@@ -59,33 +59,32 @@ export function useCursoTeorico() {
   const [alunoId, setAlunoId] = useState<string | null>(null);
   const [progressoGeral, setProgressoGeral] = useState(0);
 
-  // Buscar ID do aluno
-  useEffect(() => {
-    async function fetchAlunoId() {
-      if (!user) return;
-      
-      const { data } = await supabase
+  // Carregar tudo em um único fluxo sequencial para evitar race condition
+  const carregarTudo = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Buscar alunoId primeiro
+      const { data: alunoData } = await supabase
         .from('alunos')
         .select('id')
         .eq('user_id', user.id)
         .single();
       
-      if (data) {
-        setAlunoId(data.id);
+      if (!alunoData) {
+        setLoading(false);
+        return;
       }
-    }
-    fetchAlunoId();
-  }, [user]);
 
-  // Carregar módulos com progresso
-  const carregarModulos = useCallback(async () => {
-    if (!alunoId) {
-      setLoading(false);
-      return;
-    }
+      const currentAlunoId = alunoData.id;
+      setAlunoId(currentAlunoId);
 
-    try {
-      // Buscar módulos
+      // 2. Buscar módulos
       const { data: modulosData, error: modulosError } = await supabase
         .from('curso_modulos')
         .select('*')
@@ -94,7 +93,7 @@ export function useCursoTeorico() {
 
       if (modulosError) throw modulosError;
 
-      // Buscar aulas
+      // 3. Buscar aulas
       const { data: aulasData, error: aulasError } = await supabase
         .from('curso_aulas')
         .select('*')
@@ -103,11 +102,11 @@ export function useCursoTeorico() {
 
       if (aulasError) throw aulasError;
 
-      // Buscar progresso do aluno
+      // 4. Buscar progresso do aluno
       const { data: progressoData } = await supabase
         .from('progresso_aulas')
         .select('*')
-        .eq('aluno_id', alunoId);
+        .eq('aluno_id', currentAlunoId);
 
       const progressoMap = new Map(
         (progressoData || []).map(p => [p.aula_id, p])
@@ -116,7 +115,7 @@ export function useCursoTeorico() {
       let totalAulasCompletas = 0;
       let totalAulas = 0;
 
-      // Montar módulos com progresso
+      // 5. Montar módulos com progresso
       const modulosComProgresso: ModuloComProgresso[] = (modulosData || []).map((modulo, index) => {
         const aulasDoModulo = (aulasData || []).filter(a => a.modulo_id === modulo.id);
         const aulasCompletas = aulasDoModulo.filter(
@@ -166,11 +165,11 @@ export function useCursoTeorico() {
     } finally {
       setLoading(false);
     }
-  }, [alunoId]);
+  }, [user]);
 
   useEffect(() => {
-    carregarModulos();
-  }, [carregarModulos]);
+    carregarTudo();
+  }, [carregarTudo]);
 
   // Buscar aulas de um módulo específico
   const buscarAulasDoModulo = async (moduloId: string) => {
@@ -355,7 +354,7 @@ export function useCursoTeorico() {
 
     // Recarregar módulos para atualizar progresso geral
     if (aprovado) {
-      await carregarModulos();
+      await carregarTudo();
     }
 
     return { aprovado, nota, acertos, total: perguntas.length };
@@ -398,7 +397,7 @@ export function useCursoTeorico() {
     iniciarAula,
     atualizarTempo,
     enviarQuiz,
-    recarregar: carregarModulos,
+    recarregar: carregarTudo,
     prefetchProximoModulo
   };
 }
