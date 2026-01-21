@@ -176,8 +176,14 @@ export default function AlunoDashboard() {
   const completedSteps = [exameMedicoCompleto, cursoTeoricoCompleto, aulasPraticasCompletas, examePraticoAprovado].filter(Boolean).length;
   const totalProgress = Math.round((completedSteps / 5) * 100);
 
-  // Navegação para aulas práticas com verificação de certificado teórico
+  // Navegação para aulas práticas com verificação de progresso e certificado
   const handleAulasPraticasClick = () => {
+    // Primeiro verificar se EAD está 100%
+    if (progressoGeral < 100) {
+      toast.warning("Complete a Preparação Teórica primeiro para acessar Aulas Práticas");
+      return;
+    }
+    // Depois verificar certificado
     if (!certificadoTeoricoAprovado) {
       setShowCertificadoAlert(true);
       return;
@@ -185,11 +191,32 @@ export default function AlunoDashboard() {
     navigate('/aluno/buscar');
   };
 
-  // Função para determinar status da etapa baseado nas anteriores
-  const getStepStatus = (stepCompleted: boolean, previousCompleted: boolean): "completed" | "current" | "locked" => {
-    if (stepCompleted) return "completed";
-    if (previousCompleted) return "current";
-    return "locked";
+  // Função para obter badge dinâmico para cada etapa
+  const getBadgeForStep = (stepId: number): { text: string; color: string } => {
+    switch(stepId) {
+      case 1: // Exame Médico
+        return exameMedicoCompleto 
+          ? { text: "Concluído", color: "bg-blue-100 text-blue-700" }
+          : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+      case 2: // Preparação Teórica
+        if (cursoTeoricoCompleto) return { text: "Concluído", color: "bg-blue-100 text-blue-700" };
+        if (progressoGeral > 0) return { text: "Em andamento", color: "bg-green-500 text-white" };
+        return { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+      case 3: // Aulas Práticas
+        if (aulasPraticasCompletas) return { text: "Concluído", color: "bg-blue-100 text-blue-700" };
+        if (practicalHours > 0) return { text: "Em andamento", color: "bg-green-500 text-white" };
+        return { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+      case 4: // Exame Prático
+        return examePraticoAprovado 
+          ? { text: "Concluído", color: "bg-blue-100 text-blue-700" }
+          : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+      case 5: // PPD
+        return examePraticoAprovado 
+          ? { text: "Concluído", color: "bg-blue-100 text-blue-700" }
+          : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+      default:
+        return { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+    }
   };
 
   const steps = [
@@ -197,47 +224,53 @@ export default function AlunoDashboard() {
       id: 1, 
       name: "Exame Médico/Psicológico", 
       icon: Stethoscope, 
-      status: "locked" as const,
-      progress: 0,
-      showGreenIcon: true,
-      detail: "Avaliação médica e psicológica obrigatória"
+      iconColor: "bg-pink-100 text-pink-600",
+      detail: "Avaliação médica e psicológica obrigatória",
+      isClickable: false,
+      showProgress: false,
+      progress: 0
     },
     { 
       id: 2, 
       name: "Preparação Teórica (EAD)", 
       icon: BookOpen, 
-      status: "current" as const,
-      progress: progressoGeral, 
+      iconColor: "bg-blue-100 text-blue-600",
+      detail: "Estudo + simulados · EAD gratuito",
       link: "/aluno/curso-teorico",
-      subtitle: "Em andamento",
-      detail: "Estudo + simulados · EAD gratuito"
+      isClickable: true,
+      showProgress: true,
+      progress: progressoGeral
     },
-{ 
-          id: 3, 
-          name: "Aulas Práticas", 
-          icon: Car, 
-          status: "locked" as const,
-          progress: Math.round((practicalHours / minRequiredHours) * 100), 
-          showGreenIcon: true,
-          detail: `${practicalHours}h de ${minRequiredHours}h mínimas obrigatórias (Res. 1.020/2025)`, 
-          onClick: cursoTeoricoCompleto ? handleAulasPraticasClick : undefined
-        },
+    { 
+      id: 3, 
+      name: "Aulas Práticas", 
+      icon: Car, 
+      iconColor: "bg-green-100 text-green-600",
+      detail: `${practicalHours}h de ${minRequiredHours}h mínimas (Res. 1.020/2025)`,
+      onClick: handleAulasPraticasClick,
+      isClickable: true,
+      showProgress: true,
+      progress: Math.round((practicalHours / minRequiredHours) * 100)
+    },
     { 
       id: 4, 
       name: "Exame Prático", 
       icon: Trophy, 
-      status: "locked" as const,
-      progress: 0, 
-      showGreenIcon: true,
-      detail: "Prova prática de direção veicular"
+      iconColor: "bg-amber-100 text-amber-600",
+      detail: "Prova prática de direção veicular",
+      isClickable: false,
+      showProgress: false,
+      progress: 0
     },
     { 
       id: 5, 
       name: "Permissão para Dirigir (PPD)", 
       icon: FileText, 
-      status: "current" as const,
-      progress: 0,
-      detail: "Válida por 12 meses após aprovação"
+      iconColor: "bg-purple-100 text-purple-600",
+      detail: "Válida por 12 meses após aprovação",
+      isClickable: false,
+      showProgress: false,
+      progress: 0
     },
   ];
 
@@ -349,64 +382,41 @@ export default function AlunoDashboard() {
           <div className="space-y-3">
             {steps.map((step, index) => {
               const Icon = step.icon;
-              const isCurrent = step.status === "current";
-              const isLocked = step.status === "locked";
-              const isCompleted = false; // Não mostramos "concluído" visualmente
+              const badge = getBadgeForStep(step.id);
+              const isClickable = step.isClickable;
 
-              const content = (
+              const cardContent = (
                 <div
                   className={cn(
-                    "bg-card rounded-2xl p-4 border-2 transition-all",
-                    isCurrent && "border-primary shadow-card",
-                    isCompleted && "border-primary/30",
-                    isLocked && "border-border opacity-60"
+                    "bg-card rounded-2xl p-4 border-2 transition-all duration-300 animate-fade-in",
+                    "border-primary/20 hover:border-primary/40",
+                    !isClickable && "cursor-default pointer-events-none opacity-90"
                   )}
+                  style={{ animationDelay: `${index * 100}ms` }}
                 >
                   <div className="flex items-center gap-4">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      step.showGreenIcon && "bg-primary text-primary-foreground",
-                      !step.showGreenIcon && isCurrent && "bg-primary/10 text-primary",
-                      !step.showGreenIcon && isLocked && "bg-muted text-muted-foreground"
-                    )}>
+                    {/* Ícone colorido */}
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", step.iconColor)}>
                       <Icon className="w-6 h-6" />
                     </div>
+                    
+                    {/* Conteúdo */}
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-semibold text-foreground">{step.name}</h4>
-                        {step.subtitle ? (
-                          <span className={cn(
-                            "text-xs px-2 py-0.5 rounded-full font-semibold",
-                            isCompleted && "bg-primary/10 text-primary",
-                            isCurrent && "bg-green-500 text-white"
-                          )}>
-                            {step.subtitle}
-                          </span>
-                        ) : (
-                          <>
-                            {isCompleted && (
-                              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                                Concluído
-                              </span>
-                            )}
-                            {isCurrent && (
-                              <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-green-500 text-white">
-                                Em andamento
-                              </span>
-                            )}
-                          </>
-                        )}
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", badge.color)}>
+                          {badge.text}
+                        </span>
                       </div>
-                      {step.detail && (
-                        <p className="text-xs text-muted-foreground mt-1">{step.detail}</p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">{step.detail}</p>
                     </div>
-                    {!isLocked && (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
+                    
+                    {/* Seta apenas em clicáveis */}
+                    {isClickable && <ChevronRight className="w-5 h-5 text-muted-foreground" />}
                   </div>
-                  {/* Barra de progresso para Aulas Práticas e Preparação Teórica */}
-                  {(step.name === "Aulas Práticas" || step.name === "Preparação Teórica (EAD)") && (isCurrent || isCompleted) && (
+                  
+                  {/* Progress bar onde aplicável */}
+                  {step.showProgress && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span>Progresso</span>
@@ -423,28 +433,27 @@ export default function AlunoDashboard() {
                 </div>
               );
 
-              // Prioridade: onClick > link
-              if (step.onClick && !isLocked) {
+              // Clicável: onClick ou link
+              if (step.onClick) {
                 return (
                   <div 
                     key={step.id} 
                     onClick={step.onClick}
                     className="cursor-pointer"
                   >
-                    {content}
+                    {cardContent}
                   </div>
                 );
               }
-
-              if (step.link && !isLocked) {
+              if (step.link) {
                 return (
                   <Link key={step.id} to={step.link}>
-                    {content}
+                    {cardContent}
                   </Link>
                 );
               }
-
-              return <div key={step.id}>{content}</div>;
+              // Não clicável: só visual
+              return <div key={step.id}>{cardContent}</div>;
             })}
           </div>
         </div>
