@@ -163,11 +163,18 @@ export default function AlunoDashboard() {
   
   const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2025
   
-  // Status derivados do progresso real
-  const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
-  const cursoTeoricoCompleto = progressoGeral === 100 || !!progressoRenach?.curso_teorico_conclusao;
-  const aulasPraticasCompletas = !!progressoRenach?.aulas_praticas_conclusao || practicalHours >= minRequiredHours;
-  const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado';
+  // Status derivados do progresso real (ignora datas de teste no banco)
+  // Exame Médico: mantém como false por padrão (usuário não pode marcar manualmente)
+  const exameMedicoCompleto = false;
+  
+  // Curso Teórico: SÓ completo se progressoGeral for EXATAMENTE 100%
+  const cursoTeoricoCompleto = progressoGeral === 100;
+  
+  // Aulas Práticas: SÓ completas se horas >= mínimo obrigatório
+  const aulasPraticasCompletas = practicalHours >= minRequiredHours;
+  
+  // Exame Prático: só aprovado se aulas práticas estiverem completas
+  const examePraticoAprovado = progressoRenach?.exame_pratico_resultado === 'aprovado' && aulasPraticasCompletas;
   
   // Status para certificado teórico do DETRAN
   const certificadoTeoricoAprovado = progressoRenach?.prova_teorica_detran_aprovada ?? false;
