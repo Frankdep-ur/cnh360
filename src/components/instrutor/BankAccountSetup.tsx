@@ -61,6 +61,20 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [holderName, setHolderName] = useState("");
   const [email, setEmail] = useState("");
   
+  // Campos adicionais obrigatórios para pessoa física (Pagar.me V5)
+  const [birthdate, setBirthdate] = useState("");
+  const [monthlyIncome, setMonthlyIncome] = useState("3000");
+  const [professionalOccupation, setProfessionalOccupation] = useState("instrutor_transito");
+  
+  // Endereço (obrigatório para pessoa física)
+  const [street, setStreet] = useState("");
+  const [streetNumber, setStreetNumber] = useState("");
+  const [complement, setComplement] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  
   // Bank account - OBRIGATÓRIO para saques automáticos
   const [bankCode, setBankCode] = useState("");
   const [agencia, setAgencia] = useState("");
@@ -139,6 +153,14 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       } else if (!validateCPF(cleanDoc)) {
         errors.documentNumber = "CPF inválido. Verifique os números digitados.";
       }
+      
+      // Validar campos obrigatórios para pessoa física
+      if (!birthdate) {
+        return "Informe a data de nascimento";
+      }
+      if (!street || !streetNumber || !neighborhood || !city || !state || !zipCode) {
+        return "Preencha todos os campos do endereço";
+      }
     } else {
       if (cleanDoc.length !== 14) {
         errors.documentNumber = "CNPJ deve ter 14 dígitos";
@@ -191,6 +213,20 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         documentNumber: documentNumber.replace(/\D/g, ""),
         name: holderName.trim(),
         email: email.trim().toLowerCase(),
+        // Campos adicionais obrigatórios para pessoa física
+        birthdate: holderType === "individual" ? birthdate : undefined,
+        monthlyIncome: holderType === "individual" ? parseInt(monthlyIncome) * 100 : undefined, // Em centavos
+        professionalOccupation: holderType === "individual" ? professionalOccupation : undefined,
+        address: holderType === "individual" ? {
+          street: street.trim(),
+          streetNumber: streetNumber.trim(),
+          complement: complement.trim() || undefined,
+          neighborhood: neighborhood.trim(),
+          city: city.trim(),
+          state: state.trim().toUpperCase(),
+          zipCode: zipCode.replace(/\D/g, ""),
+        } : undefined,
+        // Dados bancários
         bankCode,
         agencia: agencia.replace(/\D/g, ""),
         agenciaDv: agenciaDv?.replace(/\D/g, "") || "",
@@ -366,6 +402,98 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
               placeholder="seu@email.com"
             />
           </div>
+
+          {/* Campos adicionais para Pessoa Física */}
+          {holderType === "individual" && (
+            <>
+              {/* Data de Nascimento */}
+              <div className="space-y-2">
+                <Label>Data de Nascimento *</Label>
+                <Input
+                  type="date"
+                  value={birthdate}
+                  onChange={(e) => setBirthdate(e.target.value)}
+                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                />
+                <p className="text-xs text-muted-foreground">Você deve ter pelo menos 18 anos</p>
+              </div>
+
+              {/* Endereço */}
+              <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Info className="w-4 h-4" />
+                  Endereço Residencial
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>CEP *</Label>
+                  <Input
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    placeholder="00000000"
+                    maxLength={8}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Rua/Avenida *</Label>
+                  <Input
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    placeholder="Nome da rua"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label>Número *</Label>
+                    <Input
+                      value={streetNumber}
+                      onChange={(e) => setStreetNumber(e.target.value)}
+                      placeholder="123"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Complemento</Label>
+                    <Input
+                      value={complement}
+                      onChange={(e) => setComplement(e.target.value)}
+                      placeholder="Apto 10"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Bairro *</Label>
+                  <Input
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
+                    placeholder="Centro"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label>Cidade *</Label>
+                    <Input
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="São Paulo"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Estado *</Label>
+                    <Input
+                      value={state}
+                      onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
+                      placeholder="SP"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Aviso importante sobre bancos não suportados */}
           <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg">
