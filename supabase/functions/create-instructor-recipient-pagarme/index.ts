@@ -289,6 +289,8 @@ serve(async (req) => {
         // Erros de configuração da conta
         "split settings enabled": "Sistema de pagamentos em configuração. Entre em contato com o suporte para habilitar os recebimentos.",
         "split": "Funcionalidade de pagamentos split não habilitada. Entre em contato com o suporte.",
+        "action_forbidden": "A funcionalidade de recebedores não está habilitada na conta Pagar.me. Entre em contato com o suporte CNH360 para ativar.",
+        "not allowed to create a recipient": "A funcionalidade de recebedores não está habilitada na conta Pagar.me. Entre em contato com o suporte CNH360 para ativar.",
         
         // Erros genéricos
         "email": "E-mail inválido.",
