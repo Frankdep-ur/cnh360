@@ -61,7 +61,10 @@ export function useCursoTeorico() {
 
   // Carregar tudo em um único fluxo sequencial para evitar race condition
   const carregarTudo = useCallback(async () => {
+    console.log('[useCursoTeorico] carregarTudo iniciado - user:', user?.id);
+    
     if (!user) {
+      console.log('[useCursoTeorico] Sem user, abortando');
       setLoading(false);
       return;
     }
@@ -70,19 +73,24 @@ export function useCursoTeorico() {
 
     try {
       // 1. Buscar alunoId primeiro
-      const { data: alunoData } = await supabase
+      console.log('[useCursoTeorico] Buscando alunoId...');
+      const { data: alunoData, error: alunoError } = await supabase
         .from('alunos')
         .select('id')
         .eq('user_id', user.id)
         .single();
       
+      console.log('[useCursoTeorico] alunoData:', alunoData, 'error:', alunoError);
+      
       if (!alunoData) {
+        console.log('[useCursoTeorico] Sem alunoData, abortando');
         setLoading(false);
         return;
       }
 
       const currentAlunoId = alunoData.id;
       setAlunoId(currentAlunoId);
+      console.log('[useCursoTeorico] alunoId definido:', currentAlunoId);
 
       // 2. Buscar módulos
       const { data: modulosData, error: modulosError } = await supabase
@@ -92,6 +100,7 @@ export function useCursoTeorico() {
         .order('ordem');
 
       if (modulosError) throw modulosError;
+      console.log('[useCursoTeorico] Módulos carregados:', modulosData?.length);
 
       // 3. Buscar aulas
       const { data: aulasData, error: aulasError } = await supabase
@@ -101,12 +110,15 @@ export function useCursoTeorico() {
         .order('ordem');
 
       if (aulasError) throw aulasError;
+      console.log('[useCursoTeorico] Aulas carregadas:', aulasData?.length);
 
       // 4. Buscar progresso do aluno
-      const { data: progressoData } = await supabase
+      const { data: progressoData, error: progressoError } = await supabase
         .from('progresso_aulas')
         .select('*')
         .eq('aluno_id', currentAlunoId);
+
+      console.log('[useCursoTeorico] Progresso carregado:', progressoData?.length, 'error:', progressoError);
 
       const progressoMap = new Map(
         (progressoData || []).map(p => [p.aula_id, p])
@@ -157,13 +169,21 @@ export function useCursoTeorico() {
         };
       });
 
+      const calculatedProgress = totalAulas > 0 ? Math.round((totalAulasCompletas / totalAulas) * 100) : 0;
+      console.log('[useCursoTeorico] PROGRESSO CALCULADO:', {
+        totalAulasCompletas,
+        totalAulas,
+        calculatedProgress
+      });
+
       setModulos(modulosComProgresso);
-      setProgressoGeral(totalAulas > 0 ? Math.round((totalAulasCompletas / totalAulas) * 100) : 0);
+      setProgressoGeral(calculatedProgress);
     } catch (error) {
-      console.error('Erro ao carregar curso:', error);
+      console.error('[useCursoTeorico] Erro ao carregar curso:', error);
       toast.error('Erro ao carregar dados do curso');
     } finally {
       setLoading(false);
+      console.log('[useCursoTeorico] carregarTudo finalizado');
     }
   }, [user]);
 
