@@ -97,12 +97,14 @@ serve(async (req) => {
     if (simplifiedStatus === "succeeded" && aulaId) {
       const { error: updateError } = await supabase
         .from("aulas")
-        .update({ status: "confirmada" })
-        .eq("id", aulaId)
-        .eq("status", "pendente"); // Only update if still pending
+        .update({ 
+          status: "confirmada",
+          payment_confirmed: true 
+        })
+        .eq("id", aulaId);
 
       if (!updateError) {
-        logStep("Lesson status updated to confirmada");
+        logStep("Lesson status and payment_confirmed updated");
       }
     }
 

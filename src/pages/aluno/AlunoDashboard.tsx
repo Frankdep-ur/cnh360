@@ -114,7 +114,8 @@ export default function AlunoDashboard() {
                 duracao_minutos,
                 ponto_encontro,
                 valor,
-                instrutor_id
+                instrutor_id,
+                payment_confirmed
               `)
               .eq('aluno_id', aluno.id)
               .eq('status', 'confirmada')
@@ -155,6 +156,9 @@ export default function AlunoDashboard() {
                 valor: aula.valor,
                 instructorId: aula.instrutor_id
               });
+              
+              // Set isPaid based on database value
+              setIsPaid((aula as any).payment_confirmed || false);
             }
           }
         });
