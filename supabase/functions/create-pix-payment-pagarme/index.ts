@@ -101,6 +101,18 @@ serve(async (req) => {
       .eq("id", user.id)
       .single();
 
+    // Parse phone for Pagar.me (required field)
+    let phoneAreaCode = "11"; // Default SP
+    let phoneNumber = "999999999"; // Default placeholder
+    
+    if (profile?.phone) {
+      const cleanPhone = profile.phone.replace(/\D/g, "");
+      if (cleanPhone.length >= 10) {
+        phoneAreaCode = cleanPhone.substring(0, 2);
+        phoneNumber = cleanPhone.substring(2);
+      }
+    }
+
     // Create PIX order in Pagar.me
     const orderPayload: any = {
       code: `pix-${Date.now()}`,
@@ -109,13 +121,13 @@ serve(async (req) => {
         name: profile?.full_name || "Cliente CNH360",
         type: "individual",
         document: profile?.cpf || undefined,
-        phones: profile?.phone ? {
+        phones: {
           mobile_phone: {
             country_code: "55",
-            area_code: profile.phone.substring(0, 2),
-            number: profile.phone.substring(2).replace(/\D/g, ""),
+            area_code: phoneAreaCode,
+            number: phoneNumber,
           },
-        } : undefined,
+        },
       },
       items: [
         {
