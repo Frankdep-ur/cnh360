@@ -367,15 +367,19 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
             />
           </div>
 
-          {/* Aviso importante sobre PIX */}
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-amber-700 dark:text-amber-300">
-              <p className="font-medium">Importante: Conta bancária obrigatória</p>
-              <p className="mt-1">
-                A Pagar.me exige conta bancária completa para saques automáticos. 
-                Chave PIX não é suportada para transferências automáticas.
-              </p>
+          {/* Aviso importante sobre bancos não suportados */}
+          <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-amber-700 dark:text-amber-300">
+                <p className="font-semibold">⚠️ PicPay, Stone e Neon NÃO são suportados</p>
+                <p className="mt-1 text-xs">
+                  Para receber automaticamente, use bancos como <strong>Nubank</strong>, <strong>Inter</strong>, <strong>PagBank</strong>, Itaú, Bradesco ou Banco do Brasil.
+                </p>
+                <p className="mt-2 text-xs opacity-80">
+                  Chaves PIX também não funcionam para saques automáticos. Informe os dados completos da conta.
+                </p>
+              </div>
             </div>
           </div>
 
