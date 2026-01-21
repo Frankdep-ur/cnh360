@@ -169,12 +169,12 @@ serve(async (req) => {
       registerInfo.address = {
         street: address.street,
         street_number: address.streetNumber,
-        complementary: address.complement || "",
+        complementary: address.complement || "N/A",
         neighborhood: address.neighborhood,
         city: address.city,
         state: address.state,
         zip_code: address.zipCode.replace(/\D/g, ""),
-        reference_point: ""
+        reference_point: address.referencePoint || "N/A"
       };
     }
 
