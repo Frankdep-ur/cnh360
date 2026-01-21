@@ -64,7 +64,7 @@ export default function AlunoAgenda() {
         return;
       }
 
-      // Fetch aulas
+      // Fetch only active/future aulas
       const { data: aulasData, error } = await supabase
         .from('aulas')
         .select(`
@@ -78,6 +78,8 @@ export default function AlunoAgenda() {
           instrutor_id
         `)
         .eq('aluno_id', aluno.id)
+        .in('status', ['pendente', 'confirmada', 'em_andamento'])
+        .gte('data_hora', new Date().toISOString())
         .order('data_hora', { ascending: true });
 
       if (error) {

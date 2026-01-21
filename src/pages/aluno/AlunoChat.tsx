@@ -121,6 +121,8 @@ export default function AlunoChat() {
     fetchConversas();
   }, [user]);
 
+  const selectedConversa = conversas.find(c => c.aula_id === selectedAulaId);
+
   if (selectedAulaId) {
     return (
       <div className="app-container pb-24">
@@ -135,12 +137,18 @@ export default function AlunoChat() {
             >
               <ChevronRight className="w-5 h-5 rotate-180" />
             </button>
-            <h1 className="text-xl font-bold text-foreground">Chat</h1>
+            <h1 className="text-xl font-bold text-foreground">
+              {selectedConversa?.instrutor_nome || 'Chat'}
+            </h1>
           </div>
 
           {/* Full screen chat */}
           <div className="fixed inset-0 top-20 bottom-20 z-40 bg-card">
-            <TripChat aulaId={selectedAulaId} className="!fixed !inset-0 !top-0 !bottom-0" />
+            <TripChat 
+              aulaId={selectedAulaId} 
+              instructorName={selectedConversa?.instrutor_nome || undefined}
+              className="!fixed !inset-0 !top-0 !bottom-0" 
+            />
           </div>
         </div>
 
