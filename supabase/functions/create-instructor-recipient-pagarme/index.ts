@@ -96,6 +96,11 @@ serve(async (req) => {
       conta,
       contaDv,
       accountType,
+      // Campos adicionais para pessoa física (Pagar.me V5)
+      birthdate,
+      monthlyIncome,
+      professionalOccupation,
+      address,
     } = body;
 
     // Validate required fields
@@ -135,19 +140,57 @@ serve(async (req) => {
     }
 
     // Build recipient payload for Pagar.me V5
+    const registerInfo: any = {
+      type: type,
+      document: cleanDocument,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone_numbers: [
+        {
+          ddd: "11",
+          number: "999999999",
+          type: "mobile"
+        }
+      ]
+    };
+
+    // Campos adicionais obrigatórios para pessoa física
+    if (type === "individual") {
+      if (!birthdate) {
+        throw new Error("Data de nascimento é obrigatória para pessoa física");
+      }
+      if (!address || !address.street || !address.streetNumber || !address.neighborhood || !address.city || !address.state || !address.zipCode) {
+        throw new Error("Endereço completo é obrigatório para pessoa física");
+      }
+
+      registerInfo.birthdate = birthdate; // Format: YYYY-MM-DD
+      registerInfo.monthly_income = monthlyIncome || 300000; // Em centavos (R$ 3.000,00)
+      registerInfo.professional_occupation = professionalOccupation || "instrutor_transito";
+      registerInfo.address = {
+        street: address.street,
+        street_number: address.streetNumber,
+        complementary: address.complement || "",
+        neighborhood: address.neighborhood,
+        city: address.city,
+        state: address.state,
+        zip_code: address.zipCode.replace(/\D/g, ""),
+        reference_point: ""
+      };
+    }
+
     const recipientPayload = {
-      register_information: {
-        type: type,
-        document: cleanDocument, // V5 API requires 'document', not 'document_number'
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone_numbers: [
-          {
-            ddd: "11",
-            number: "999999999",
-            type: "mobile"
-          }
-        ]
+      code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`,
+      register_information: registerInfo,
+      default_bank_account: {
+        holder_name: name.trim(),
+        holder_type: type,
+        holder_document: cleanDocument,
+        bank: cleanBankCode,
+        branch_number: agencia.replace(/\D/g, ""),
+        branch_check_digit: agenciaDv?.replace(/\D/g, "") || "",
+        account_number: conta.replace(/\D/g, ""),
+        account_check_digit: contaDv || "",
+        type: accountType
       },
       transfer_settings: {
         transfer_enabled: true,
@@ -159,18 +202,6 @@ serve(async (req) => {
         type: "full",
         volume_percentage: 100,
         delay: null
-      },
-      code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`,
-      default_bank_account: {
-        holder_name: name.trim(),
-        holder_type: type,
-        holder_document: cleanDocument,
-        bank: cleanBankCode,
-        branch_number: agencia.replace(/\D/g, ""),
-        branch_check_digit: agenciaDv?.replace(/\D/g, "") || "",
-        account_number: conta.replace(/\D/g, ""),
-        account_check_digit: contaDv || "",
-        type: accountType
       }
     };
 
