@@ -74,6 +74,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zipCode, setZipCode] = useState("");
+  const [loadingCep, setLoadingCep] = useState(false);
+  const [cepError, setCepError] = useState("");
   
   // Bank account - OBRIGATÓRIO para saques automáticos
   const [bankCode, setBankCode] = useState("");
@@ -115,6 +117,57 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
     if (profile) {
       if (profile.full_name) setHolderName(profile.full_name);
       if (profile.cpf) setDocumentNumber(formatDocument(profile.cpf, "individual"));
+    }
+  };
+
+  // Busca automática de endereço por CEP via ViaCEP
+  const fetchAddressByCep = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
+    
+    setLoadingCep(true);
+    setCepError("");
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+      
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      
+      // Preencher campos automaticamente
+      if (data.logradouro) setStreet(data.logradouro);
+      if (data.bairro) setNeighborhood(data.bairro);
+      if (data.localidade) setCity(data.localidade);
+      if (data.uf) setState(data.uf);
+      
+      toast.success("Endereço encontrado!", {
+        description: `${data.localidade} - ${data.uf}`,
+      });
+    } catch (error) {
+      console.error("[BankAccountSetup] CEP lookup error:", error);
+      setCepError("Erro ao buscar CEP. Tente novamente.");
+    } finally {
+      setLoadingCep(false);
+    }
+  };
+
+  // Handler para formatação e busca automática do CEP
+  const handleCepChange = (value: string) => {
+    // Formatar CEP: 00000-000
+    const formatted = value.replace(/\D/g, "")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .slice(0, 9);
+    
+    setZipCode(formatted);
+    setCepError("");
+    
+    // Buscar quando tiver 8 dígitos
+    const cleanCep = formatted.replace(/\D/g, "");
+    if (cleanCep.length === 8) {
+      fetchAddressByCep(cleanCep);
     }
   };
 
@@ -427,12 +480,27 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 
                 <div className="space-y-2">
                   <Label>CEP *</Label>
-                  <Input
-                    value={zipCode}
-                    onChange={(e) => setZipCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="00000000"
-                    maxLength={8}
-                  />
+                  <div className="relative">
+                    <Input
+                      value={zipCode}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      placeholder="00000-000"
+                      maxLength={9}
+                      className={cepError ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+                    />
+                    {loadingCep && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  {cepError && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      {cepError}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Digite o CEP para preencher o endereço automaticamente
+                  </p>
                 </div>
 
                 <div className="space-y-2">
