@@ -152,7 +152,7 @@ export default function InstrutorPerfil() {
         
         {/* Back Button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/aluno/buscar")}
           className="absolute top-6 left-6 w-10 h-10 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-lg safe-top"
         >
           <ArrowLeft className="w-5 h-5" />

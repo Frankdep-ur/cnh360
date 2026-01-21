@@ -9,7 +9,7 @@ export default function PoliticaPrivacidade() {
       <header className="px-6 pt-6 pb-4 safe-top border-b border-border">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/")}
             className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
