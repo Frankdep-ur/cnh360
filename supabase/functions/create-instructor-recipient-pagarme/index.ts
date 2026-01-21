@@ -286,6 +286,10 @@ serve(async (req) => {
         "unauthorized": "Erro de autenticação. Entre em contato com o suporte.",
         "denied": "Acesso negado. Entre em contato com o suporte.",
         
+        // Erros de configuração da conta
+        "split settings enabled": "Sistema de pagamentos em configuração. Entre em contato com o suporte para habilitar os recebimentos.",
+        "split": "Funcionalidade de pagamentos split não habilitada. Entre em contato com o suporte.",
+        
         // Erros genéricos
         "email": "E-mail inválido.",
         "phone": "Telefone inválido.",
