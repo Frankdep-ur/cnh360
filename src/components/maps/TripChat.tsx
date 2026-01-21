@@ -10,9 +10,10 @@ import { ptBR } from 'date-fns/locale';
 interface TripChatProps {
   aulaId: string;
   className?: string;
+  instructorName?: string;
 }
 
-export function TripChat({ aulaId, className }: TripChatProps) {
+export function TripChat({ aulaId, className, instructorName }: TripChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -96,7 +97,7 @@ export function TripChat({ aulaId, className }: TripChatProps) {
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-foreground">Chat da Viagem</span>
+              <span className="font-semibold text-foreground">{instructorName || 'Chat'}</span>
             </div>
             <button
               onClick={() => setIsOpen(false)}
