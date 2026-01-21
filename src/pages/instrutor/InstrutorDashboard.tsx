@@ -76,7 +76,7 @@ export default function InstrutorDashboard() {
     localStorage.setItem("instrutor_online_status", String(online));
   };
 
-  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; cidade: string | null } | null>(null);
 
   // Fetch instructor ID for notifications
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function InstrutorDashboard() {
     if (user) {
       supabase
         .from('profiles')
-        .select('full_name, avatar_url')
+        .select('full_name, avatar_url, cidade')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => setProfile(data));
@@ -211,7 +211,7 @@ export default function InstrutorDashboard() {
           <div className="flex items-center gap-2">
             <NotificationBell />
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-              #{instrutor.rankingCidade} em Araçatuba
+              #{instrutor.rankingCidade} em {profile?.cidade || "sua cidade"}
             </Badge>
           </div>
         </div>
@@ -487,7 +487,7 @@ export default function InstrutorDashboard() {
         <Card className="p-4 shadow-card bg-gradient-to-br from-primary/5 to-secondary/5">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-foreground mb-1">Seu Ranking em Araçatuba</h3>
+              <h3 className="font-semibold text-foreground mb-1">Seu Ranking em {profile?.cidade || "sua cidade"}</h3>
               <p className="text-sm text-muted-foreground">
                 #{instrutor.rankingCidade} de {instrutor.totalInstrutores} instrutores
               </p>

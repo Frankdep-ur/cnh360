@@ -309,6 +309,21 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         throw new Error(data.error);
       }
 
+      // Save city and state to profile
+      if (city && state) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from("profiles")
+            .update({ 
+              cidade: city.trim(),
+              estado: state.trim().toUpperCase()
+            })
+            .eq("id", user.id);
+          console.log("[BankAccountSetup] City and state saved to profile:", city, state);
+        }
+      }
+
       setStatus("success");
       toast.success("Dados bancários configurados!", {
         description: "Você receberá seus pagamentos automaticamente",
