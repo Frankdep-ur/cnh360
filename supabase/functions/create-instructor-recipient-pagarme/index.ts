@@ -138,7 +138,7 @@ serve(async (req) => {
     const recipientPayload = {
       register_information: {
         type: type,
-        document_number: cleanDocument,
+        document: cleanDocument, // V5 API requires 'document', not 'document_number'
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone_numbers: [
