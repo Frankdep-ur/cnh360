@@ -185,16 +185,7 @@ export default function AlunoDashboard() {
 
   // Navegação para aulas práticas com verificação de progresso e certificado
   const handleAulasPraticasClick = () => {
-    // Primeiro verificar se EAD está 100%
-    if (progressoGeral < 100) {
-      toast.warning("Complete a Preparação Teórica primeiro para acessar Aulas Práticas");
-      return;
-    }
-    // Depois verificar certificado
-    if (!certificadoTeoricoAprovado) {
-      setShowCertificadoAlert(true);
-      return;
-    }
+    // Acesso direto à busca de instrutores (validações desabilitadas temporariamente)
     navigate('/aluno/buscar');
   };
 
