@@ -200,12 +200,12 @@ export default function AlunoDashboard() {
           : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
       case 2: // Preparação Teórica
         if (cursoTeoricoCompleto) return { text: "Concluído", color: "bg-blue-100 text-blue-700" };
-        if (progressoGeral > 0) return { text: "Em andamento", color: "bg-green-500 text-white" };
-        return { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+        // Sempre "Em andamento" até completar 100%
+        return { text: "Em andamento", color: "bg-green-500 text-white" };
       case 3: // Aulas Práticas
         if (aulasPraticasCompletas) return { text: "Concluído", color: "bg-blue-100 text-blue-700" };
-        if (practicalHours > 0) return { text: "Em andamento", color: "bg-green-500 text-white" };
-        return { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+        // Sempre "Em andamento" até completar as horas mínimas
+        return { text: "Em andamento", color: "bg-green-500 text-white" };
       case 4: // Exame Prático
         return examePraticoAprovado 
           ? { text: "Concluído", color: "bg-blue-100 text-blue-700" }
