@@ -255,7 +255,7 @@ export default function SimuladoTeorico() {
           <div className="max-w-md mx-auto">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => navigate("/aluno")}
                 className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -452,7 +452,7 @@ export default function SimuladoTeorico() {
             <button
               onClick={() => {
                 if (confirm("Deseja sair do simulado? Seu progresso será perdido.")) {
-                  navigate(-1);
+                  navigate("/aluno");
                 }
               }}
               className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"

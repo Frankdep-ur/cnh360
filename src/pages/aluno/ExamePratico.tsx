@@ -67,7 +67,7 @@ export default function ExamePratico() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate("/aluno")}
               className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />

@@ -464,7 +464,7 @@ export default function AgendarAula() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center gap-4 mb-4">
             <button
-              onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)}
+              onClick={() => step > 1 ? setStep(step - 1) : navigate(`/aluno/instrutor/${id}`)}
               className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />
