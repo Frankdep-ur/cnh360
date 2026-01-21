@@ -97,7 +97,7 @@ export default function InstrutorPerfil() {
           credencial_detran: instrutorResult.credencial_detran,
           cnh_numero: instrutorResult.cnh_numero,
           cnh_categoria: instrutorResult.cnh_categoria,
-          preco_hora: Number(instrutorResult.preco_hora) || 80,
+          preco_hora: Number(instrutorResult.preco_hora) || 20,
           nota_media: Number(instrutorResult.nota_media) || 5,
           total_aulas: instrutorResult.total_aulas || 0,
           pagarme_recipient_id: instrutorResult.pagarme_recipient_id || null,

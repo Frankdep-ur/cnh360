@@ -235,7 +235,7 @@ export default function AgendarAula() {
         user_id: id!,
         name: cacheData.nome || "Instrutor",
         photo: cacheData.foto || "",
-        price: Number(cacheData.preco_hora) || 80,
+        price: Number(cacheData.preco_hora) || 20,
         car: carType,
         email: null,
       });

@@ -104,7 +104,7 @@ export default function InstrutorPerfil() {
         photo: cacheData.foto || "",
         rating: Number(cacheData.nota_media) || 5.0,
         reviews: cacheData.total_avaliacoes || 0,
-        price: Number(cacheData.preco_hora) || 80,
+        price: Number(cacheData.preco_hora) || 20,
         distance: `${cacheData.raio_atendimento_km || 10} km`,
         car: {
           model: veiculo?.modelo || "Veículo não informado",
