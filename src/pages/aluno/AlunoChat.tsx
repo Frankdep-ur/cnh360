@@ -76,10 +76,10 @@ export default function AlunoChat() {
       // Get instrutor info and last message for each aula
       const conversasData = await Promise.all(
         (aulasData || []).map(async (aula) => {
-          // Get instrutor info
+          // Get instrutor info from public cache (no RLS restrictions)
           const { data: instrutorData } = await supabase
-            .from('instrutores_seguros')
-            .select('full_name, avatar_url, nota_media')
+            .from('instrutores_publico_cache')
+            .select('nome, foto, nota_media')
             .eq('id', aula.instrutor_id)
             .single();
 
@@ -102,8 +102,8 @@ export default function AlunoChat() {
           return {
             aula_id: aula.id,
             instrutor_id: aula.instrutor_id,
-            instrutor_nome: instrutorData?.full_name || 'Instrutor',
-            instrutor_foto: instrutorData?.avatar_url,
+            instrutor_nome: instrutorData?.nome || 'Instrutor',
+            instrutor_foto: instrutorData?.foto,
             instrutor_nota: instrutorData?.nota_media,
             data_hora: aula.data_hora,
             status: aula.status,

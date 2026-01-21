@@ -78,7 +78,7 @@ export default function AlunoAgenda() {
           instrutor_id
         `)
         .eq('aluno_id', aluno.id)
-        .in('status', ['pendente', 'confirmada', 'em_andamento'])
+        .in('status', ['confirmada', 'em_andamento'])
         .gte('data_hora', new Date().toISOString())
         .order('data_hora', { ascending: true });
 
@@ -91,16 +91,17 @@ export default function AlunoAgenda() {
       // Get instrutor info for each aula
       const aulasWithInstrutor = await Promise.all(
         (aulasData || []).map(async (aula) => {
+          // Get instrutor info from public cache (no RLS restrictions)
           const { data: instrutorData } = await supabase
-            .from('instrutores_seguros')
-            .select('full_name, avatar_url, nota_media')
+            .from('instrutores_publico_cache')
+            .select('nome, foto, nota_media')
             .eq('id', aula.instrutor_id)
             .single();
 
           return {
             ...aula,
-            instrutor_nome: instrutorData?.full_name || 'Instrutor',
-            instrutor_foto: instrutorData?.avatar_url,
+            instrutor_nome: instrutorData?.nome || 'Instrutor',
+            instrutor_foto: instrutorData?.foto,
             instrutor_nota: instrutorData?.nota_media
           };
         })
