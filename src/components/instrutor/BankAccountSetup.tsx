@@ -34,9 +34,6 @@ const SUPPORTED_BANKS = [
   { code: "212", name: "Banco Original" },
 ];
 
-// Bancos NÃO suportados (para exibir aviso se usuário mencionar)
-const UNSUPPORTED_BANKS = ["380", "197", "655"]; // PicPay, Stone, Neon
-
 type Status = "idle" | "loading" | "success" | "error";
 
 // Interface para erros específicos de campo
@@ -66,16 +63,10 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [monthlyIncome, setMonthlyIncome] = useState("3000");
   const [professionalOccupation, setProfessionalOccupation] = useState("instrutor_transito");
   
-  // Endereço (obrigatório para pessoa física)
-  const [street, setStreet] = useState("");
-  const [streetNumber, setStreetNumber] = useState("");
-  const [complement, setComplement] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
+  // Address loaded from profile
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [loadingCep, setLoadingCep] = useState(false);
-  const [cepError, setCepError] = useState("");
+  const [hasAddress, setHasAddress] = useState(false);
   
   // Bank account - OBRIGATÓRIO para saques automáticos
   const [bankCode, setBankCode] = useState("");
@@ -110,64 +101,16 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, cpf, phone")
+      .select("full_name, cpf, phone, cidade, estado")
       .eq("id", user?.id)
       .maybeSingle();
 
     if (profile) {
       if (profile.full_name) setHolderName(profile.full_name);
       if (profile.cpf) setDocumentNumber(formatDocument(profile.cpf, "individual"));
-    }
-  };
-
-  // Busca automática de endereço por CEP via ViaCEP
-  const fetchAddressByCep = async (cep: string) => {
-    const cleanCep = cep.replace(/\D/g, "");
-    if (cleanCep.length !== 8) return;
-    
-    setLoadingCep(true);
-    setCepError("");
-    
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
-      
-      if (data.erro) {
-        setCepError("CEP não encontrado");
-        return;
-      }
-      
-      // Preencher campos automaticamente
-      if (data.logradouro) setStreet(data.logradouro);
-      if (data.bairro) setNeighborhood(data.bairro);
-      if (data.localidade) setCity(data.localidade);
-      if (data.uf) setState(data.uf);
-      
-      toast.success("Endereço encontrado!", {
-        description: `${data.localidade} - ${data.uf}`,
-      });
-    } catch (error) {
-      console.error("[BankAccountSetup] CEP lookup error:", error);
-      setCepError("Erro ao buscar CEP. Tente novamente.");
-    } finally {
-      setLoadingCep(false);
-    }
-  };
-
-  // Handler para formatação e busca automática do CEP
-  const handleCepChange = (value: string) => {
-    // Formatar CEP: 00000-000
-    const formatted = value.replace(/\D/g, "")
-      .replace(/(\d{5})(\d)/, "$1-$2")
-      .slice(0, 9);
-    
-    setZipCode(formatted);
-    setCepError("");
-    
-    // Buscar quando tiver 8 dígitos
-    const cleanCep = formatted.replace(/\D/g, "");
-    if (cleanCep.length === 8) {
-      fetchAddressByCep(cleanCep);
+      if (profile.cidade) setCity(profile.cidade);
+      if (profile.estado) setState(profile.estado);
+      setHasAddress(!!(profile.cidade && profile.estado));
     }
   };
 
@@ -211,8 +154,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       if (!birthdate) {
         return "Informe a data de nascimento";
       }
-      if (!street || !streetNumber || !neighborhood || !city || !state || !zipCode) {
-        return "Preencha todos os campos do endereço";
+      if (!hasAddress) {
+        return "Complete seu endereço no cadastro do instrutor primeiro";
       }
     } else {
       if (cleanDoc.length !== 14) {
@@ -270,14 +213,14 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         birthdate: holderType === "individual" ? birthdate : undefined,
         monthlyIncome: holderType === "individual" ? parseInt(monthlyIncome) * 100 : undefined, // Em centavos
         professionalOccupation: holderType === "individual" ? professionalOccupation : undefined,
+        // Address from profile (simplified - just city/state for Pagar.me)
         address: holderType === "individual" ? {
-          street: street.trim(),
-          streetNumber: streetNumber.trim(),
-          complement: complement.trim() || undefined,
-          neighborhood: neighborhood.trim(),
+          street: "Rua Principal",
+          streetNumber: "1",
+          neighborhood: "Centro",
           city: city.trim(),
           state: state.trim().toUpperCase(),
-          zipCode: zipCode.replace(/\D/g, ""),
+          zipCode: "00000000", // Will be filled by Pagar.me
         } : undefined,
         // Dados bancários
         bankCode,
@@ -307,21 +250,6 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       if (data?.error) {
         console.error("[BankAccountSetup] API error:", data.error);
         throw new Error(data.error);
-      }
-
-      // Save city and state to profile
-      if (city && state) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase
-            .from("profiles")
-            .update({ 
-              cidade: city.trim(),
-              estado: state.trim().toUpperCase()
-            })
-            .eq("id", user.id);
-          console.log("[BankAccountSetup] City and state saved to profile:", city, state);
-        }
       }
 
       setStatus("success");
@@ -415,6 +343,25 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
             </div>
           )}
 
+          {/* Address info from profile */}
+          {hasAddress && (
+            <div className="p-3 bg-secondary/10 rounded-lg flex items-center gap-2">
+              <Info className="w-4 h-4 text-secondary" />
+              <span className="text-sm text-secondary">
+                Localização: <strong>{city} - {state}</strong>
+              </span>
+            </div>
+          )}
+
+          {!hasAddress && holderType === "individual" && (
+            <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <span className="text-sm text-amber-700 dark:text-amber-300">
+                Complete seu cadastro de instrutor primeiro para informar sua cidade.
+              </span>
+            </div>
+          )}
+
           {/* Holder Type */}
           <div className="space-y-2">
             <Label>Tipo de conta</Label>
@@ -473,109 +420,16 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
 
           {/* Campos adicionais para Pessoa Física */}
           {holderType === "individual" && (
-            <>
-              {/* Data de Nascimento */}
-              <div className="space-y-2">
-                <Label>Data de Nascimento *</Label>
-                <Input
-                  type="date"
-                  value={birthdate}
-                  onChange={(e) => setBirthdate(e.target.value)}
-                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
-                />
-                <p className="text-xs text-muted-foreground">Você deve ter pelo menos 18 anos</p>
-              </div>
-
-              {/* Endereço */}
-              <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Info className="w-4 h-4" />
-                  Endereço Residencial
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>CEP *</Label>
-                  <div className="relative">
-                    <Input
-                      value={zipCode}
-                      onChange={(e) => handleCepChange(e.target.value)}
-                      placeholder="00000-000"
-                      maxLength={9}
-                      className={cepError ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
-                    />
-                    {loadingCep && (
-                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                  </div>
-                  {cepError && (
-                    <p className="text-xs text-destructive flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      {cepError}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Digite o CEP para preencher o endereço automaticamente
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Rua/Avenida *</Label>
-                  <Input
-                    value={street}
-                    onChange={(e) => setStreet(e.target.value)}
-                    placeholder="Nome da rua"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-2">
-                    <Label>Número *</Label>
-                    <Input
-                      value={streetNumber}
-                      onChange={(e) => setStreetNumber(e.target.value)}
-                      placeholder="123"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Complemento</Label>
-                    <Input
-                      value={complement}
-                      onChange={(e) => setComplement(e.target.value)}
-                      placeholder="Apto 10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Bairro *</Label>
-                  <Input
-                    value={neighborhood}
-                    onChange={(e) => setNeighborhood(e.target.value)}
-                    placeholder="Centro"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-2">
-                    <Label>Cidade *</Label>
-                    <Input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="São Paulo"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Estado *</Label>
-                    <Input
-                      value={state}
-                      onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
-                      placeholder="SP"
-                      maxLength={2}
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
+            <div className="space-y-2">
+              <Label>Data de Nascimento *</Label>
+              <Input
+                type="date"
+                value={birthdate}
+                onChange={(e) => setBirthdate(e.target.value)}
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+              />
+              <p className="text-xs text-muted-foreground">Você deve ter pelo menos 18 anos</p>
+            </div>
           )}
 
           {/* Aviso importante sobre bancos não suportados */}
@@ -724,7 +578,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
           {/* Submit */}
           <Button
             onClick={handleSubmit}
-            disabled={status === "loading"}
+            disabled={status === "loading" || (!hasAddress && holderType === "individual")}
             className="w-full"
             size="lg"
           >

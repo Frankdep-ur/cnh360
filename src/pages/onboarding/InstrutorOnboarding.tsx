@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,12 +17,16 @@ import {
 type FormErrors = {
   name?: string;
   cpf?: string;
+  cep?: string;
+  streetNumber?: string;
   detranCredential?: string;
   cnh?: string;
   carModel?: string;
   carPlate?: string;
   transmission?: string;
 };
+
+const TOTAL_STEPS = 4;
 
 export default function InstrutorOnboarding() {
   const navigate = useNavigate();
@@ -31,11 +35,25 @@ export default function InstrutorOnboarding() {
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
   const [name, setName] = useState("");
+  
+  // Step 2 - Address
+  const [cep, setCep] = useState("");
+  const [street, setStreet] = useState("");
+  const [streetNumber, setStreetNumber] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [loadingCep, setLoadingCep] = useState(false);
+  
+  // Step 3 - Credentials
   const [detranCredential, setDetranCredential] = useState("");
   const [cnh, setCnh] = useState("");
+  
+  // Step 4 - Vehicle
   const [carModel, setCarModel] = useState("");
   const [carPlate, setCarPlate] = useState("");
   const [transmission, setTransmission] = useState<"manual" | "automatico" | null>(null);
+  
   const [loading, setLoading] = useState(false);
   const [checkingExisting, setCheckingExisting] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -81,6 +99,55 @@ export default function InstrutorOnboarding() {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
+  const formatCEP = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    return numbers.replace(/(\d{5})(\d)/, "$1-$2").slice(0, 9);
+  };
+
+  // Fetch address by CEP
+  const fetchAddressByCep = async (cepValue: string) => {
+    const cleanCep = cepValue.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
+    
+    setLoadingCep(true);
+    setErrors(prev => ({ ...prev, cep: undefined }));
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+      
+      if (data.erro) {
+        setErrors(prev => ({ ...prev, cep: "CEP não encontrado" }));
+        return;
+      }
+      
+      if (data.logradouro) setStreet(data.logradouro);
+      if (data.bairro) setNeighborhood(data.bairro);
+      if (data.localidade) setCity(data.localidade);
+      if (data.uf) setState(data.uf);
+      
+      toast({
+        title: "Endereço encontrado!",
+        description: `${data.localidade} - ${data.uf}`,
+      });
+    } catch (error) {
+      console.error("[InstrutorOnboarding] CEP lookup error:", error);
+      setErrors(prev => ({ ...prev, cep: "Erro ao buscar CEP" }));
+    } finally {
+      setLoadingCep(false);
+    }
+  };
+
+  const handleCepChange = (value: string) => {
+    const formatted = formatCEP(value);
+    setCep(formatted);
+    
+    const cleanCep = formatted.replace(/\D/g, "");
+    if (cleanCep.length === 8) {
+      fetchAddressByCep(cleanCep);
+    }
+  };
+
   const validateStep = (currentStep: number): boolean => {
     setErrors({});
     
@@ -88,8 +155,22 @@ export default function InstrutorOnboarding() {
       if (currentStep === 1) {
         instrutorStep1Schema.parse({ name, cpf });
       } else if (currentStep === 2) {
-        instrutorStep2Schema.parse({ detranCredential, cnh });
+        // Validate address
+        if (cep.replace(/\D/g, "").length !== 8) {
+          setErrors({ cep: "CEP inválido" });
+          return false;
+        }
+        if (!city || !state) {
+          setErrors({ cep: "Busque o endereço pelo CEP" });
+          return false;
+        }
+        if (!streetNumber.trim()) {
+          setErrors({ streetNumber: "Informe o número" });
+          return false;
+        }
       } else if (currentStep === 3) {
+        instrutorStep2Schema.parse({ detranCredential, cnh });
+      } else if (currentStep === 4) {
         instrutorStep3Schema.parse({ carModel, carPlate, transmission });
       }
       return true;
@@ -108,8 +189,9 @@ export default function InstrutorOnboarding() {
 
   const canProceed = () => {
     if (step === 1) return cpf.length === 14 && name.length > 2;
-    if (step === 2) return detranCredential.length > 0 && cnh.length > 0;
-    if (step === 3) return carModel.length > 0 && carPlate.length > 0 && transmission !== null;
+    if (step === 2) return cep.replace(/\D/g, "").length === 8 && city.length > 0 && streetNumber.length > 0;
+    if (step === 3) return detranCredential.length > 0 && cnh.length > 0;
+    if (step === 4) return carModel.length > 0 && carPlate.length > 0 && transmission !== null;
     return false;
   };
 
@@ -123,7 +205,7 @@ export default function InstrutorOnboarding() {
       return;
     }
 
-    if (step < 3) {
+    if (step < TOTAL_STEPS) {
       setStep(step + 1);
     } else {
       // Save to database
@@ -140,10 +222,15 @@ export default function InstrutorOnboarding() {
       setLoading(true);
 
       try {
-        // Update profile with CPF
+        // Update profile with CPF and address
         const { error: profileError } = await supabase
           .from("profiles")
-          .update({ cpf: cpf.replace(/\D/g, ""), full_name: name.trim() })
+          .update({ 
+            cpf: cpf.replace(/\D/g, ""), 
+            full_name: name.trim(),
+            cidade: city.trim(),
+            estado: state.trim().toUpperCase()
+          })
           .eq("id", user.id);
 
         if (profileError) throw profileError;
@@ -245,7 +332,7 @@ export default function InstrutorOnboarding() {
           </button>
           <div className="flex-1">
             <div className="flex gap-2">
-              {[1, 2, 3].map((s) => (
+              {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
                 <div
                   key={s}
                   className={cn(
@@ -310,8 +397,77 @@ export default function InstrutorOnboarding() {
             </div>
           )}
 
-          {/* Step 2: Credentials */}
+          {/* Step 2: Address */}
           {step === 2 && (
+            <div className="animate-fade-in">
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Onde você mora? 📍
+              </h1>
+              <p className="text-muted-foreground mb-8">
+                Informe seu endereço de residência
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    CEP
+                  </label>
+                  <div className="relative">
+                    <Input
+                      placeholder="00000-000"
+                      value={cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      maxLength={9}
+                      className={cn("h-14 text-lg rounded-xl pr-12", errors.cep && "border-destructive")}
+                    />
+                    {loadingCep && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  {errors.cep && <p className="text-sm text-destructive mt-1">{errors.cep}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Digite o CEP para preencher automaticamente
+                  </p>
+                </div>
+
+                {city && (
+                  <div className="p-4 bg-secondary/10 rounded-2xl space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-2 text-secondary">
+                      <MapPin className="w-5 h-5" />
+                      <span className="font-medium">{city} - {state}</span>
+                    </div>
+                    
+                    {street && (
+                      <div className="text-sm text-muted-foreground">
+                        {street}{neighborhood && `, ${neighborhood}`}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-2 block">
+                          Número *
+                        </label>
+                        <Input
+                          placeholder="123"
+                          value={streetNumber}
+                          onChange={(e) => {
+                            setStreetNumber(e.target.value);
+                            if (errors.streetNumber) setErrors({ ...errors, streetNumber: undefined });
+                          }}
+                          className={cn("h-12 rounded-xl", errors.streetNumber && "border-destructive")}
+                        />
+                        {errors.streetNumber && <p className="text-xs text-destructive mt-1">{errors.streetNumber}</p>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Credentials */}
+          {step === 3 && (
             <div className="animate-fade-in">
               <h1 className="text-2xl font-bold text-foreground mb-2">
                 Credenciamento
@@ -375,8 +531,8 @@ export default function InstrutorOnboarding() {
             </div>
           )}
 
-          {/* Step 3: Vehicle */}
-          {step === 3 && (
+          {/* Step 4: Vehicle */}
+          {step === 4 && (
             <div className="animate-fade-in">
               <h1 className="text-2xl font-bold text-foreground mb-2">
                 Seu veículo
@@ -473,7 +629,7 @@ export default function InstrutorOnboarding() {
             disabled={!canProceed() || loading}
             onClick={handleNext}
           >
-            {loading ? "Salvando..." : step === 3 ? "Começar a dar aulas" : "Continuar"}
+            {loading ? "Salvando..." : step === TOTAL_STEPS ? "Começar a dar aulas" : "Continuar"}
             <ArrowRight className="w-5 h-5" />
           </Button>
         </div>
