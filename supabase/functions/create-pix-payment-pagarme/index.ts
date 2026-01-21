@@ -177,12 +177,35 @@ serve(async (req) => {
 
     if (!orderResponse.ok) {
       const errorData = await orderResponse.json();
-      logStep("Pagar.me PIX error", errorData);
+      logStep("Pagar.me PIX HTTP error", errorData);
       throw new Error(errorData.message || "Erro ao criar PIX no Pagar.me");
     }
 
     const orderData = await orderResponse.json();
-    logStep("PIX order created", { orderId: orderData.id, status: orderData.status });
+    logStep("PIX order created", { 
+      orderId: orderData.id, 
+      status: orderData.status,
+      charges: orderData.charges 
+    });
+
+    // Check if order failed
+    if (orderData.status === "failed") {
+      const charge = orderData.charges?.[0];
+      const lastTransaction = charge?.last_transaction;
+      const errorMessage = lastTransaction?.gateway_response?.errors?.[0]?.message 
+        || lastTransaction?.acquirer_message 
+        || charge?.last_transaction?.status
+        || "Pagamento recusado pelo gateway";
+      
+      logStep("PIX order failed", { 
+        chargeStatus: charge?.status,
+        transactionStatus: lastTransaction?.status,
+        gatewayResponse: lastTransaction?.gateway_response,
+        acquirerMessage: lastTransaction?.acquirer_message
+      });
+      
+      throw new Error(`PIX falhou: ${errorMessage}`);
+    }
 
     // Extract PIX data from response
     const pixCharge = orderData.charges?.[0];
@@ -194,6 +217,12 @@ serve(async (req) => {
 
     const qrCode = pixTransaction.qr_code;
     const qrCodeUrl = pixTransaction.qr_code_url;
+    
+    if (!qrCode || !qrCodeUrl) {
+      logStep("PIX QR code missing", { qrCode, qrCodeUrl, transaction: pixTransaction });
+      throw new Error("QR Code PIX não foi gerado pela Pagar.me");
+    }
+    
     const expiresAt = pixTransaction.expires_at;
     const transactionId = orderData.id;
 
