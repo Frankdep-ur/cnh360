@@ -63,14 +63,17 @@ serve(async (req) => {
     }
 
     if (!instrutorData.pagarme_recipient_id) {
+      // Return 200 with needsSetup flag instead of 400 error
+      // This allows the frontend to handle it gracefully
       return new Response(
         JSON.stringify({ 
-          error: "Dados bancários não configurados",
+          success: false,
           needsSetup: true,
+          message: "Dados bancários não configurados",
         }),
         { 
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
+          status: 200, // Use 200 so frontend doesn't treat as error
         }
       );
     }
