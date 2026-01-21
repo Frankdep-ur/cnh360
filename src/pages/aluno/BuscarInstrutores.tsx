@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { QUERY_KEYS } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
 
 const filters = [
   { id: "disponivel", label: "Disponível agora" },
@@ -135,47 +134,12 @@ export default function BuscarInstrutores() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  // Verificar se aluno tem certificado teórico aprovado
-  const [certificadoAprovado, setCertificadoAprovado] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    async function checkCertificado() {
-      if (!user) return;
-      
-      const { data: aluno } = await supabase
-        .from('alunos')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (!aluno) return;
-      
-      const { data: progresso } = await supabase
-        .from('progresso_renach')
-        .select('prova_teorica_detran_aprovada')
-        .eq('aluno_id', aluno.id)
-        .maybeSingle();
-      
-      const aprovado = progresso?.prova_teorica_detran_aprovada ?? false;
-      setCertificadoAprovado(aprovado);
-      
-      if (!aprovado) {
-        toast.warning(
-          "É necessário enviar o certificado de aprovação no exame teórico do DETRAN antes de agendar aulas práticas.",
-          { duration: 6000 }
-        );
-        navigate('/aluno/enviar-certificado');
-      }
-    }
-    checkCertificado();
-  }, [user, navigate]);
 
   // Use React Query for data fetching with caching
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
     queryFn: fetchInstructorsWithVehicles,
     staleTime: 5 * 60 * 1000, // 5 minutes cache
-    enabled: certificadoAprovado === true,
   });
 
   const toggleFilter = (filterId: string) => {
