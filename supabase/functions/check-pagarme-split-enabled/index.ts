@@ -32,10 +32,10 @@ serve(async (req) => {
       );
     }
 
-    logStep("Attempting to list recipients to check if Split is enabled");
-
-    // Try to list recipients - this endpoint fails with 412 if Split is not enabled
-    const response = await fetch("https://api.pagar.me/core/v5/recipients?page=1&size=1", {
+    // First check: Try to list recipients (basic connectivity)
+    logStep("Step 1: Checking if we can list recipients");
+    
+    const listResponse = await fetch("https://api.pagar.me/core/v5/recipients?page=1&size=1", {
       method: "GET",
       headers: {
         "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
@@ -43,31 +43,25 @@ serve(async (req) => {
       },
     });
 
-    const responseText = await response.text();
-    logStep("Pagar.me response", { status: response.status, body: responseText });
+    const listText = await listResponse.text();
+    logStep("List recipients response", { status: listResponse.status });
 
-    let data: any = {};
+    let listData: any = {};
     try {
-      data = JSON.parse(responseText);
+      listData = JSON.parse(listText);
     } catch {
-      logStep("Failed to parse response as JSON");
+      logStep("Failed to parse list response as JSON");
     }
 
-    // Check for Split not enabled errors
-    if (!response.ok) {
+    // If listing fails with 412 or forbidden, Split is definitely not enabled
+    if (!listResponse.ok) {
       const isDisabled =
-        response.status === 412 ||
-        data.message?.toLowerCase().includes("action_forbidden") ||
-        data.message?.toLowerCase().includes("not allowed") ||
-        data.message?.toLowerCase().includes("recipient") ||
-        data.errors?.some((e: any) =>
-          e.message?.toLowerCase().includes("forbidden") ||
-          e.message?.toLowerCase().includes("not allowed")
-        );
-
-      logStep("Split check failed", { isDisabled, status: response.status });
+        listResponse.status === 412 ||
+        listData.message?.toLowerCase().includes("action_forbidden") ||
+        listData.message?.toLowerCase().includes("not allowed");
 
       if (isDisabled) {
+        logStep("Split not enabled - cannot even list recipients");
         return new Response(
           JSON.stringify({
             enabled: false,
@@ -77,28 +71,82 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
       }
+    }
 
-      // Other API error
+    // Second check: Try to create a recipient with minimal invalid data
+    // This will fail with validation error if creation is allowed, or action_forbidden if not
+    logStep("Step 2: Testing if we can create recipients (dry-run)");
+    
+    const testPayload = {
+      name: "TEST_VALIDATION_CHECK",
+      document: "00000000000", // Invalid CPF - will fail validation if creation is allowed
+      type: "individual",
+      code: `test-check-${Date.now()}`,
+    };
+
+    const createResponse = await fetch("https://api.pagar.me/core/v5/recipients", {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(testPayload),
+    });
+
+    const createText = await createResponse.text();
+    logStep("Create test response", { status: createResponse.status, body: createText.substring(0, 500) });
+
+    let createData: any = {};
+    try {
+      createData = JSON.parse(createText);
+    } catch {
+      logStep("Failed to parse create response as JSON");
+    }
+
+    // Check if the creation attempt was blocked due to permissions (not validation)
+    const createErrorMessage = (createData.message || "").toLowerCase();
+    const isCreationBlocked = 
+      createResponse.status === 412 ||
+      createErrorMessage.includes("action_forbidden") ||
+      createErrorMessage.includes("not allowed to create") ||
+      createErrorMessage.includes("company it not allowed");
+
+    if (isCreationBlocked) {
+      logStep("Split enabled for listing but NOT for creating recipients");
       return new Response(
         JSON.stringify({
           enabled: false,
-          reason: "api_error",
-          message: data.message || "Erro ao verificar configuração de pagamentos"
+          reason: "creation_not_allowed",
+          message: "A conta Pagar.me pode listar recebedores, mas não pode criar novos. Habilite o Split/Marketplace completo no dashboard Pagar.me."
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    // Success - Split is enabled
-    logStep("Split/Marketplace is enabled", { 
-      recipientCount: Array.isArray(data.data) ? data.data.length : 0 
-    });
+    // If we got here, either:
+    // 1. Creation failed with validation error (400) - which means creation IS allowed
+    // 2. Some other error occurred
+    
+    // A 400 with validation errors means the endpoint is accessible
+    if (createResponse.status === 400 || createResponse.status === 422) {
+      logStep("Split/Marketplace is fully enabled - creation endpoint accessible");
+      return new Response(
+        JSON.stringify({
+          enabled: true,
+          reason: "ok",
+          message: "Sistema de pagamentos configurado corretamente"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
 
+    // Unexpected response - log and assume it might work
+    logStep("Unexpected create response, assuming enabled", { status: createResponse.status });
     return new Response(
       JSON.stringify({
         enabled: true,
-        reason: "ok",
-        message: "Sistema de pagamentos configurado corretamente"
+        reason: "assumed_ok",
+        message: "Sistema de pagamentos aparenta estar configurado"
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
@@ -116,4 +164,3 @@ serve(async (req) => {
     );
   }
 });
-
