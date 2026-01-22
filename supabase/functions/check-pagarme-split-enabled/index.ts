@@ -73,15 +73,50 @@ serve(async (req) => {
       }
     }
 
-    // Second check: Try to create a recipient with minimal invalid data
-    // This will fail with validation error if creation is allowed, or action_forbidden if not
-    logStep("Step 2: Testing if we can create recipients (dry-run)");
+    // Second check: Try to create a recipient with COMPLETE payload
+    // This forces Pagar.me to check permissions, not just validate data
+    logStep("Step 2: Testing if we can create recipients (dry-run with complete payload)");
     
     const testPayload = {
-      name: "TEST_VALIDATION_CHECK",
-      document: "00000000000", // Invalid CPF - will fail validation if creation is allowed
-      type: "individual",
-      code: `test-check-${Date.now()}`,
+      code: `test-split-check-${Date.now()}`,
+      register_information: {
+        type: "individual",
+        document: "00000000191", // CPF válido de teste
+        name: "TESTE SPLIT CHECK",
+        email: "teste@teste.com",
+        birthdate: "1990-01-01",
+        monthly_income: 300000,
+        professional_occupation: "teste",
+        phone_numbers: [
+          { ddd: "11", number: "999999999", type: "mobile" }
+        ],
+        address: {
+          street: "Rua Teste",
+          street_number: "100",
+          complementary: "N/A",
+          neighborhood: "Centro",
+          city: "São Paulo",
+          state: "SP",
+          zip_code: "01310100",
+          reference_point: "N/A"
+        }
+      },
+      default_bank_account: {
+        holder_name: "TESTE SPLIT CHECK",
+        holder_type: "individual",
+        holder_document: "00000000191",
+        bank: "001", // Banco do Brasil
+        branch_number: "0001",
+        branch_check_digit: "",
+        account_number: "12345",
+        account_check_digit: "6",
+        type: "checking"
+      },
+      transfer_settings: {
+        transfer_enabled: true,
+        transfer_interval: "daily",
+        transfer_day: 0
+      }
     };
 
     const createResponse = await fetch("https://api.pagar.me/core/v5/recipients", {
@@ -105,39 +140,61 @@ serve(async (req) => {
 
     // Check if the creation attempt was blocked due to permissions (not validation)
     const createErrorMessage = (createData.message || "").toLowerCase();
+    const errorDetails = JSON.stringify(createData.errors || []).toLowerCase();
+
     const isCreationBlocked = 
       createResponse.status === 412 ||
       createErrorMessage.includes("action_forbidden") ||
       createErrorMessage.includes("not allowed to create") ||
-      createErrorMessage.includes("company it not allowed");
+      createErrorMessage.includes("company it not allowed") ||
+      createErrorMessage.includes("is not allowed") ||
+      errorDetails.includes("action_forbidden") ||
+      errorDetails.includes("not allowed");
 
     if (isCreationBlocked) {
-      logStep("Split enabled for listing but NOT for creating recipients");
+      logStep("Split NOT enabled - creation blocked by permissions", { 
+        status: createResponse.status,
+        message: createData.message,
+        errors: createData.errors
+      });
       return new Response(
         JSON.stringify({
           enabled: false,
           reason: "creation_not_allowed",
-          message: "A conta Pagar.me pode listar recebedores, mas não pode criar novos. Habilite o Split/Marketplace completo no dashboard Pagar.me."
+          message: "A funcionalidade de recebedores não está habilitada na conta Pagar.me. Entre em contato com o suporte para ativar o Split/Marketplace."
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    // If we got here, either:
-    // 1. Creation failed with validation error (400) - which means creation IS allowed
-    // 2. Some other error occurred
-    
-    // A 400 with validation errors means the endpoint is accessible
+    // If we got here with validation errors (400/422), it means permission check PASSED
+    // and only the test data was invalid - which is expected and good!
     if (createResponse.status === 400 || createResponse.status === 422) {
-      logStep("Split/Marketplace is fully enabled - creation endpoint accessible");
-      return new Response(
-        JSON.stringify({
-          enabled: true,
-          reason: "ok",
-          message: "Sistema de pagamentos configurado corretamente"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
+      // Verify it's a validation error and not a permission error
+      const hasValidationErrors = createData.errors?.some((e: any) => {
+        const msg = (e.message || "").toLowerCase();
+        return msg.includes("invalid") || 
+               msg.includes("required") || 
+               msg.includes("must be") ||
+               msg.includes("already exists") ||
+               msg.includes("cpf") ||
+               msg.includes("document");
+      });
+      
+      if (hasValidationErrors || !isCreationBlocked) {
+        logStep("Split/Marketplace is ENABLED - validation errors confirm access", {
+          status: createResponse.status,
+          errorsCount: createData.errors?.length
+        });
+        return new Response(
+          JSON.stringify({
+            enabled: true,
+            reason: "ok",
+            message: "Sistema de pagamentos configurado corretamente"
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
     }
 
     // Unexpected response - log and assume it might work
