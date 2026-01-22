@@ -27,6 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Handle token refresh and sign out events
         if (event === 'TOKEN_REFRESHED') {
           console.log('Token renovado com sucesso');
+          setSession(session);
+          setUser(session?.user ?? null);
         }
         
         if (event === 'SIGNED_OUT' || !session) {
@@ -40,17 +42,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    // THEN check for existing session and validate token
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (error) {
         console.error('Erro ao recuperar sessão:', error);
-        // Clear invalid session
-        supabase.auth.signOut();
+        // Token inválido - forçar logout limpo
+        await supabase.auth.signOut({ scope: 'local' });
         setSession(null);
         setUser(null);
+        setLoading(false);
+        return;
+      }
+      
+      if (session) {
+        // Validar se o token ainda é válido
+        const { error: validateError } = await supabase.auth.getUser();
+        if (validateError) {
+          console.error('Token inválido, fazendo logout:', validateError);
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
       } else {
-        setSession(session);
-        setUser(session?.user ?? null);
+        setSession(null);
+        setUser(null);
       }
       setLoading(false);
     });
