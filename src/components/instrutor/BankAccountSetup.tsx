@@ -52,6 +52,10 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [errorMessage, setErrorMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   
+  // Split verification state
+  const [splitEnabled, setSplitEnabled] = useState<boolean | null>(null);
+  const [checkingSplit, setCheckingSplit] = useState(true);
+  
   // Form data
   const [holderType, setHolderType] = useState<"individual" | "company">("individual");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -76,9 +80,32 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
   const [contaDv, setContaDv] = useState("");
   const [accountType, setAccountType] = useState<"checking" | "savings">("checking");
 
+  // Check Split/Marketplace status when modal opens
+  const checkSplitEnabled = async () => {
+    setCheckingSplit(true);
+    try {
+      console.log("[BankAccountSetup] Checking if Split/Marketplace is enabled...");
+      const { data, error } = await supabase.functions.invoke("check-pagarme-split-enabled");
+      
+      if (error) {
+        console.error("[BankAccountSetup] Error checking Split:", error);
+        setSplitEnabled(null); // Indeterminate - allow form to show
+      } else {
+        console.log("[BankAccountSetup] Split check result:", data);
+        setSplitEnabled(data?.enabled ?? false);
+      }
+    } catch (err) {
+      console.error("[BankAccountSetup] Exception checking Split:", err);
+      setSplitEnabled(null); // Indeterminate - allow form to show
+    } finally {
+      setCheckingSplit(false);
+    }
+  };
+
   // Load user data on mount
   useEffect(() => {
     if (open) {
+      checkSplitEnabled();
       loadUserData();
       setStatus("idle");
       setErrorMessage("");
@@ -336,31 +363,61 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
         </DialogHeader>
 
         <div className="space-y-4">
-          {existingRecipientId && (
-            <div className="p-3 bg-[#4CAF50]/10 rounded-lg flex items-center gap-2">
-              <Check className="w-4 h-4 text-[#4CAF50]" />
-              <span className="text-sm text-[#4CAF50]">Dados bancários já configurados</span>
+          {/* Split/Marketplace verification loading */}
+          {checkingSplit && (
+            <div className="p-4 bg-muted/50 rounded-lg flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Verificando configuração do sistema...</span>
             </div>
           )}
 
-          {/* Address info from profile */}
-          {hasAddress && (
-            <div className="p-3 bg-secondary/10 rounded-lg flex items-center gap-2">
-              <Info className="w-4 h-4 text-secondary" />
-              <span className="text-sm text-secondary">
-                Localização: <strong>{city} - {state}</strong>
-              </span>
+          {/* Split not enabled - blocking error */}
+          {splitEnabled === false && !checkingSplit && (
+            <div className="p-4 bg-destructive/10 border border-destructive/40 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-6 h-6 text-destructive mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-destructive">Sistema em Configuração</p>
+                  <p className="text-sm text-destructive/80 mt-1">
+                    A funcionalidade de recebimentos ainda não está habilitada. 
+                    Entre em contato com o suporte do CNH360 para ativar.
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={onClose}>
+                    Fechar
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
-          {!hasAddress && holderType === "individual" && (
-            <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-              <span className="text-sm text-amber-700 dark:text-amber-300">
-                Complete seu cadastro de instrutor primeiro para informar sua cidade.
-              </span>
-            </div>
-          )}
+          {/* Main form content - only show when Split is enabled or indeterminate */}
+          {splitEnabled !== false && !checkingSplit && (
+            <>
+              {existingRecipientId && (
+                <div className="p-3 bg-[#4CAF50]/10 rounded-lg flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#4CAF50]" />
+                  <span className="text-sm text-[#4CAF50]">Dados bancários já configurados</span>
+                </div>
+              )}
+
+              {/* Address info from profile */}
+              {hasAddress && (
+                <div className="p-3 bg-secondary/10 rounded-lg flex items-center gap-2">
+                  <Info className="w-4 h-4 text-secondary" />
+                  <span className="text-sm text-secondary">
+                    Localização: <strong>{city} - {state}</strong>
+                  </span>
+                </div>
+              )}
+
+              {!hasAddress && holderType === "individual" && (
+                <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-amber-700 dark:text-amber-300">
+                    Complete seu cadastro de instrutor primeiro para informar sua cidade.
+                  </span>
+                </div>
+              )}
 
           {/* Holder Type */}
           <div className="space-y-2">
@@ -593,6 +650,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
               "Salvar dados bancários"
             )}
           </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
