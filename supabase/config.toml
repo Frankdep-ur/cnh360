@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.request-manual-transfer-pagarme]
 verify_jwt = true
+
+[functions.check-pagarme-split-enabled]
+verify_jwt = false
