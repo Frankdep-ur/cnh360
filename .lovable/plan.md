@@ -1,178 +1,142 @@
 
-# Plano: Verificação Prévia de Split/Marketplace no BankAccountSetup
 
-## Objetivo
+# Plano: Corrigir Validação e Exibição do Campo Data de Nascimento
 
-Detectar **antes** do usuário preencher o formulário se a funcionalidade de Split/Marketplace está habilitada na conta Pagar.me, mostrando uma mensagem clara se não estiver.
+## Problema Identificado
 
-## Estratégia
+O campo "Data de Nascimento" existe no formulário, mas quando está vazio:
+1. O erro é lançado como exceção genérica (`return "Informe a data de nascimento"`)
+2. Não há destaque visual no campo (borda vermelha)
+3. Não há mensagem de erro abaixo do campo
 
-A Pagar.me não oferece um endpoint específico para verificar se o Split está habilitado. Porém, podemos fazer uma **requisição de teste** (dry-run) ou verificar a configuração da conta através do endpoint de listar recebedores ou verificar as configurações da empresa.
+Diferente dos outros campos que usam o objeto `fieldErrors` para feedback visual específico.
 
-A melhor abordagem é criar uma **Edge Function dedicada** que tenta uma operação simples e detecta o erro `action_forbidden`.
+## Solução
 
-## Arquivos a Criar/Modificar
+Modificar a validação para tratar o campo de data de nascimento da mesma forma que os outros campos.
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/check-pagarme-split-enabled/index.ts` | **Criar** | Nova Edge Function que verifica se Split está habilitado |
-| `supabase/config.toml` | Modificar | Adicionar configuração da nova função |
-| `src/components/instrutor/BankAccountSetup.tsx` | Modificar | Adicionar verificação ao abrir o modal |
+## Arquivos a Modificar
 
-## Implementação
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/instrutor/BankAccountSetup.tsx` | Adicionar validação visual para birthdate |
 
-### 1. Nova Edge Function: `check-pagarme-split-enabled`
+## Implementacao
 
-Cria uma Edge Function que verifica se o Split/Marketplace está habilitado tentando listar recebedores ou verificando as configurações da conta:
-
-```typescript
-// supabase/functions/check-pagarme-split-enabled/index.ts
-serve(async (req) => {
-  // ... CORS handling ...
-  
-  try {
-    const pagarmeApiKey = Deno.env.get("PAGARME_API_KEY");
-    
-    // Tentar listar recebedores - endpoint simples que falha se Split não estiver habilitado
-    const response = await fetch("https://api.pagar.me/core/v5/recipients?page=1&size=1", {
-      method: "GET",
-      headers: {
-        "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
-      },
-    });
-    
-    const data = await response.json();
-    
-    // Se retornar 412 ou erro de "action_forbidden", Split não está habilitado
-    if (!response.ok) {
-      const isDisabled = data.message?.includes("action_forbidden") || 
-                         data.message?.includes("not allowed") ||
-                         response.status === 412;
-      
-      return new Response(JSON.stringify({
-        enabled: false,
-        reason: isDisabled ? "split_not_enabled" : "api_error"
-      }), { headers: corsHeaders });
-    }
-    
-    return new Response(JSON.stringify({
-      enabled: true
-    }), { headers: corsHeaders });
-    
-  } catch (error) {
-    return new Response(JSON.stringify({
-      enabled: false,
-      reason: "connection_error"
-    }), { headers: corsHeaders, status: 500 });
-  }
-});
-```
-
-### 2. Atualizar config.toml
-
-```toml
-[functions.check-pagarme-split-enabled]
-verify_jwt = false
-```
-
-### 3. Modificar BankAccountSetup.tsx
-
-Adicionar estado e verificação ao carregar o componente:
+### 1. Adicionar "birthdate" ao interface FieldErrors (linha ~48)
 
 ```typescript
-// Novos estados
-const [splitEnabled, setSplitEnabled] = useState<boolean | null>(null);
-const [checkingSplit, setCheckingSplit] = useState(true);
-
-// Verificar Split ao abrir modal
-useEffect(() => {
-  if (open) {
-    checkSplitEnabled();
-    loadUserData();
-    // ...
-  }
-}, [open]);
-
-const checkSplitEnabled = async () => {
-  setCheckingSplit(true);
-  try {
-    const { data, error } = await supabase.functions.invoke("check-pagarme-split-enabled");
-    
-    if (error) {
-      console.error("Erro ao verificar Split:", error);
-      setSplitEnabled(null); // Indeterminado
-    } else {
-      setSplitEnabled(data?.enabled ?? false);
-    }
-  } catch {
-    setSplitEnabled(null);
-  } finally {
-    setCheckingSplit(false);
-  }
-};
+interface FieldErrors {
+  documentNumber?: string;
+  agencia?: string;
+  conta?: string;
+  contaDv?: string;
+  holderName?: string;
+  email?: string;
+  bankCode?: string;
+  birthdate?: string;  // ← Adicionar
+}
 ```
 
-### 4. UI de Bloqueio quando Split Desabilitado
+### 2. Modificar validateForm para usar fieldErrors (linhas 180-186)
 
-Exibir alerta no início do modal se Split não estiver habilitado:
+**Antes:**
+```typescript
+// Validar campos obrigatórios para pessoa física
+if (!birthdate) {
+  return "Informe a data de nascimento";
+}
+```
 
+**Depois:**
+```typescript
+// Validar campos obrigatórios para pessoa física
+if (!birthdate) {
+  errors.birthdate = "Informe a data de nascimento";
+}
+
+// Validar idade mínima (18 anos)
+if (birthdate) {
+  const birth = new Date(birthdate);
+  const today = new Date();
+  const age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (age < 18 || (age === 18 && monthDiff < 0)) {
+    errors.birthdate = "Você deve ter pelo menos 18 anos";
+  }
+}
+```
+
+### 3. Adicionar destaque visual e mensagem de erro no Input (linhas 479-490)
+
+**Depois:**
 ```tsx
-{/* Verificação de Split */}
-{checkingSplit && (
-  <div className="p-4 bg-muted/50 rounded-lg flex items-center gap-3">
-    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-    <span className="text-sm text-muted-foreground">Verificando configuração...</span>
+{holderType === "individual" && (
+  <div className="space-y-2">
+    <Label>Data de Nascimento *</Label>
+    <Input
+      type="date"
+      value={birthdate}
+      onChange={(e) => {
+        setBirthdate(e.target.value);
+        clearFieldError("birthdate");  // ← Adicionar
+      }}
+      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+      className={fieldErrors.birthdate ? "border-destructive focus-visible:ring-destructive" : ""}
+    />
+    {fieldErrors.birthdate && (
+      <p className="text-xs text-destructive flex items-center gap-1">
+        <AlertTriangle className="w-3 h-3" />
+        {fieldErrors.birthdate}
+      </p>
+    )}
+    <p className="text-xs text-muted-foreground">Você deve ter pelo menos 18 anos</p>
   </div>
-)}
-
-{splitEnabled === false && !checkingSplit && (
-  <div className="p-4 bg-destructive/10 border border-destructive/40 rounded-lg">
-    <div className="flex items-start gap-3">
-      <AlertTriangle className="w-6 h-6 text-destructive mt-0.5 flex-shrink-0" />
-      <div>
-        <p className="font-semibold text-destructive">Sistema em Configuração</p>
-        <p className="text-sm text-destructive/80 mt-1">
-          A funcionalidade de recebimentos ainda não está habilitada. 
-          Entre em contato com o suporte do CNH360 para ativar.
-        </p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={onClose}>
-          Fechar
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-
-{/* Resto do formulário só aparece se Split estiver OK */}
-{splitEnabled !== false && !checkingSplit && (
-  // ... formulário atual ...
 )}
 ```
 
-## Fluxo de Usuário
+### 4. Remover o return antecipado de endereço
+
+Também ajustar a validação de endereço para seguir o mesmo padrão:
+
+```typescript
+if (!hasAddress) {
+  errors.address = "Complete seu cadastro primeiro";
+  // Em vez de: return "Complete seu endereço...";
+}
+```
+
+## Fluxo Corrigido
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ Usuário clica em "Configurar Conta Bancária"                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Modal abre → "Verificando configuração..." (loading)        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────────┐
-│  Split HABILITADO       │     │  Split NÃO habilitado       │
-│  → Mostra formulário    │     │  → Mostra alerta vermelho   │
-│    normalmente          │     │    "Sistema em Configuração" │
-└─────────────────────────┘     └─────────────────────────────┘
+┌─────────────────────────────────────────┐
+│ Usuário abre formulário de dados        │
+│ bancários sem preencher data nascimento │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│ Clica em "Salvar dados bancários"       │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│ Validação detecta campo vazio           │
+│ → Adiciona ao fieldErrors.birthdate     │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│ Campo recebe borda VERMELHA             │
+│ Mensagem: "Informe a data de nascimento"│
+└─────────────────────────────────────────┘
 ```
 
 ## Benefícios
 
-1. **UX Melhorada**: Usuário não perde tempo preenchendo formulário para só então ver erro
-2. **Mensagem Clara**: Explica o problema de forma amigável em português
-3. **Ação Definida**: Indica que deve contatar o suporte
-4. **Performance**: Verificação rápida (1 request simples) ao abrir o modal
+1. **Feedback visual claro** - Borda vermelha no campo vazio
+2. **Mensagem específica** - "Informe a data de nascimento" abaixo do campo
+3. **Validação de idade** - Verifica se tem pelo menos 18 anos
+4. **Limpa erro ao digitar** - Remove destaque vermelho quando usuário corrige
+5. **Consistência** - Mesmo padrão dos outros campos do formulário
+
