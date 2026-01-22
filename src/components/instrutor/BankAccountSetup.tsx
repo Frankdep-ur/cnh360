@@ -45,6 +45,7 @@ interface FieldErrors {
   holderName?: string;
   email?: string;
   bankCode?: string;
+  birthdate?: string;
 }
 
 export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId }: BankAccountSetupProps) {
@@ -179,10 +180,19 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       
       // Validar campos obrigatórios para pessoa física
       if (!birthdate) {
-        return "Informe a data de nascimento";
-      }
-      if (!hasAddress) {
-        return "Complete seu endereço no cadastro do instrutor primeiro";
+        errors.birthdate = "Informe a data de nascimento";
+      } else {
+        // Validar idade mínima (18 anos)
+        const birth = new Date(birthdate);
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+          age--;
+        }
+        if (age < 18) {
+          errors.birthdate = "Você deve ter pelo menos 18 anos";
+        }
       }
     } else {
       if (cleanDoc.length !== 14) {
@@ -482,9 +492,19 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
               <Input
                 type="date"
                 value={birthdate}
-                onChange={(e) => setBirthdate(e.target.value)}
+                onChange={(e) => {
+                  setBirthdate(e.target.value);
+                  clearFieldError("birthdate");
+                }}
                 max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                className={fieldErrors.birthdate ? "border-destructive focus-visible:ring-destructive" : ""}
               />
+              {fieldErrors.birthdate && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {fieldErrors.birthdate}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">Você deve ter pelo menos 18 anos</p>
             </div>
           )}
