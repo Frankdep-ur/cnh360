@@ -44,63 +44,83 @@ const mockInstructors: InstructorData[] = [];
 
 // Fetch all instructors with vehicles in a single optimized query
 async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
-  // Fetch instructors from cache
-  const { data: cacheData, error: cacheError } = await supabase
-    .from("instrutores_publico_cache")
-    .select("*")
-    .eq("ativo", true);
+  try {
+    // Fetch instructors from cache (público)
+    const { data: cacheData, error: cacheError } = await supabase
+      .from("instrutores_publico_cache")
+      .select("*")
+      .eq("ativo", true);
 
-  if (cacheError) {
-    console.error("Error fetching instructors:", cacheError);
-    return mockInstructors;
-  }
-
-  if (!cacheData || cacheData.length === 0) {
-    return mockInstructors;
-  }
-
-  // Get all instructor IDs for batch vehicle fetch
-  const instructorIds = cacheData.map((inst) => inst.id);
-
-  // Fetch all vehicles at once (single query instead of N queries)
-  const { data: allVehicles, error: vehiclesError } = await supabase
-    .from("veiculos")
-    .select("instrutor_id, modelo, transmissao")
-    .in("instrutor_id", instructorIds)
-    .eq("ativo", true);
-
-   // Create a map for quick vehicle lookup
-  const vehicleMap = new Map<string, { modelo: string; transmissao: string }>();
-  allVehicles?.forEach((v) => {
-    if (!vehicleMap.has(v.instrutor_id)) {
-      vehicleMap.set(v.instrutor_id, v);
+    if (cacheError) {
+      // Se for erro de JWT expirado, tentar limpar sessão
+      if (cacheError.message?.includes('JWT') || cacheError.code === 'PGRST303') {
+        console.warn('Sessão expirada, limpando...');
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+      console.error("Error fetching instructors:", cacheError);
+      return mockInstructors;
     }
-  });
 
-  // Transform data to UI format
-  return cacheData.map((inst) => {
-    const veiculo = vehicleMap.get(inst.id);
-    const carType = veiculo
-      ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
-      : "";
+    if (!cacheData || cacheData.length === 0) {
+      return mockInstructors;
+    }
 
-    return {
-      id: inst.id,
-      name: inst.nome || "Instrutor",
-      photo: inst.foto || "",
-      rating: Number(inst.nota_media) || 5.0,
-      reviews: inst.total_avaliacoes || 0,
-      price: Number(inst.preco_hora) || 20,
-      distance: `${inst.raio_atendimento_km || 10} km`,
-      carType,
-      available: true,
-      verified: true,
-      isMEI: true,
-      aceitaCarroProprio: true,
-      tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
-      email: null,
-    };
-  });
+    // Get all instructor IDs for batch vehicle fetch
+    const instructorIds = cacheData.map((inst) => inst.id);
+
+    // Fetch all vehicles at once (single query instead of N queries)
+    const { data: allVehicles, error: vehiclesError } = await supabase
+      .from("veiculos")
+      .select("instrutor_id, modelo, transmissao")
+      .in("instrutor_id", instructorIds)
+      .eq("ativo", true);
+
+    if (vehiclesError) {
+      // Se for erro de JWT expirado, tentar limpar sessão
+      if (vehiclesError.message?.includes('JWT') || vehiclesError.code === 'PGRST303') {
+        console.warn('Sessão expirada ao buscar veículos, limpando...');
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+      console.error("Error fetching vehicles:", vehiclesError);
+      // Continua mesmo sem veículos
+    }
+
+    // Create a map for quick vehicle lookup
+    const vehicleMap = new Map<string, { modelo: string; transmissao: string }>();
+    allVehicles?.forEach((v) => {
+      if (!vehicleMap.has(v.instrutor_id)) {
+        vehicleMap.set(v.instrutor_id, v);
+      }
+    });
+
+    // Transform data to UI format
+    return cacheData.map((inst) => {
+      const veiculo = vehicleMap.get(inst.id);
+      const carType = veiculo
+        ? `${veiculo.modelo} - ${veiculo.transmissao === "automatico" ? "Automático" : "Manual"}`
+        : "";
+
+      return {
+        id: inst.id,
+        name: inst.nome || "Instrutor",
+        photo: inst.foto || "",
+        rating: Number(inst.nota_media) || 5.0,
+        reviews: inst.total_avaliacoes || 0,
+        price: Number(inst.preco_hora) || 20,
+        distance: `${inst.raio_atendimento_km || 10} km`,
+        carType,
+        available: true,
+        verified: true,
+        isMEI: true,
+        aceitaCarroProprio: true,
+        tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
+        email: null,
+      };
+    });
+  } catch (error) {
+    console.error("Unexpected error fetching instructors:", error);
+    return mockInstructors;
+  }
 }
 
 // Memoized filter button
