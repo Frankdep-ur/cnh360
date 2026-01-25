@@ -1,32 +1,117 @@
 
+# Plano: Remover Twilio e Migrar para SendPulse
 
-# Plano: Atualizar Secret TWILIO_WHATSAPP_NUMBER
+## Fase 1: Limpeza Completa do Twilio
 
-## Ação Necessária
+### 1.1 Reescrever Edge Function `send-whatsapp-notification`
+Substituir todo o conteudo de `supabase/functions/send-whatsapp-notification/index.ts`:
+- Remover referencias a `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`
+- Adicionar comentario de migracao no topo
+- Criar estrutura preparada para SendPulse (temporariamente desabilitada ate configurar credenciais)
 
-Você precisa atualizar o secret `TWILIO_WHATSAPP_NUMBER` para o número do Sandbox da Twilio.
+```text
+Arquivo: supabase/functions/send-whatsapp-notification/index.ts
 
-### Passos:
+Antes: Usa Twilio API para enviar WhatsApp
+Depois: Estrutura pronta para SendPulse, com log indicando que esta pendente de configuracao
+```
 
-1. **Clique em "Aprovar"** este plano
-2. Quando aparecer o modal para atualizar o secret, insira o valor:
-   ```
-   +14155238886
-   ```
-3. Confirme a atualização
+### 1.2 Atualizar `check-payment-status-pagarme`
+O arquivo `supabase/functions/check-payment-status-pagarme/index.ts` continua chamando a Edge Function `send-whatsapp-notification` normalmente - nao precisa mudar, pois a interface (payload) sera mantida.
 
-### Importante - Ativação do Sandbox pelo Tiago
+### 1.3 Limpar documentacao antiga
+Atualizar `.lovable/plan.md` com informacoes sobre SendPulse ao inves de Twilio.
 
-Antes de testar, certifique-se que o instrutor **Tiago Silva** já enviou a mensagem de ativação:
+### 1.4 Remover Secrets do Twilio
+Solicitar remocao dos secrets:
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_WHATSAPP_NUMBER`
 
-1. No **console Twilio** → **Messaging** → **Try it out** → **Send a WhatsApp message**
-2. Copie o código de ativação (ex: `join bright-sunset`)
-3. O Tiago deve enviar esse código via WhatsApp para `+14155238886`
+## Fase 2: Preparar Integracao SendPulse
 
-### Após Atualização
+### 2.1 Secrets necessarios para SendPulse
+Apos voce criar a conta no SendPulse e conectar o WhatsApp Business:
+- `SENDPULSE_API_USER_ID` - ID do usuario da API
+- `SENDPULSE_API_SECRET` - Secret da API
+- `SENDPULSE_WHATSAPP_BOT_ID` - ID do bot WhatsApp configurado
 
-Assim que você atualizar o secret, eu vou:
-1. Redeployar a Edge Function
-2. Testar o envio de mensagem WhatsApp para o Tiago
-3. Confirmar se a notificação chegou
+### 2.2 Nova implementacao da Edge Function
+A Edge Function `send-whatsapp-notification` sera atualizada para:
+1. Autenticar na API SendPulse (OAuth2)
+2. Enviar mensagem WhatsApp usando a API de bots
+3. Manter o mesmo payload de entrada (compatibilidade com `check-payment-status-pagarme`)
 
+---
+
+## Estrutura Final
+
+```text
+supabase/functions/send-whatsapp-notification/
+  index.ts  <- Migrado para SendPulse
+
+Secrets removidos:
+  - TWILIO_ACCOUNT_SID
+  - TWILIO_AUTH_TOKEN
+  - TWILIO_WHATSAPP_NUMBER
+
+Novos secrets (a adicionar):
+  - SENDPULSE_API_USER_ID
+  - SENDPULSE_API_SECRET
+  - SENDPULSE_WHATSAPP_BOT_ID
+```
+
+---
+
+## Proximo Passo Apos Aprovacao
+
+1. Vou reescrever a Edge Function sem Twilio
+2. Vou limpar a documentacao `.lovable/plan.md`
+3. Vou solicitar a remocao dos 3 secrets do Twilio
+4. Vou criar a estrutura inicial para SendPulse
+5. Voce cria a conta no SendPulse, conecta o WhatsApp, e me passa as credenciais
+
+---
+
+## Secao Tecnica
+
+### API SendPulse - Fluxo de Autenticacao
+
+```text
+POST https://api.sendpulse.com/oauth/access_token
+Content-Type: application/json
+
+{
+  "grant_type": "client_credentials",
+  "client_id": "SENDPULSE_API_USER_ID",
+  "client_secret": "SENDPULSE_API_SECRET"
+}
+```
+
+### API SendPulse - Enviar Mensagem WhatsApp
+
+```text
+POST https://api.sendpulse.com/whatsapp/contacts/sendByPhone
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "bot_id": "SENDPULSE_WHATSAPP_BOT_ID",
+  "phone": "+5518981288372",
+  "message": {
+    "type": "text",
+    "text": {
+      "body": "Mensagem aqui..."
+    }
+  }
+}
+```
+
+### Comparacao Twilio vs SendPulse
+
+| Aspecto | Twilio | SendPulse |
+|---------|--------|-----------|
+| Sandbox | Requer ativacao manual por usuario | Nao tem sandbox, usa numero real |
+| Setup | Complexo, precisa de join code | Conecta WhatsApp Business direto |
+| Custo | Trial limitado | Plano gratuito ate 10k contatos |
+| API | REST simples | REST com OAuth2 |
