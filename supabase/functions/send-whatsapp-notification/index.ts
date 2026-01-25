@@ -81,14 +81,15 @@ Bora ensinar! 🚗`;
       ? `whatsapp:+${phoneClean}`
       : `whatsapp:+55${phoneClean}`;
 
-    logStep("Enviando para WhatsApp", { to: whatsappTo });
+    const fromNumber = `whatsapp:${twilioWhatsApp}`;
+    logStep("Enviando para WhatsApp", { to: whatsappTo, from: fromNumber, twilioWhatsAppRaw: twilioWhatsApp });
 
     // Enviar via Twilio
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
     const twilioAuth = btoa(`${twilioSid}:${twilioToken}`);
 
     const formData = new URLSearchParams();
-    formData.append("From", `whatsapp:${twilioWhatsApp}`);
+    formData.append("From", fromNumber);
     formData.append("To", whatsappTo);
     formData.append("Body", message);
 
