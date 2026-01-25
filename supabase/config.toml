@@ -56,3 +56,6 @@ verify_jwt = true
 
 [functions.check-pagarme-split-enabled]
 verify_jwt = false
+
+[functions.send-whatsapp-notification]
+verify_jwt = false
