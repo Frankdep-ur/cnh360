@@ -1,30 +1,32 @@
 
-# Plano: Atualizar TWILIO_WHATSAPP_NUMBER e Testar Notificação
 
-## Situação Atual
-O secret `TWILIO_WHATSAPP_NUMBER` está configurado, mas parece não ser o número correto do Sandbox da Twilio (que deve ser `+14155238886`).
+# Plano: Atualizar Secret TWILIO_WHATSAPP_NUMBER
 
 ## Ação Necessária
 
-### 1. Atualizar o Secret
-Preciso que você atualize o valor do secret `TWILIO_WHATSAPP_NUMBER` para:
-```
-+14155238886
-```
+Você precisa atualizar o secret `TWILIO_WHATSAPP_NUMBER` para o número do Sandbox da Twilio.
 
-Este é o número oficial do WhatsApp Sandbox da Twilio usado para testes.
+### Passos:
 
-### 2. Confirmar Ativação do Tiago
-O instrutor Tiago Silva precisa ter enviado a mensagem de código para `+14155238886` no WhatsApp. O código geralmente é algo como:
-```
-join [palavra-aleatória]
-```
-Exemplo: `join bright-sunset`
+1. **Clique em "Aprovar"** este plano
+2. Quando aparecer o modal para atualizar o secret, insira o valor:
+   ```
+   +14155238886
+   ```
+3. Confirme a atualização
 
-Este código aparece no console da Twilio em **Messaging → Try it out → Send a WhatsApp message**.
+### Importante - Ativação do Sandbox pelo Tiago
 
-### 3. Testar Novamente
-Após atualizar o secret, farei um novo teste da Edge Function para enviar a mensagem de confirmação de aula para o WhatsApp do Tiago.
+Antes de testar, certifique-se que o instrutor **Tiago Silva** já enviou a mensagem de ativação:
 
-## Próximo Passo
-Clique em "Aprovar" e eu vou solicitar a atualização do secret `TWILIO_WHATSAPP_NUMBER` para o número do Sandbox.
+1. No **console Twilio** → **Messaging** → **Try it out** → **Send a WhatsApp message**
+2. Copie o código de ativação (ex: `join bright-sunset`)
+3. O Tiago deve enviar esse código via WhatsApp para `+14155238886`
+
+### Após Atualização
+
+Assim que você atualizar o secret, eu vou:
+1. Redeployar a Edge Function
+2. Testar o envio de mensagem WhatsApp para o Tiago
+3. Confirmar se a notificação chegou
+
