@@ -259,7 +259,7 @@ export default function AulaConfirmada() {
             className="w-full"
             onClick={() => {
               if (paymentData?.lesson?.aulaId) {
-                navigate(`/aluno/aula/${paymentData.lesson.aulaId}`);
+                navigate(`/aluno/chat`, { state: { openAulaId: paymentData.lesson.aulaId } });
               } else {
                 toast.info("Chat não disponível no momento");
               }

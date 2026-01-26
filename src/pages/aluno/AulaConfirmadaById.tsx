@@ -10,6 +10,7 @@ import {
   Navigation,
   Car
 } from "lucide-react";
+import { TripChat } from "@/components/maps/TripChat";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -308,6 +309,14 @@ export default function AulaConfirmadaById() {
           </p>
         </div>
       </div>
+
+      {/* Trip Chat */}
+      {aulaId && aula && aula.status !== 'cancelada' && (
+        <TripChat 
+          aulaId={aulaId} 
+          instructorName={aula.instrutor_nome}
+        />
+      )}
     </div>
   );
 }
