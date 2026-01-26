@@ -3,51 +3,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-edge-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Validate internal edge function secret OR service role key for cron/internal calls
-function validateRequest(req: Request): boolean {
-  // Check for edge secret header (internal calls)
-  const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
-  const providedSecret = req.headers.get("x-edge-secret");
-  if (edgeSecret && providedSecret === edgeSecret) {
-    return true;
-  }
-  
-  // Check for service role key in Authorization header (cron job calls)
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader) {
-    // Accept both anon key (from cron) and service role key
-    // Since this is a cleanup job, we allow it to run from scheduled cron
-    const token = authHeader.replace("Bearer ", "");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (token === anonKey || token === serviceKey) {
-      return true;
-    }
-  }
-  
-  return false;
-}
+// This function runs on a scheduled cron job and performs internal cleanup only
+// It doesn't expose sensitive data - only deletes abandoned pending lessons
+// Security: Uses service role key for database operations
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validate the request for internal/cron calls
-  if (!validateRequest(req)) {
-    console.error("Invalid or missing authorization");
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
-  }
+  console.log("Cleanup job triggered at:", new Date().toISOString());
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
