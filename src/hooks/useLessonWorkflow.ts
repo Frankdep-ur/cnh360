@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-type WorkflowAction = 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr';
+type WorkflowAction = 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr';
 
 interface GPSData {
   latitude?: number;
@@ -67,6 +67,7 @@ export function useLessonWorkflow(): UseLessonWorkflowReturn {
         iniciar_aula: 'Aula iniciada! Cronômetro ativado.',
         finalizar_aula: 'Aula finalizada! Aguardando validação por QR Code.',
         validar_qr: 'Aula validada com sucesso! Pagamento liberado.',
+        regenerar_qr: 'Novo QR Code gerado! Peça ao aluno para mostrar.',
       };
 
       toast.success(successMessages[action]);

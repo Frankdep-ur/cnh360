@@ -6,7 +6,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface WorkflowRequest {
   aula_id: string;
-  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr';
+  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr';
   qr_data?: string;
   latitude?: number;
   longitude?: number;
@@ -362,6 +362,51 @@ Deno.serve(async (req) => {
         auditDadosAdicionais = { hash: qrHash };
         break;
 
+      case "regenerar_qr":
+        if (!isInstrutor) {
+          return new Response(JSON.stringify({ error: "Apenas instrutor pode regenerar QR" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_qr") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Generate new QR code data
+        const newQrTimestamp = new Date().toISOString();
+        const newQrPayload = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: newQrTimestamp,
+          version: 1
+        });
+        const newEncoder = new TextEncoder();
+        const newData = newEncoder.encode(newQrPayload + Deno.env.get("EDGE_FUNCTION_SECRET"));
+        const newHashBuffer = await crypto.subtle.digest("SHA-256", newData);
+        const newHashArray = Array.from(new Uint8Array(newHashBuffer));
+        const newHashHex = newHashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        
+        const newQrCodeData = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: newQrTimestamp,
+          hash: newHashHex,
+          version: 1
+        });
+
+        updateData = { 
+          qr_code_data: newQrCodeData,
+          qr_code_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        };
+        systemMessage = "🔄 **CNH360:** Novo QR Code gerado! Aluno, mostre para o instrutor.";
+        notificationTitle = "Novo QR Code! 📱";
+        notificationBody = "Um novo código foi gerado. Apresente ao instrutor.";
+        notifyUserId = aula.alunos.user_id;
+        auditEvento = "regenerar_qr";
+        break;
+
       default:
         return new Response(JSON.stringify({ error: "Ação inválida" }), {
           status: 400,
@@ -436,9 +481,9 @@ Deno.serve(async (req) => {
     // Release payment if QR validated
     if (releasePayment && aula.transaction_id) {
       try {
-        console.log("Releasing payment for transaction:", aula.transaction_id);
+        console.log("Releasing payment for aula:", aula_id, "transaction:", aula.transaction_id);
         await supabase.functions.invoke("capture-payment-pagarme", {
-          body: { transaction_id: aula.transaction_id }
+          body: { aulaId: aula_id }
         });
 
         // Send WhatsApp notification for payment (only for payments)

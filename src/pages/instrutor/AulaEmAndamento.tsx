@@ -11,7 +11,8 @@ import {
   Play,
   Flag,
   QrCode,
-  User
+  User,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -167,7 +168,7 @@ export default function AulaEmAndamento() {
     };
   }
 
-  const handleAction = async (action: 'em_rota' | 'cheguei' | 'iniciar_aula' | 'finalizar_aula') => {
+  const handleAction = async (action: 'em_rota' | 'cheguei' | 'iniciar_aula' | 'finalizar_aula' | 'regenerar_qr') => {
     if (!aulaId) return;
     const success = await executeAction(aulaId, action);
     if (success && action === 'em_rota') {
@@ -185,7 +186,7 @@ export default function AulaEmAndamento() {
       // Navigate to success/summary
       navigate(`/instrutor`);
     } else {
-      setQrError("QR Code inválido ou expirado");
+      setQrError("QR Code inválido ou expirado. Tente regenerar.");
     }
   };
 
@@ -440,18 +441,30 @@ export default function AulaEmAndamento() {
             </Button>
           )}
 
-          {/* Status: aguardando_qr -> Show QR Scanner button */}
+          {/* Status: aguardando_qr -> Show QR Scanner button and Regenerate option */}
           {aula.status === 'aguardando_qr' && (
-            <Button
-              variant="hero"
-              size="xl"
-              className="w-full"
-              onClick={() => setShowQRScanner(true)}
-              disabled={workflowLoading}
-            >
-              <QrCode className="w-5 h-5 mr-2" />
-              Escanear QR Code do Aluno
-            </Button>
+            <div className="space-y-3">
+              <Button
+                variant="hero"
+                size="xl"
+                className="w-full"
+                onClick={() => setShowQRScanner(true)}
+                disabled={workflowLoading}
+              >
+                <QrCode className="w-5 h-5 mr-2" />
+                Escanear QR Code do Aluno
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => handleAction('regenerar_qr')}
+                disabled={workflowLoading}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Regenerar QR Code (expirado?)
+              </Button>
+            </div>
           )}
 
           {/* Status: concluida */}
