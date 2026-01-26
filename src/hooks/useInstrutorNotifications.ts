@@ -43,6 +43,7 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
       .select("*")
       .eq("instrutor_id", instrutorId)
       .eq("status", "pendente")
+      .eq("payment_confirmed", true)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -141,7 +142,7 @@ export function useInstrutorNotifications(instrutorId: string | null, isOnline: 
         async (payload) => {
           console.log("[Notificações] 🚨 REALTIME: Nova aula recebida!", payload);
           
-          if (payload.new && payload.new.status === "pendente") {
+          if (payload.new && payload.new.status === "pendente" && payload.new.payment_confirmed === true) {
             const newAula = payload.new as AulaPendente;
             
             // Get student name
