@@ -1,8 +1,8 @@
 
-# Plano: Botao Flutuante WhatsApp na Landing Page
+# Plano: Animacao Pulse no Botao WhatsApp
 
 ## Resumo
-Adicionar um botao flutuante de WhatsApp no canto inferior direito da landing page (Index.tsx) que fica sempre visivel e permite que visitantes entrem em contato com o suporte antes de criar uma conta.
+Adicionar uma animacao de pulse sutil ao botao flutuante do WhatsApp para chamar mais atencao dos visitantes na landing page.
 
 ---
 
@@ -10,140 +10,82 @@ Adicionar um botao flutuante de WhatsApp no canto inferior direito da landing pa
 
 | Arquivo | Modificacao |
 |---------|-------------|
-| `src/pages/Index.tsx` | Adicionar botao flutuante com posicao fixa |
+| `src/pages/Index.tsx` | Adicionar classe `animate-pulse` customizada |
 
 ---
 
-## Design Visual
+## Abordagem
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│                     CNH 360                              │
-│                                                          │
-│   Sua habilitacao mais rapida, barata e transparente    │
-│                                                          │
-│   ┌──────────────────────────────────────┐              │
-│   │  Como voce quer usar o CNH 360?      │              │
-│   │                                       │              │
-│   │  [Sou Aluno]                         │              │
-│   │  [Sou Instrutor]                     │              │
-│   │  [Sou Autoescola]                    │              │
-│   └──────────────────────────────────────┘              │
-│                                                          │
-│   Politica de Privacidade | Termos de Uso               │
-│   Contato: 360cnh@gmail.com                             │
-│                                                     ┌───┐│
-│                                                     │ W ││
-│                                                     └───┘│
-└──────────────────────────────────────────────────────────┘
-                                                      ↑
-                                          Botao flutuante
-                                          verde WhatsApp
-```
+Vou adicionar uma animacao de pulse usando uma sombra que pulsa suavemente ao redor do botao. Isso cria um efeito visual que chama atencao sem ser irritante.
+
+### Estilo da Animacao
+
+Em vez de usar o `animate-pulse` padrao do Tailwind (que altera opacidade), vou criar um efeito de "glow" pulsante usando box-shadow animado inline, que e mais elegante para botoes de CTA.
 
 ---
 
-## Especificacoes do Botao
+## Codigo Atualizado
 
-| Propriedade | Valor |
-|-------------|-------|
-| Posicao | `fixed bottom-6 right-6` |
-| Tamanho | `w-14 h-14` (56px) |
-| Cor de fundo | `#25D366` (verde oficial WhatsApp) |
-| Icone | `MessageCircle` do Lucide (branco) |
-| Sombra | `shadow-lg` para destaque |
-| Animacao | Pulse sutil no hover |
-| Z-index | `z-50` para ficar acima de tudo |
+### Linha 196-205 - Adicionar animacao
 
----
-
-## Funcionamento
-
-### Ao clicar no botao:
 ```typescript
-const phone = "5518981288372";
-const message = encodeURIComponent("Olá! Gostaria de saber mais sobre a CNH360.");
-window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+className={cn(
+  "fixed bottom-6 right-6 z-50",
+  "w-14 h-14 rounded-full",
+  "bg-[#25D366] hover:bg-[#20bd5a]",
+  "flex items-center justify-center",
+  "shadow-lg hover:shadow-xl",
+  "transition-all duration-300",
+  "hover:scale-110",
+  "animate-[pulse-glow_2s_ease-in-out_infinite]",  // ADICIONAR
+  showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+)}
 ```
 
-### Mensagem pre-definida:
-> "Ola! Gostaria de saber mais sobre a CNH360."
+### Adicionar keyframes inline via style
 
-Esta mensagem e diferente da usada nas paginas de perfil ("Preciso de ajuda") pois e direcionada para visitantes curiosos que ainda nao sao usuarios.
+Como a animacao de glow nao existe no Tailwind por padrao, vou usar uma abordagem mais simples: adicionar a classe `animate-bounce-subtle` que ja existe no projeto (definida no tailwind.config.ts linhas 81-84).
 
 ---
 
-## Codigo a Adicionar
+## Solucao Final
 
-### 1. Import do icone (linha 3)
-Adicionar `MessageCircle` ao import existente do Lucide:
+Usar a animacao `animate-bounce-subtle` ja existente no projeto:
+
 ```typescript
-import { 
-  Car, GraduationCap, Building2, ChevronRight, 
-  Shield, Zap, Users, LogOut, 
-  MessageCircle  // ADICIONAR
-} from "lucide-react";
+className={cn(
+  "fixed bottom-6 right-6 z-50",
+  "w-14 h-14 rounded-full",
+  "bg-[#25D366] hover:bg-[#20bd5a]",
+  "flex items-center justify-center",
+  "shadow-lg hover:shadow-xl",
+  "transition-all duration-300",
+  "hover:scale-110",
+  "animate-bounce-subtle",  // ADICIONAR - ja existe no projeto!
+  showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+)}
 ```
 
-### 2. Botao flutuante (antes do fechamento da div principal)
-Inserir antes da linha 184 (`</div>`):
-```typescript
-{/* Botao Flutuante WhatsApp */}
-<button
-  onClick={() => {
-    const phone = "5518981288372";
-    const message = encodeURIComponent("Olá! Gostaria de saber mais sobre a CNH360.");
-    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
-  }}
-  className={cn(
-    "fixed bottom-6 right-6 z-50",
-    "w-14 h-14 rounded-full",
-    "bg-[#25D366] hover:bg-[#20bd5a]",
-    "flex items-center justify-center",
-    "shadow-lg hover:shadow-xl",
-    "transition-all duration-300",
-    "hover:scale-110",
-    showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-  )}
-  style={{ transitionDelay: "900ms" }}
-  aria-label="Falar no WhatsApp"
->
-  <MessageCircle className="w-7 h-7 text-white" />
-</button>
-```
+Esta animacao ja esta definida no `tailwind.config.ts`:
+- Keyframe: move o botao 5px para cima e volta
+- Duracao: 2 segundos
+- Easing: ease-in-out
+- Loop: infinito
 
 ---
 
-## Detalhes de UX
+## Resultado Visual
 
-### Animacao de entrada
-O botao aparece com a mesma animacao de fade-in dos outros elementos, com delay de 900ms para ser o ultimo elemento a aparecer.
-
-### Acessibilidade
-- `aria-label="Falar no WhatsApp"` para leitores de tela
-- Hover state claro com escala aumentada
-
-### Responsividade
-- `bottom-6 right-6` funciona bem em todos os tamanhos
-- Nao interfere com o conteudo da pagina
-- Tamanho de 56px e confortavel para toque em mobile
-
----
-
-## Beneficios
-
-1. **Conversao de leads**: Visitantes podem tirar duvidas antes de criar conta
-2. **Confianca**: Mostra que ha suporte humano disponivel
-3. **Consistencia**: Usa o mesmo padrao visual do WhatsApp das paginas de perfil
-4. **Nao-intrusivo**: Fica no canto, nao bloqueia conteudo
+O botao tera um movimento sutil de "bounce" que:
+- Sobe 5px e desce suavemente
+- Repete a cada 2 segundos
+- Para no hover (quando `hover:scale-110` assume)
+- Nao e intrusivo mas chama atencao
 
 ---
 
 ## Checklist de Implementacao
 
-- [ ] Adicionar `MessageCircle` ao import do Lucide
-- [ ] Inserir botao flutuante com posicao fixa
-- [ ] Configurar onClick para abrir WhatsApp com mensagem
-- [ ] Aplicar animacao de entrada sincronizada
-- [ ] Testar em mobile e desktop
-- [ ] Verificar z-index nao conflita com outros elementos
+- [ ] Adicionar classe `animate-bounce-subtle` ao botao WhatsApp
+- [ ] Testar que a animacao funciona corretamente
+- [ ] Verificar que nao interfere com hover states
