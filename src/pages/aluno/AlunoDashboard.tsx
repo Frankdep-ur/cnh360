@@ -18,12 +18,14 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useCursoTeorico } from "@/hooks/useCursoTeorico";
+import { useAulaRating } from "@/hooks/useAulaRating";
 import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
+import { RatingModal } from "@/components/aula/RatingModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,6 +57,8 @@ export default function AlunoDashboard() {
   const [showContent, setShowContent] = useState(true);
   const { user } = useAuth();
   const { progressoGeral, loading: cursoLoading } = useCursoTeorico();
+  const { pendingRating, submitRating, dismissRating } = useAulaRating();
+  const [showRatingModal, setShowRatingModal] = useState(false);
   
   // Debug log para verificar valores
   console.log('[AlunoDashboard] progressoGeral:', progressoGeral, 'cursoLoading:', cursoLoading);
@@ -71,7 +75,15 @@ export default function AlunoDashboard() {
   } | null>(null);
   const [practicalHours, setPracticalHours] = useState(0);
   const [showCertificadoAlert, setShowCertificadoAlert] = useState(false);
-  
+
+  // Show rating modal when there's a pending rating
+  useEffect(() => {
+    if (pendingRating) {
+      // Small delay to not overwhelm user on page load
+      const timer = setTimeout(() => setShowRatingModal(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingRating]);
 
   useEffect(() => {
     if (user) {
@@ -605,6 +617,27 @@ export default function AlunoDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rating Modal */}
+      {pendingRating && (
+        <RatingModal
+          open={showRatingModal}
+          onOpenChange={(open) => {
+            setShowRatingModal(open);
+            if (!open) dismissRating();
+          }}
+          instructorName={pendingRating.instrutor_nome}
+          instructorPhoto={pendingRating.instrutor_foto}
+          onSubmit={async (nota, comentario) => {
+            await submitRating(
+              pendingRating.id,
+              pendingRating.instrutor_id,
+              nota,
+              comentario
+            );
+          }}
+        />
+      )}
 
       <BottomNav />
     </div>
