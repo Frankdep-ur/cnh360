@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Building2, MapPin, Phone, Mail, 
-  FileText, Settings, LogOut, Crown, ChevronRight, AlertTriangle
+  FileText, Settings, LogOut, Crown, ChevronRight, AlertTriangle, MessageCircle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -276,7 +276,26 @@ export default function AutoescolaPerfil() {
                       )} />
                     </button>
                   );
-                })}
+                    })}
+
+                {/* Suporte WhatsApp */}
+                <button
+                  onClick={() => {
+                    const phone = "5518981288372";
+                    const message = encodeURIComponent("Olá! Preciso de ajuda com a CNH360.");
+                    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-all"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#25D366]/10 flex items-center justify-center">
+                    <MessageCircle className="w-5 h-5 text-[#25D366]" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <span className="font-medium block">Suporte</span>
+                    <span className="text-xs text-muted-foreground">Falar pelo WhatsApp</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </button>
               </div>
             </CardContent>
           </Card>
