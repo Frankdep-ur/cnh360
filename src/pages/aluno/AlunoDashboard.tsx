@@ -11,9 +11,9 @@ import {
   Shield,
   FileText,
   CreditCard,
-  Navigation,
   Stethoscope,
-  Award
+  Award,
+  MessageCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,8 +23,6 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { LocationShareButton } from "@/components/maps/LocationShareButton";
-import { RouteMapCard } from "@/components/maps/RouteMapCard";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import {
   AlertDialog,
@@ -61,8 +59,6 @@ export default function AlunoDashboard() {
   // Debug log para verificar valores
   console.log('[AlunoDashboard] progressoGeral:', progressoGeral, 'cursoLoading:', cursoLoading);
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
-  const [locationShared, setLocationShared] = useState(false);
-  const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [proximaAula, setProximaAula] = useState<ProximaAula | null>(null);
@@ -508,34 +504,13 @@ export default function AlunoDashboard() {
               <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
-                  <span>{sharedLocation?.address || proximaAula.location}</span>
+                  <span>{proximaAula.location}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   <span>{proximaAula.duration}</span>
                 </div>
               </div>
-
-              {/* Location Share Section */}
-              {!locationShared ? (
-                <LocationShareButton
-                  className="w-full mb-3"
-                  onLocationShared={(loc) => {
-                    setLocationShared(true);
-                    setSharedLocation(loc);
-                    toast.success("Localização enviada ao instrutor!");
-                  }}
-                />
-              ) : (
-                <RouteMapCard
-                  originAddress={sharedLocation?.address || "Sua localização"}
-                  destinationAddress={proximaAula.location}
-                  distance="3.2 km"
-                  eta="8 min"
-                  showNavButton={false}
-                  className="mb-3"
-                />
-              )}
 
               {/* Payment and Action Buttons */}
               <div className="flex gap-3">
@@ -561,17 +536,15 @@ export default function AlunoDashboard() {
                     </Button>
                   </>
                 ) : (
-                  <>
-                    <Button variant="outline" className="flex-1">
-                      <Navigation className="w-4 h-4 mr-2" />
-                      Ver Rota
-                    </Button>
-                    <Link to={`/aluno/validacao-aula?id=${proximaAula.id}`} className="flex-1">
-                      <Button className="w-full">
-                        Iniciar Aula
-                      </Button>
-                    </Link>
-                  </>
+                  <Button 
+                    className="w-full bg-[#4CAF50] hover:bg-[#45a049] text-white"
+                    onClick={() => navigate('/aluno/chat', { 
+                      state: { openAulaId: proximaAula.id } 
+                    })}
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Enviar Mensagem ao Instrutor
+                  </Button>
                 )}
               </div>
             </div>
