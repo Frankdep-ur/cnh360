@@ -96,17 +96,33 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
     async (content: string) => {
       if (!aulaId || !user || !content.trim()) return;
 
+      const trimmedContent = content.trim();
+
       const { error: insertError } = await supabase
         .from('mensagens_aula')
         .insert({
           aula_id: aulaId,
           sender_id: user.id,
-          content: content.trim(),
+          content: trimmedContent,
         });
 
       if (insertError) {
         console.error('Error sending message:', insertError);
         throw new Error('Erro ao enviar mensagem');
+      }
+
+      // Send push notification to recipient (fire and forget)
+      try {
+        supabase.functions.invoke('send-chat-notification', {
+          body: {
+            aula_id: aulaId,
+            sender_id: user.id,
+            message_preview: trimmedContent
+          }
+        }).catch(err => console.log('Push notification error (non-blocking):', err));
+      } catch (notifError) {
+        // Don't block message sending if notification fails
+        console.log('Could not send chat notification:', notifError);
       }
     },
     [aulaId, user]
