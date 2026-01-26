@@ -9,6 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { ComplianceBanner } from '@/components/layout/ComplianceBanner';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { InstructorBottomNav } from '@/components/layout/InstructorBottomNav';
+import { SystemMessage } from '@/components/chat/SystemMessage';
 interface ChatViewProps {
   aulaId: string;
   contactName?: string;
@@ -122,36 +123,44 @@ export function ChatView({
           </div>
         ) : (
           messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                'flex flex-col max-w-[80%]',
-                msg.isOwn ? 'ml-auto items-end' : 'mr-auto items-start'
-              )}
-            >
+            msg.is_system ? (
+              <SystemMessage 
+                key={msg.id} 
+                content={msg.content} 
+                timestamp={msg.created_at} 
+              />
+            ) : (
               <div
+                key={msg.id}
                 className={cn(
-                  'px-4 py-2.5 rounded-2xl shadow-sm',
-                  msg.isOwn
-                    ? 'bg-primary text-primary-foreground rounded-br-md'
-                    : 'bg-card text-foreground border border-border rounded-bl-md'
+                  'flex flex-col max-w-[80%]',
+                  msg.isOwn ? 'ml-auto items-end' : 'mr-auto items-start'
                 )}
               >
-                <p className="text-sm whitespace-pre-wrap break-words">
-                  {msg.content}
-                </p>
+                <div
+                  className={cn(
+                    'px-4 py-2.5 rounded-2xl shadow-sm',
+                    msg.isOwn
+                      ? 'bg-primary text-primary-foreground rounded-br-md'
+                      : 'bg-card text-foreground border border-border rounded-bl-md'
+                  )}
+                >
+                  <p className="text-sm whitespace-pre-wrap break-words">
+                    {msg.content}
+                  </p>
+                </div>
+                <span className="text-[10px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
+                  {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
+                  {msg.isOwn && (
+                    msg.read_at ? (
+                      <CheckCheck className="w-3 h-3 text-blue-500" />
+                    ) : (
+                      <Check className="w-3 h-3" />
+                    )
+                  )}
+                </span>
               </div>
-              <span className="text-[10px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
-                {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
-                {msg.isOwn && (
-                  msg.read_at ? (
-                    <CheckCheck className="w-3 h-3 text-blue-500" />
-                  ) : (
-                    <Check className="w-3 h-3" />
-                  )
-                )}
-              </span>
-            </div>
+            )
           ))
         )}
         <div ref={messagesEndRef} />

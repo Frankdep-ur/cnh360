@@ -64,7 +64,10 @@ export type Database = {
       }
       aulas: {
         Row: {
+          aluno_confirmou_chegada: boolean | null
           aluno_id: string
+          aula_fim: string | null
+          aula_inicio: string | null
           codigo_validacao: string | null
           created_at: string
           data_hora: string
@@ -80,6 +83,9 @@ export type Database = {
           observacoes: string | null
           payment_confirmed: boolean | null
           ponto_encontro: string | null
+          qr_code_data: string | null
+          qr_code_expires_at: string | null
+          qr_validado: boolean | null
           status: Database["public"]["Enums"]["status_aula"]
           transaction_id: string | null
           updated_at: string
@@ -89,7 +95,10 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          aluno_confirmou_chegada?: boolean | null
           aluno_id: string
+          aula_fim?: string | null
+          aula_inicio?: string | null
           codigo_validacao?: string | null
           created_at?: string
           data_hora: string
@@ -105,6 +114,9 @@ export type Database = {
           observacoes?: string | null
           payment_confirmed?: boolean | null
           ponto_encontro?: string | null
+          qr_code_data?: string | null
+          qr_code_expires_at?: string | null
+          qr_validado?: boolean | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null
           updated_at?: string
@@ -114,7 +126,10 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          aluno_confirmou_chegada?: boolean | null
           aluno_id?: string
+          aula_fim?: string | null
+          aula_inicio?: string | null
           codigo_validacao?: string | null
           created_at?: string
           data_hora?: string
@@ -130,6 +145,9 @@ export type Database = {
           observacoes?: string | null
           payment_confirmed?: boolean | null
           ponto_encontro?: string | null
+          qr_code_data?: string | null
+          qr_code_expires_at?: string | null
+          qr_validado?: boolean | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null
           updated_at?: string
@@ -689,6 +707,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_system: boolean | null
           read_at: string | null
           sender_id: string
         }
@@ -697,6 +716,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          is_system?: boolean | null
           read_at?: string | null
           sender_id: string
         }
@@ -705,6 +725,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          is_system?: boolean | null
           read_at?: string | null
           sender_id?: string
         }
@@ -1441,6 +1462,9 @@ export type Database = {
         | "em_andamento"
         | "concluida"
         | "cancelada"
+        | "em_rota"
+        | "aguardando_confirmacao"
+        | "aguardando_qr"
       status_pagamento:
         | "pendente"
         | "processando"
@@ -1590,6 +1614,9 @@ export const Constants = {
         "em_andamento",
         "concluida",
         "cancelada",
+        "em_rota",
+        "aguardando_confirmacao",
+        "aguardando_qr",
       ],
       status_pagamento: [
         "pendente",
