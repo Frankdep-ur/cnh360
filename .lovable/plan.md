@@ -1,63 +1,53 @@
+# Integração Z-API - Notificações WhatsApp ✅
 
-# Plano: Integrar Z-API para Notificações WhatsApp
+## Status: IMPLEMENTADO
 
-## Visão Geral
+A integração com Z-API foi concluída em 26/01/2026.
 
-Substituir a integração SendPulse (nunca configurada) pela Z-API para enviar notificações WhatsApp automáticas ao instrutor quando o pagamento de uma aula for confirmado.
-
-## Arquitetura Atual
+## Arquitetura
 
 ```text
 Pagamento Confirmado (Pagar.me)
         ↓
 check-payment-status-pagarme (Edge Function)
         ↓
-send-whatsapp-notification (Edge Function) ← MODIFICAR AQUI
+send-whatsapp-notification (Edge Function) ← Z-API
         ↓
 WhatsApp → Instrutor
 ```
 
-O fluxo já está 100% implementado - só preciso trocar o provedor de SendPulse para Z-API.
+## Secrets Configurados
 
----
+| Secret | Status |
+|--------|--------|
+| `ZAPI_INSTANCE_ID` | ✅ Configurado |
+| `ZAPI_TOKEN` | ✅ Configurado |
 
-## Fase 1: Adicionar Secrets da Z-API
+## Edge Function
 
-Criar 2 novos secrets no projeto:
+**Arquivo:** `supabase/functions/send-whatsapp-notification/index.ts`
 
-| Secret | Descrição |
-|--------|-----------|
-| `ZAPI_INSTANCE_ID` | ID da instância "CNH360 Teste" |
-| `ZAPI_TOKEN` | Token de integração da instância |
-
-Você precisará fornecer esses valores do seu dashboard Z-API.
-
----
-
-## Fase 2: Reescrever Edge Function
-
-Arquivo: `supabase/functions/send-whatsapp-notification/index.ts`
-
-### Mudanças:
-
-1. **Remover** todo código SendPulse (OAuth2, getSendPulseAccessToken, sendWhatsAppViaSendPulse)
-2. **Adicionar** função `sendWhatsAppViaZAPI` usando a API REST da Z-API
-3. **Atualizar** comentário no topo do arquivo
-4. **Manter** o mesmo payload de entrada (compatibilidade com `check-payment-status-pagarme`)
-
-### API Z-API - Enviar Texto
-
+**Endpoint Z-API:**
 ```text
 POST https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text
-Content-Type: application/json
+```
 
-{
-  "phone": "5518981288372",
-  "message": "Pagamento confirmado! 🎉\n..."
+**Payload de entrada (compatível com check-payment-status-pagarme):**
+```typescript
+interface WhatsAppPayload {
+  aulaId: string;
+  alunoNome: string;
+  instrutorPhone: string;
+  instrutorNome: string;
+  dataHora: string;
+  duracaoMinutos: number;
+  pontoEncontro: string;
+  valor: number;
+  categoria?: string;
 }
 ```
 
-### Mensagem Formatada
+## Mensagem Enviada
 
 ```text
 🎉 *Pagamento confirmado!*
@@ -74,56 +64,16 @@ https://cnh360.lovable.app/aluno/chat/[aulaId]
 Bora ensinar! 🚗
 ```
 
----
+## Histórico de Migrações
 
-## Fase 3: Atualizar Documentação
+| Data | De | Para | Motivo |
+|------|-----|------|--------|
+| 25/01/2026 | Twilio | SendPulse | Sandbox Twilio travado |
+| 26/01/2026 | SendPulse | Z-API | Provedor brasileiro, setup mais simples |
 
-Arquivo: `.lovable/plan.md`
+## Próximos Passos
 
-Atualizar para refletir a mudança de SendPulse para Z-API.
-
----
-
-## Fase 4: Deploy e Teste
-
-1. Fazer deploy da Edge Function atualizada
-2. Testar chamando a função com dados reais do instrutor Tiago Silva
-3. Verificar se a mensagem chegou no WhatsApp dele
-
----
-
-## Estrutura Final
-
-```text
-Secrets:
-  ✓ ZAPI_INSTANCE_ID (novo)
-  ✓ ZAPI_TOKEN (novo)
-
-Edge Function:
-  ✓ send-whatsapp-notification → Usando Z-API
-
-Arquivos modificados:
-  - supabase/functions/send-whatsapp-notification/index.ts
-  - .lovable/plan.md
-```
-
----
-
-## Comparação SendPulse vs Z-API
-
-| Aspecto | SendPulse | Z-API |
-|---------|-----------|-------|
-| Autenticação | OAuth2 (2 chamadas) | Token direto na URL |
-| Endpoint | Complexo | Simples e direto |
-| Suporte BR | Internacional | Brasileiro 🇧🇷 |
-| Setup | Requer bot WhatsApp | Conecta direto |
-
----
-
-## Próximos Passos Após Aprovação
-
-1. Você me fornece o `ZAPI_INSTANCE_ID` e `ZAPI_TOKEN`
-2. Eu adiciono os secrets no projeto
-3. Eu reescrevo a Edge Function para usar Z-API
-4. Eu atualizo a documentação
-5. Testamos o envio para o instrutor Tiago Silva
+1. ✅ Secrets configurados
+2. ✅ Edge Function reescrita
+3. 🔄 Testar envio real para instrutor
+4. 📊 Monitorar logs de envio
