@@ -1,8 +1,45 @@
 
-# Plano: Animacao Pulse no Botao WhatsApp
+# Plano: Filtrar Aulas Nao Pagas para Instrutor
 
-## Resumo
-Adicionar uma animacao de pulse sutil ao botao flutuante do WhatsApp para chamar mais atencao dos visitantes na landing page.
+## Resumo do Problema
+Atualmente, quando um aluno inicia o processo de agendamento, a aula e criada no banco de dados **antes** do pagamento ser concluido. Isso faz com que aulas nao pagas aparecam no dashboard do instrutor, o que e confuso e problematico.
+
+---
+
+## Fluxo Atual (Problematico)
+
+```text
+Aluno clica "Pagar"
+       │
+       ▼
+Aula criada no banco ──────► Aparece para instrutor
+(status: pendente)           (mesmo sem pagamento!)
+       │
+       ▼
+Aluno completa pagamento
+       │
+       ▼
+payment_confirmed = true
+```
+
+---
+
+## Fluxo Corrigido
+
+```text
+Aluno clica "Pagar"
+       │
+       ▼
+Aula criada no banco
+(status: pendente)
+payment_confirmed: false      ──────► NAO aparece para instrutor
+       │
+       ▼
+Aluno completa pagamento
+       │
+       ▼
+payment_confirmed = true      ──────► Aparece para instrutor
+```
 
 ---
 
@@ -10,82 +47,99 @@ Adicionar uma animacao de pulse sutil ao botao flutuante do WhatsApp para chamar
 
 | Arquivo | Modificacao |
 |---------|-------------|
-| `src/pages/Index.tsx` | Adicionar classe `animate-pulse` customizada |
+| `src/hooks/useAulasPendentes.ts` | Adicionar filtro `payment_confirmed = true` |
 
 ---
 
-## Abordagem
+## Mudanca Tecnica
 
-Vou adicionar uma animacao de pulse usando uma sombra que pulsa suavemente ao redor do botao. Isso cria um efeito visual que chama atencao sem ser irritante.
+### Linhas 73-89 - Adicionar filtro de pagamento confirmado
 
-### Estilo da Animacao
-
-Em vez de usar o `animate-pulse` padrao do Tailwind (que altera opacidade), vou criar um efeito de "glow" pulsante usando box-shadow animado inline, que e mais elegante para botoes de CTA.
-
----
-
-## Codigo Atualizado
-
-### Linha 196-205 - Adicionar animacao
-
+**Codigo atual:**
 ```typescript
-className={cn(
-  "fixed bottom-6 right-6 z-50",
-  "w-14 h-14 rounded-full",
-  "bg-[#25D366] hover:bg-[#20bd5a]",
-  "flex items-center justify-center",
-  "shadow-lg hover:shadow-xl",
-  "transition-all duration-300",
-  "hover:scale-110",
-  "animate-[pulse-glow_2s_ease-in-out_infinite]",  // ADICIONAR
-  showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-)}
+const { data: aulasData, error: aulasError } = await supabase
+  .from("aulas")
+  .select(`
+    id,
+    aluno_id,
+    data_hora,
+    duracao_minutos,
+    ponto_encontro,
+    valor,
+    usa_carro_aluno,
+    status,
+    created_at,
+    transaction_id
+  `)
+  .eq("instrutor_id", instrutorData.id)
+  .in("status", ["pendente", "confirmada"])
+  .order("data_hora", { ascending: true });
 ```
 
-### Adicionar keyframes inline via style
-
-Como a animacao de glow nao existe no Tailwind por padrao, vou usar uma abordagem mais simples: adicionar a classe `animate-bounce-subtle` que ja existe no projeto (definida no tailwind.config.ts linhas 81-84).
-
----
-
-## Solucao Final
-
-Usar a animacao `animate-bounce-subtle` ja existente no projeto:
-
+**Codigo corrigido:**
 ```typescript
-className={cn(
-  "fixed bottom-6 right-6 z-50",
-  "w-14 h-14 rounded-full",
-  "bg-[#25D366] hover:bg-[#20bd5a]",
-  "flex items-center justify-center",
-  "shadow-lg hover:shadow-xl",
-  "transition-all duration-300",
-  "hover:scale-110",
-  "animate-bounce-subtle",  // ADICIONAR - ja existe no projeto!
-  showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-)}
+const { data: aulasData, error: aulasError } = await supabase
+  .from("aulas")
+  .select(`
+    id,
+    aluno_id,
+    data_hora,
+    duracao_minutos,
+    ponto_encontro,
+    valor,
+    usa_carro_aluno,
+    status,
+    created_at,
+    transaction_id,
+    payment_confirmed
+  `)
+  .eq("instrutor_id", instrutorData.id)
+  .in("status", ["pendente", "confirmada"])
+  .eq("payment_confirmed", true)  // NOVA LINHA: So aulas pagas
+  .order("data_hora", { ascending: true });
 ```
 
-Esta animacao ja esta definida no `tailwind.config.ts`:
-- Keyframe: move o botao 5px para cima e volta
-- Duracao: 2 segundos
-- Easing: ease-in-out
-- Loop: infinito
+---
+
+## Logica de Negocio
+
+### Criterios para aparecer no Dashboard do Instrutor:
+1. A aula deve ter `payment_confirmed = true` (pagamento confirmado)
+2. O status deve ser `pendente` (aguardando aceite) ou `confirmada` (aceita pelo instrutor)
+
+### Por que isso funciona:
+- Quando o aluno inicia o pagamento, a aula e criada com `payment_confirmed = false`
+- Quando o pagamento e concluido (via webhook ou polling), `payment_confirmed` vira `true`
+- Somente depois disso a aula aparece para o instrutor
 
 ---
 
-## Resultado Visual
+## Impacto nos Componentes
 
-O botao tera um movimento sutil de "bounce" que:
-- Sobe 5px e desce suavemente
-- Repete a cada 2 segundos
-- Para no hover (quando `hover:scale-110` assume)
-- Nao e intrusivo mas chama atencao
+### Remocao da Aula de Demonstracao (Opcional)
+
+Com a correcao, se nao houver aulas pagas pendentes, o instrutor vera uma lista vazia. O sistema ja tem uma aula de demonstracao que aparece nesse caso, entao nao precisa de mudanca adicional.
+
+### Validacao de Pagamento no Aceitar
+
+A funcao `aceitarAula` (linha 145-152) ja tem verificacao de `transaction_id`, mas com a nova filtragem, todas as aulas que chegam para aceite ja terao pagamento confirmado, tornando essa verificacao redundante (mas vale manter como seguranca adicional).
+
+---
+
+## Verificacao de Seguranca
+
+### Ponto importante:
+Com essa mudanca, o instrutor **nunca** vera aulas sem pagamento. Isso e importante porque:
+- Protege o instrutor de aceitar aulas que nao foram pagas
+- Garante que so aulas legitimas aparecam
+- Evita confusao e reclamacoes
 
 ---
 
 ## Checklist de Implementacao
 
-- [ ] Adicionar classe `animate-bounce-subtle` ao botao WhatsApp
-- [ ] Testar que a animacao funciona corretamente
-- [ ] Verificar que nao interfere com hover states
+- [ ] Adicionar `payment_confirmed` ao SELECT da query
+- [ ] Adicionar filtro `.eq("payment_confirmed", true)`
+- [ ] Testar que aulas nao pagas nao aparecem
+- [ ] Testar que aulas pagas aparecem normalmente
+- [ ] Verificar que aulas confirmadas continuam visiveis
