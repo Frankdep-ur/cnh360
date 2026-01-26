@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card } from "@/components/ui/card";
@@ -32,9 +33,23 @@ interface Conversa {
 
 export default function AlunoChat() {
   const { user } = useAuth();
+  const location = useLocation();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAulaId, setSelectedAulaId] = useState<string | null>(null);
+
+  // Abrir chat automaticamente se vier com openAulaId no state
+  useEffect(() => {
+    const openAulaId = location.state?.openAulaId as string | undefined;
+    if (openAulaId && !loading && conversas.length > 0) {
+      const conversaExiste = conversas.find(c => c.aula_id === openAulaId);
+      if (conversaExiste) {
+        setSelectedAulaId(openAulaId);
+        // Limpar o state para evitar reabrir ao navegar
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, loading, conversas]);
 
   useEffect(() => {
     if (!user) return;
