@@ -123,8 +123,8 @@ serve(async (req) => {
       timeZone: "America/Sao_Paulo",
     });
 
-    // Deep link para o chat da aula
-    const chatDeepLink = `https://cnh360.lovable.app/aluno/chat/${payload.aulaId}`;
+    // Deep link para o chat da aula (domínio oficial)
+    const chatDeepLink = `https://cnh360.com/aluno/chat/${payload.aulaId}`;
 
     // Mensagem formatada para WhatsApp com emojis e negrito
     const message = `🎉 *Pagamento confirmado!*
