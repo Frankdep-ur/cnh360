@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, LogOut } from "lucide-react";
+import { Car, GraduationCap, Building2, ChevronRight, Shield, Zap, Users, LogOut, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
@@ -181,5 +181,28 @@ export default function Index() {
           </div>
         </div>
       </div>
+
+      {/* Botão Flutuante WhatsApp */}
+      <button
+        onClick={() => {
+          const phone = "5518981288372";
+          const message = encodeURIComponent("Olá! Gostaria de saber mais sobre a CNH360.");
+          window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+        }}
+        className={cn(
+          "fixed bottom-6 right-6 z-50",
+          "w-14 h-14 rounded-full",
+          "bg-[#25D366] hover:bg-[#20bd5a]",
+          "flex items-center justify-center",
+          "shadow-lg hover:shadow-xl",
+          "transition-all duration-300",
+          "hover:scale-110",
+          showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+        )}
+        style={{ transitionDelay: "900ms" }}
+        aria-label="Falar no WhatsApp"
+      >
+        <MessageCircle className="w-7 h-7 text-white" />
+      </button>
     </div>;
 }
