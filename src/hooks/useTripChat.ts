@@ -7,6 +7,7 @@ interface Message {
   sender_id: string;
   content: string;
   created_at: string;
+  read_at: string | null;
   isOwn: boolean;
 }
 
@@ -15,6 +16,7 @@ interface UseTripChatReturn {
   loading: boolean;
   error: string | null;
   sendMessage: (content: string) => Promise<void>;
+  markMessagesAsRead: () => Promise<void>;
 }
 
 export function useTripChat(aulaId: string | null): UseTripChatReturn {
@@ -47,6 +49,7 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
             sender_id: msg.sender_id,
             content: msg.content,
             created_at: msg.created_at,
+            read_at: msg.read_at,
             isOwn: msg.sender_id === user?.id,
           }))
         );
@@ -56,33 +59,45 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
 
     fetchMessages();
 
-    // Subscribe to new messages
+    // Subscribe to message changes (INSERT and UPDATE)
     const channel = supabase
       .channel(`chat-${aulaId}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'mensagens_aula',
           filter: `aula_id=eq.${aulaId}`,
         },
         (payload) => {
-          const newMsg = payload.new as any;
-          setMessages((prev) => {
-            // Avoid duplicates
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [
-              ...prev,
-              {
-                id: newMsg.id,
-                sender_id: newMsg.sender_id,
-                content: newMsg.content,
-                created_at: newMsg.created_at,
-                isOwn: newMsg.sender_id === user?.id,
-              },
-            ];
-          });
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as any;
+            setMessages((prev) => {
+              // Avoid duplicates
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [
+                ...prev,
+                {
+                  id: newMsg.id,
+                  sender_id: newMsg.sender_id,
+                  content: newMsg.content,
+                  created_at: newMsg.created_at,
+                  read_at: newMsg.read_at,
+                  isOwn: newMsg.sender_id === user?.id,
+                },
+              ];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = payload.new as any;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === updatedMsg.id
+                  ? { ...m, read_at: updatedMsg.read_at }
+                  : m
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -91,6 +106,22 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
       supabase.removeChannel(channel);
     };
   }, [aulaId, user?.id]);
+
+  const markMessagesAsRead = useCallback(async () => {
+    if (!aulaId || !user) return;
+
+    // Mark as read only messages from the OTHER user
+    const { error: updateError } = await supabase
+      .from('mensagens_aula')
+      .update({ read_at: new Date().toISOString() })
+      .eq('aula_id', aulaId)
+      .neq('sender_id', user.id)
+      .is('read_at', null);
+
+    if (updateError) {
+      console.error('Error marking messages as read:', updateError);
+    }
+  }, [aulaId, user]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -133,5 +164,6 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
     loading,
     error,
     sendMessage,
+    markMessagesAsRead,
   };
 }
