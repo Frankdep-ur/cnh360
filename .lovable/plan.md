@@ -1,70 +1,41 @@
 
 
-# Plano: Configurar Client-Token Z-API
+# Plano: Atualizar Link para Domínio Oficial
 
 ## Objetivo
 
-Adicionar o Client-Token encontrado e atualizar a Edge Function para corrigir o erro "your client-token is not configured".
+Alterar o deep link na mensagem WhatsApp para usar o domínio principal `cnh360.com` ao invés de `cnh360.lovable.app`.
 
 ---
 
-## Passo 1: Adicionar Secret
+## Alteração Necessária
 
-| Secret | Valor |
-|--------|-------|
-| `ZAPI_CLIENT_TOKEN` | `F3e433787498b4210b472e04f3170f4eaS` |
+### Arquivo: `supabase/functions/send-whatsapp-notification/index.ts`
 
----
-
-## Passo 2: Atualizar Edge Function
-
-Modificar o arquivo `supabase/functions/send-whatsapp-notification/index.ts` para incluir o header `Client-Token` nas requisições à API Z-API.
-
-### Mudança no código
-
+**Linha atual (linha 100):**
 ```typescript
-// Antes (sem Client-Token)
-const response = await fetch(zapiUrl, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ phone, message }),
-});
-
-// Depois (com Client-Token)
-const response = await fetch(zapiUrl, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Client-Token": clientToken,  // ← Novo header obrigatório
-  },
-  body: JSON.stringify({ phone, message }),
-});
+const chatDeepLink = `https://cnh360.lovable.app/aluno/chat/${payload.aulaId}`;
 ```
 
----
-
-## Passo 3: Testar Envio
-
-Após as alterações:
-1. Fazer deploy automático da Edge Function
-2. Chamar a função com dados do instrutor Tiago Silva
-3. Verificar se a mensagem WhatsApp é entregue
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/send-whatsapp-notification/index.ts` | Adicionar leitura do `ZAPI_CLIENT_TOKEN` e incluir header `Client-Token` na requisição |
+**Nova linha:**
+```typescript
+const chatDeepLink = `https://cnh360.com/aluno/chat/${payload.aulaId}`;
+```
 
 ---
 
 ## Resultado Esperado
 
-- Requisição à Z-API retorna sucesso (status 200)
-- Instrutor Tiago Silva recebe mensagem WhatsApp
-- Logs mostram: "Mensagem enviada via Z-API"
+A mensagem WhatsApp passará a exibir:
+
+```
+💬 Acesse o chat no app para falar com o aluno:
+https://cnh360.com/aluno/chat/abc123
+```
+
+---
+
+## Observação
+
+A conta Z-API está em modo **TRIAL** (teste). Para produção, será necessário ativar o plano pago da Z-API para remover a mensagem de aviso.
 
