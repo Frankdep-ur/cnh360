@@ -1,65 +1,70 @@
 
-# Plano: Atualizar Secrets Z-API
+
+# Plano: Configurar Client-Token Z-API
 
 ## Objetivo
 
-Corrigir os secrets `ZAPI_INSTANCE_ID` e `ZAPI_TOKEN` que estão incorretos, causando o erro "your client-token is not configured".
+Adicionar o Client-Token encontrado e atualizar a Edge Function para corrigir o erro "your client-token is not configured".
 
 ---
 
-## Ação Necessária
+## Passo 1: Adicionar Secret
 
-### Passo 1: Obter valores do Dashboard Z-API
-
-No seu dashboard Z-API (https://admin.z-api.io), localize:
-
-1. **Instance ID** - O identificador único da instância "CNH360 Teste"
-   - Geralmente está na URL quando você clica na instância
-   - Formato: sequência alfanumérica (ex: `3D5F7A2B1C9E8D4F`)
-
-2. **Token** - O token de segurança para autenticação
-   - Está na seção "Configurações" ou "Token" da instância
-   - Formato: sequência alfanumérica longa
+| Secret | Valor |
+|--------|-------|
+| `ZAPI_CLIENT_TOKEN` | `F3e433787498b4210b472e04f3170f4eaS` |
 
 ---
 
-### Passo 2: Atualizar Secrets no Projeto
+## Passo 2: Atualizar Edge Function
 
-Usarei a ferramenta de adicionar secrets para solicitar os novos valores:
+Modificar o arquivo `supabase/functions/send-whatsapp-notification/index.ts` para incluir o header `Client-Token` nas requisições à API Z-API.
 
-| Secret | Descrição |
-|--------|-----------|
-| `ZAPI_INSTANCE_ID` | ID da instância CNH360 Teste |
-| `ZAPI_TOKEN` | Token de integração |
+### Mudança no código
 
----
+```typescript
+// Antes (sem Client-Token)
+const response = await fetch(zapiUrl, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ phone, message }),
+});
 
-### Passo 3: Testar Novamente
-
-Após atualizar os secrets:
-1. Chamar a Edge Function `send-whatsapp-notification`
-2. Verificar se a mensagem chega no WhatsApp do instrutor Tiago Silva
-
----
-
-## Onde Encontrar no Dashboard Z-API
-
-```text
-Dashboard Z-API
-    ↓
-Instâncias → CNH360 Teste
-    ↓
-┌─────────────────────────────────┐
-│ Instance ID: XXXXXXXX           │  ← Copiar este valor
-│ Token: YYYYYYYY                 │  ← Copiar este valor
-└─────────────────────────────────┘
+// Depois (com Client-Token)
+const response = await fetch(zapiUrl, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Client-Token": clientToken,  // ← Novo header obrigatório
+  },
+  body: JSON.stringify({ phone, message }),
+});
 ```
+
+---
+
+## Passo 3: Testar Envio
+
+Após as alterações:
+1. Fazer deploy automático da Edge Function
+2. Chamar a função com dados do instrutor Tiago Silva
+3. Verificar se a mensagem WhatsApp é entregue
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/send-whatsapp-notification/index.ts` | Adicionar leitura do `ZAPI_CLIENT_TOKEN` e incluir header `Client-Token` na requisição |
 
 ---
 
 ## Resultado Esperado
 
-Após a atualização:
-- A chamada à API Z-API retornará sucesso
-- O instrutor receberá a notificação WhatsApp
-- Os logs mostrarão "Mensagem enviada via Z-API"
+- Requisição à Z-API retorna sucesso (status 200)
+- Instrutor Tiago Silva recebe mensagem WhatsApp
+- Logs mostram: "Mensagem enviada via Z-API"
+
