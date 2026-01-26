@@ -123,8 +123,8 @@ serve(async (req) => {
       timeZone: "America/Sao_Paulo",
     });
 
-    // Deep link para o chat da aula (domínio oficial)
-    const chatDeepLink = `https://cnh360.com/aluno/chat/${payload.aulaId}`;
+    // Deep link para página do instrutor (domínio oficial)
+    const chatDeepLink = `https://cnh360.com/instrutor/a-caminho/${payload.aulaId}`;
 
     // Mensagem formatada para WhatsApp com emojis e negrito
     const message = `🎉 *Pagamento confirmado!*
@@ -135,7 +135,7 @@ serve(async (req) => {
 📍 *Local:* ${payload.pontoEncontro || "A combinar"}
 💰 *Valor pago:* R$ ${payload.valor.toFixed(2)}
 
-💬 Acesse o chat no app para falar com o aluno:
+💬 Acesse o app para ver detalhes e falar com o aluno:
 ${chatDeepLink}
 
 Bora ensinar! 🚗`;
