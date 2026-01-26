@@ -194,6 +194,56 @@ export type Database = {
           },
         ]
       }
+      aulas_auditoria: {
+        Row: {
+          aula_id: string
+          created_at: string
+          dados_adicionais: Json | null
+          device_info: Json | null
+          evento: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          precisao_metros: number | null
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          aula_id: string
+          created_at?: string
+          dados_adicionais?: Json | null
+          device_info?: Json | null
+          evento: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          precisao_metros?: number | null
+          timestamp?: string
+          user_id: string
+        }
+        Update: {
+          aula_id?: string
+          created_at?: string
+          dados_adicionais?: Json | null
+          device_info?: Json | null
+          evento?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          precisao_metros?: number | null
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aulas_auditoria_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       autoescolas: {
         Row: {
           ativa: boolean | null
