@@ -1,8 +1,8 @@
 // =============================================================================
-// NOTIFICAÇÕES WHATSAPP MIGRADAS PARA SENDPULSE
-// Twilio foi removida permanentemente em 25/01/2026
-// Agora usamos SendPulse como provedor oficial WhatsApp Business API
-// Motivo: sandbox Twilio travado e setup complicado no trial
+// NOTIFICAÇÕES WHATSAPP VIA Z-API
+// Migrado de SendPulse para Z-API em 26/01/2026
+// Z-API é um provedor brasileiro com integração direta ao WhatsApp
+// Documentação: https://developer.z-api.io/
 // =============================================================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -28,87 +28,50 @@ interface WhatsAppPayload {
   categoria?: string;
 }
 
-// Função para obter token de acesso do SendPulse (OAuth2)
-async function getSendPulseAccessToken(): Promise<string | null> {
-  const apiUserId = Deno.env.get("SENDPULSE_API_USER_ID");
-  const apiSecret = Deno.env.get("SENDPULSE_API_SECRET");
-
-  if (!apiUserId || !apiSecret) {
-    logStep("SendPulse não configurado - credenciais ausentes");
-    return null;
-  }
-
-  try {
-    const response = await fetch("https://api.sendpulse.com/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "client_credentials",
-        client_id: apiUserId,
-        client_secret: apiSecret,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      logStep("Erro ao obter token SendPulse", { status: response.status, error });
-      return null;
-    }
-
-    const data = await response.json();
-    return data.access_token;
-  } catch (error: any) {
-    logStep("Exceção ao obter token SendPulse", { message: error.message });
-    return null;
-  }
-}
-
-// Função para enviar mensagem WhatsApp via SendPulse
-async function sendWhatsAppViaSendPulse(
-  accessToken: string,
+// Função para enviar mensagem WhatsApp via Z-API
+async function sendWhatsAppViaZAPI(
   phone: string,
   message: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const botId = Deno.env.get("SENDPULSE_WHATSAPP_BOT_ID");
+  const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
+  const token = Deno.env.get("ZAPI_TOKEN");
 
-  if (!botId) {
-    return { success: false, error: "SENDPULSE_WHATSAPP_BOT_ID não configurado" };
+  if (!instanceId || !token) {
+    logStep("Z-API não configurado - credenciais ausentes");
+    return { success: false, error: "ZAPI_INSTANCE_ID ou ZAPI_TOKEN não configurados" };
   }
 
-  // Formatar número para padrão internacional
+  // Formatar número para padrão brasileiro (apenas dígitos, com 55)
   const phoneClean = phone.replace(/\D/g, "");
   const phoneFormatted = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
 
+  const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+
   try {
-    const response = await fetch("https://api.sendpulse.com/whatsapp/contacts/sendByPhone", {
+    logStep("Enviando mensagem via Z-API", { phone: phoneFormatted });
+
+    const response = await fetch(zapiUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        bot_id: botId,
         phone: phoneFormatted,
-        message: {
-          type: "text",
-          text: {
-            body: message,
-          },
-        },
+        message: message,
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      logStep("Erro SendPulse API", { status: response.status, data });
-      return { success: false, error: data.message || "Erro ao enviar mensagem" };
+      logStep("Erro Z-API", { status: response.status, data });
+      return { success: false, error: data.message || data.error || "Erro ao enviar mensagem" };
     }
 
-    logStep("Mensagem enviada via SendPulse", { phone: phoneFormatted, data });
-    return { success: true, messageId: data.id || "sent" };
+    logStep("Mensagem enviada via Z-API", { phone: phoneFormatted, data });
+    return { success: true, messageId: data.messageId || data.zapiMessageId || "sent" };
   } catch (error: any) {
-    logStep("Exceção ao enviar via SendPulse", { message: error.message });
+    logStep("Exceção ao enviar via Z-API", { message: error.message });
     return { success: false, error: error.message };
   }
 }
@@ -126,16 +89,17 @@ serve(async (req) => {
       instrutorNome: payload.instrutorNome 
     });
 
-    // Verificar se SendPulse está configurado
-    const accessToken = await getSendPulseAccessToken();
+    // Verificar se Z-API está configurado
+    const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
+    const token = Deno.env.get("ZAPI_TOKEN");
     
-    if (!accessToken) {
-      logStep("SendPulse não configurado, notificação WhatsApp pulada");
+    if (!instanceId || !token) {
+      logStep("Z-API não configurado, notificação WhatsApp pulada");
       return new Response(
         JSON.stringify({ 
           success: false, 
-          reason: "sendpulse_not_configured",
-          message: "Configure SENDPULSE_API_USER_ID, SENDPULSE_API_SECRET e SENDPULSE_WHATSAPP_BOT_ID"
+          reason: "zapi_not_configured",
+          message: "Configure ZAPI_INSTANCE_ID e ZAPI_TOKEN nos secrets do projeto"
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -155,7 +119,7 @@ serve(async (req) => {
     // Deep link para o chat da aula
     const chatDeepLink = `https://cnh360.lovable.app/aluno/chat/${payload.aulaId}`;
 
-    // Mensagem formatada para WhatsApp
+    // Mensagem formatada para WhatsApp com emojis e negrito
     const message = `🎉 *Pagamento confirmado!*
 
 👤 *Aluno:* ${payload.alunoNome}
@@ -167,11 +131,10 @@ serve(async (req) => {
 💬 Acesse o chat no app para falar com o aluno:
 ${chatDeepLink}
 
-Qualquer dúvida, responde aqui ou no app.
 Bora ensinar! 🚗`;
 
-    // Enviar via SendPulse
-    const result = await sendWhatsAppViaSendPulse(accessToken, payload.instrutorPhone, message);
+    // Enviar via Z-API
+    const result = await sendWhatsAppViaZAPI(payload.instrutorPhone, message);
 
     if (!result.success) {
       logStep("Falha ao enviar WhatsApp", { error: result.error });
@@ -181,10 +144,10 @@ Bora ensinar! 🚗`;
       );
     }
 
-    logStep("WhatsApp enviado com sucesso via SendPulse", { messageId: result.messageId });
+    logStep("WhatsApp enviado com sucesso via Z-API", { messageId: result.messageId });
 
     return new Response(
-      JSON.stringify({ success: true, messageId: result.messageId, provider: "sendpulse" }),
+      JSON.stringify({ success: true, messageId: result.messageId, provider: "zapi" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
