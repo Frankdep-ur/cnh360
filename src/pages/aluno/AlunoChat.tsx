@@ -106,12 +106,13 @@ export default function AlunoChat() {
             .limit(1)
             .single();
 
-          // Count unread messages (messages from instrutor)
+          // Count unread messages (messages from instrutor that haven't been read)
           const { count } = await supabase
             .from('mensagens_aula')
             .select('*', { count: 'exact', head: true })
             .eq('aula_id', aula.id)
-            .neq('sender_id', user.id);
+            .neq('sender_id', user.id)
+            .is('read_at', null);
 
           return {
             aula_id: aula.id,

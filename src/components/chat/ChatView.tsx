@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Send, Loader2, MessageCircle } from 'lucide-react';
+import { ChevronLeft, Send, Loader2, MessageCircle, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTripChat } from '@/hooks/useTripChat';
@@ -9,7 +9,6 @@ import { ptBR } from 'date-fns/locale';
 import { ComplianceBanner } from '@/components/layout/ComplianceBanner';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { InstructorBottomNav } from '@/components/layout/InstructorBottomNav';
-
 interface ChatViewProps {
   aulaId: string;
   contactName?: string;
@@ -34,9 +33,16 @@ export function ChatView({
   const displayPhoto = contactPhoto ?? instructorPhoto;
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const { messages, loading, sendMessage } = useTripChat(aulaId);
+  const { messages, loading, sendMessage, markMessagesAsRead } = useTripChat(aulaId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Mark messages as read when chat opens and when new messages arrive
+  useEffect(() => {
+    if (!loading && messages.length > 0) {
+      markMessagesAsRead();
+    }
+  }, [loading, messages.length, markMessagesAsRead]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -135,8 +141,15 @@ export function ChatView({
                   {msg.content}
                 </p>
               </div>
-              <span className="text-[10px] text-muted-foreground mt-1 px-1">
+              <span className="text-[10px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
                 {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
+                {msg.isOwn && (
+                  msg.read_at ? (
+                    <CheckCheck className="w-3 h-3 text-blue-500" />
+                  ) : (
+                    <Check className="w-3 h-3" />
+                  )
+                )}
               </span>
             </div>
           ))
