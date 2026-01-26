@@ -35,10 +35,16 @@ async function sendWhatsAppViaZAPI(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
   const token = Deno.env.get("ZAPI_TOKEN");
+  const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
 
   if (!instanceId || !token) {
     logStep("Z-API não configurado - credenciais ausentes");
     return { success: false, error: "ZAPI_INSTANCE_ID ou ZAPI_TOKEN não configurados" };
+  }
+
+  if (!clientToken) {
+    logStep("Z-API Client-Token não configurado");
+    return { success: false, error: "ZAPI_CLIENT_TOKEN não configurado" };
   }
 
   // Formatar número para padrão brasileiro (apenas dígitos, com 55)
@@ -54,6 +60,7 @@ async function sendWhatsAppViaZAPI(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Client-Token": clientToken,
       },
       body: JSON.stringify({
         phone: phoneFormatted,
