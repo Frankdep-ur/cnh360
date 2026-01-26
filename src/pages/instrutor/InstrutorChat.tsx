@@ -88,12 +88,39 @@ export default function InstrutorChat() {
       // Get aluno info and last message for each aula
       const conversasData = await Promise.all(
         (aulasData || []).map(async (aula) => {
-          // Get aluno info from view that instructor can access
-          const { data: alunoData } = await supabase
-            .from('alunos_seguros')
-            .select('user_id, full_name, avatar_url')
+          // First get aluno's user_id from alunos table (instructor has access via RLS)
+          const { data: alunoRecord } = await supabase
+            .from('alunos')
+            .select('user_id')
             .eq('id', aula.aluno_id)
             .single();
+
+          let alunoNome = 'Aluno';
+          let alunoFoto: string | null = null;
+          let alunoUserId = '';
+
+          if (alunoRecord?.user_id) {
+            alunoUserId = alunoRecord.user_id;
+            
+            // Try to get name using the secure function
+            const { data: nomeData } = await supabase
+              .rpc('get_participant_name', { p_user_id: alunoRecord.user_id });
+            
+            if (nomeData) {
+              alunoNome = nomeData;
+            }
+
+            // Get photo from instrutores_publico_cache or try alunos_seguros
+            const { data: alunoSeguros } = await supabase
+              .from('alunos_seguros')
+              .select('avatar_url')
+              .eq('user_id', alunoRecord.user_id)
+              .single();
+
+            if (alunoSeguros?.avatar_url) {
+              alunoFoto = alunoSeguros.avatar_url;
+            }
+          }
 
           // Get last message
           const { data: mensagemData } = await supabase
@@ -114,9 +141,9 @@ export default function InstrutorChat() {
           return {
             aula_id: aula.id,
             aluno_id: aula.aluno_id,
-            aluno_user_id: alunoData?.user_id || '',
-            aluno_nome: alunoData?.full_name || 'Aluno',
-            aluno_foto: alunoData?.avatar_url,
+            aluno_user_id: alunoUserId,
+            aluno_nome: alunoNome,
+            aluno_foto: alunoFoto,
             data_hora: aula.data_hora,
             status: aula.status,
             ultima_mensagem: mensagemData?.content || null,
