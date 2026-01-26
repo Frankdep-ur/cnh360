@@ -1,110 +1,130 @@
 
-
-# Plano: Adicionar Botão de Suporte WhatsApp nos Perfis
+# Plano: Modificar Tela "Proxima aula" no AlunoDashboard
 
 ## Resumo
-Implementar um botão de "Suporte" em todas as páginas de perfil (Aluno, Instrutor e Autoescola) que, ao ser clicado, abre uma conversa direta no WhatsApp com o número de suporte da CNH360: **(18) 98128-8372**.
+Simplificar a seção "Próxima aula" no dashboard do aluno após o pagamento ser confirmado:
+- **Remover**: botões "Ver Rota", "Iniciar Aula" e "Compartilhar Localização"
+- **Adicionar**: botão único e destacado "Enviar Mensagem ao Instrutor" que abre o chat
 
 ---
 
-## Arquivos a Modificar
+## Arquivo a Modificar
 
-| Arquivo | Localização do Botão |
-|---------|---------------------|
-| `src/pages/aluno/AlunoPerfil.tsx` | Seção "Actions" (após Documentos RENACH) |
-| `src/pages/instrutor/InstrutorPerfil.tsx` | Seção "Actions" (após Disponibilidade) |
-| `src/pages/autoescola/AutoescolaPerfil.tsx` | Após menu items (antes do Logout) |
+| Arquivo | Modificacao |
+|---------|-------------|
+| `src/pages/aluno/AlunoDashboard.tsx` | Linhas 519-576 (seção de botões após pagamento) |
 
 ---
 
-## Implementacao
+## Mudancas Detalhadas
 
-### 1. Componente do Botão de Suporte
+### 1. Remover Componentes
 
-Cada página receberá um botão consistente com o design existente:
+Remover da seção "Próxima aula" (após `isPaid` ser true):
+
+- **LocationShareButton** (linhas 520-528) - compartilhamento de localização
+- **RouteMapCard** (linhas 530-538) - mapa de rota
+- **Botão "Ver Rota"** (linhas 565-568)
+- **Botão "Iniciar Aula"** (linhas 569-573)
+
+### 2. Adicionar Novo Botao
+
+Substituir os botões removidos por um único botão verde:
 
 ```
-┌─────────────────────────────────────────────────┐
-│  [💬]  Suporte                           [>]   │
-│         Falar pelo WhatsApp                     │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  [💬]  Enviar Mensagem ao Instrutor                    │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Comportamento ao clicar:**
-- Abre o WhatsApp Web/App com o número formatado
-- URL: `https://wa.me/5518981288372?text=Olá! Preciso de ajuda com a CNH360.`
+**Especificacoes:**
+- **Cor**: Verde `#4CAF50` (mesmo tom do botão Pagar)
+- **Icone**: `MessageCircle` do Lucide
+- **Largura**: Full width (`w-full`)
+- **Acao**: Navegar para `/aluno/chat` com `state: { openAulaId: proximaAula.id }`
 
-### 2. Icone e Estilo
+### 3. Fluxo de Navegacao
 
-- **Icone:** `MessageCircle` do Lucide (representando chat/suporte)
-- **Cor do icone:** Verde (#25D366 - cor oficial do WhatsApp)
-- **Background do container:** Verde claro (`bg-[#25D366]/10`)
+Ao clicar no botão:
+```typescript
+navigate('/aluno/chat', { state: { openAulaId: proximaAula.id } });
+```
 
-### 3. Alteracoes por Arquivo
+O componente `AlunoChat.tsx` já está preparado para receber `openAulaId` via `location.state` e abrir automaticamente a conversa correta (linhas 41-51).
 
-#### AlunoPerfil.tsx (linha ~411)
-Adicionar botão entre "Documentos RENACH" e "Sair da conta"
+---
 
-#### InstrutorPerfil.tsx (linha ~503)
-Adicionar botão entre "Disponibilidade" e "Sair da conta"
+## Resultado Visual
 
-#### AutoescolaPerfil.tsx (linha ~165)
-Adicionar item no Card de menu items com estilo consistente
+### ANTES (apos pagamento confirmado):
+```
+┌─ Proxima aula ────────────────────────────────────────┐
+│  [Foto] Nome Instrutor ★4.9         Hoje 12:00        │
+│  📍 Local: Casa da tia              🕐 60 min         │
+│                                                        │
+│  [📍 Compartilhar Localização]                        │
+│                                                        │
+│  [ Ver Rota ]    [ Iniciar Aula ]                     │
+└───────────────────────────────────────────────────────┘
+```
+
+### DEPOIS (apos pagamento confirmado):
+```
+┌─ Proxima aula ────────────────────────────────────────┐
+│  [Foto] Nome Instrutor ★4.9         Hoje 12:00        │
+│  📍 Local: Casa da tia              🕐 60 min         │
+│                                                        │
+│  [💬 Enviar Mensagem ao Instrutor]  ← VERDE           │
+└───────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Detalhes Tecnicos
 
-### Funcao de Abertura do WhatsApp
-
+### Import Necessario
+Adicionar `MessageCircle` ao import do Lucide (linha 3):
 ```typescript
-const handleOpenSupport = () => {
-  const phone = "5518981288372"; // (18) 98128-8372 formatado
-  const message = encodeURIComponent("Olá! Preciso de ajuda com a CNH360.");
-  window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
-};
+import { 
+  // ...existing imports...
+  MessageCircle  // adicionar
+} from "lucide-react";
 ```
 
-### Import Necessario
-Adicionar `MessageCircle` ao import do Lucide em cada arquivo.
+### Codigo do Novo Botao
+```typescript
+{isPaid ? (
+  <Button 
+    className="w-full bg-[#4CAF50] hover:bg-[#45a049] text-white"
+    onClick={() => navigate('/aluno/chat', { 
+      state: { openAulaId: proximaAula.id } 
+    })}
+  >
+    <MessageCircle className="w-4 h-4 mr-2" />
+    Enviar Mensagem ao Instrutor
+  </Button>
+) : (
+  // ...botões de pagamento mantidos...
+)}
+```
 
 ---
 
-## Resultado Visual Esperado
+## Secoes Removidas
 
-Em todas as 3 paginas de perfil, o usuario vera:
+Toda a seção de compartilhamento de localização (linhas 519-538) sera removida:
+- Condicional `!locationShared` com `LocationShareButton`
+- Componente `RouteMapCard`
 
-**Aluno/Instrutor:**
-```
-┌─ Perfil Card ─────────────────────────────────┐
-│  ...                                          │
-├─ Actions ─────────────────────────────────────┤
-│  [📄] Documentos RENACH              [>]      │
-│  [💬] Suporte                        [>]   ← NOVO
-│       Falar pelo WhatsApp                     │
-│  [🚪] Sair da conta                           │
-└───────────────────────────────────────────────┘
-```
-
-**Autoescola:**
-```
-┌─ Menu Items Card ─────────────────────────────┐
-│  ...configuracoes...                          │
-│  [💬] Suporte                        [>]   ← NOVO
-│       Falar pelo WhatsApp                     │
-└───────────────────────────────────────────────┘
-│  [🚪] Sair da conta                           │
-```
+Isso simplifica a tela para focar apenas na comunicação com o instrutor nesta fase inicial.
 
 ---
 
 ## Checklist de Implementacao
 
-- [ ] Adicionar import `MessageCircle` em AlunoPerfil.tsx
-- [ ] Adicionar botao de suporte em AlunoPerfil.tsx
-- [ ] Adicionar import `MessageCircle` em InstrutorPerfil.tsx
-- [ ] Adicionar botao de suporte em InstrutorPerfil.tsx
-- [ ] Adicionar import `MessageCircle` em AutoescolaPerfil.tsx
-- [ ] Adicionar botao de suporte em AutoescolaPerfil.tsx
-- [ ] Testar abertura do WhatsApp em cada perfil
-
+- [ ] Adicionar `MessageCircle` ao import do Lucide
+- [ ] Remover seção `LocationShareButton` / `RouteMapCard` (linhas 519-538)
+- [ ] Substituir botões "Ver Rota" e "Iniciar Aula" por botão único "Enviar Mensagem ao Instrutor"
+- [ ] Implementar navegação para `/aluno/chat` com `openAulaId` no state
+- [ ] Testar abertura automática do chat correto
+- [ ] Verificar responsividade em mobile
