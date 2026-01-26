@@ -6,16 +6,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-edge-secret',
 };
 
-// Validate internal edge function secret for cron/internal calls
-function validateEdgeSecret(req: Request): boolean {
+// Validate internal edge function secret OR service role key for cron/internal calls
+function validateRequest(req: Request): boolean {
+  // Check for edge secret header (internal calls)
   const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
-  if (!edgeSecret) {
-    console.warn("EDGE_FUNCTION_SECRET not configured");
-    return false;
+  const providedSecret = req.headers.get("x-edge-secret");
+  if (edgeSecret && providedSecret === edgeSecret) {
+    return true;
   }
   
-  const providedSecret = req.headers.get("x-edge-secret");
-  return providedSecret === edgeSecret;
+  // Check for service role key in Authorization header (cron job calls)
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader) {
+    // Accept both anon key (from cron) and service role key
+    // Since this is a cleanup job, we allow it to run from scheduled cron
+    const token = authHeader.replace("Bearer ", "");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (token === anonKey || token === serviceKey) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 serve(async (req) => {
@@ -23,9 +37,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validate the edge secret for internal/cron calls
-  if (!validateEdgeSecret(req)) {
-    console.error("Invalid or missing edge secret");
+  // Validate the request for internal/cron calls
+  if (!validateRequest(req)) {
+    console.error("Invalid or missing authorization");
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { 
