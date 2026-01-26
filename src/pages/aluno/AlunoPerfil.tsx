@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, AlertTriangle } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, AlertTriangle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -414,6 +414,26 @@ export default function AlunoPerfil() {
                   <Shield className="w-5 h-5 text-primary" />
                 </div>
                 <span className="font-medium text-foreground">Documentos RENACH</span>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+
+            <button 
+              onClick={() => {
+                const phone = "5518981288372";
+                const message = encodeURIComponent("Olá! Preciso de ajuda com a CNH360.");
+                window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+              }}
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#25D366]/10 flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-[#25D366]" />
+                </div>
+                <div className="text-left">
+                  <span className="font-medium text-foreground block">Suporte</span>
+                  <span className="text-xs text-muted-foreground">Falar pelo WhatsApp</span>
+                </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
