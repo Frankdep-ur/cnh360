@@ -9,6 +9,7 @@ interface Message {
   created_at: string;
   read_at: string | null;
   isOwn: boolean;
+  is_system: boolean;
 }
 
 interface UseTripChatReturn {
@@ -44,13 +45,14 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
         setError('Erro ao carregar mensagens');
       } else if (data) {
         setMessages(
-          data.map((msg) => ({
+          data.map((msg: any) => ({
             id: msg.id,
             sender_id: msg.sender_id,
             content: msg.content,
             created_at: msg.created_at,
             read_at: msg.read_at,
             isOwn: msg.sender_id === user?.id,
+            is_system: msg.is_system || false,
           }))
         );
       }
@@ -85,6 +87,7 @@ export function useTripChat(aulaId: string | null): UseTripChatReturn {
                   created_at: newMsg.created_at,
                   read_at: newMsg.read_at,
                   isOwn: newMsg.sender_id === user?.id,
+                  is_system: newMsg.is_system || false,
                 },
               ];
             });

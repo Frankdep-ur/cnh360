@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.send-chat-notification]
 verify_jwt = true
+
+[functions.lesson-workflow]
+verify_jwt = true

@@ -50,6 +50,7 @@ const InstrutorAulas = lazy(() => import("./pages/instrutor/InstrutorAulas"));
 const InstrutorChat = lazy(() => import("./pages/instrutor/InstrutorChat"));
 const ValidarAulaInstrutor = lazy(() => import("./pages/instrutor/ValidarAulaInstrutor"));
 const InstrutorACaminho = lazy(() => import("./pages/instrutor/InstrutorACaminho"));
+const AulaEmAndamento = lazy(() => import("./pages/instrutor/AulaEmAndamento"));
 
 // Lazy loaded pages - Autoescola
 const AutoescolaDashboard = lazy(() => import("./pages/autoescola/AutoescolaDashboard"));
@@ -244,6 +245,11 @@ const App = () => (
               <Route path="/instrutor/a-caminho/:aulaId" element={
                 <ProtectedRoute>
                   <InstrutorACaminho />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/aula/:aulaId" element={
+                <ProtectedRoute>
+                  <AulaEmAndamento />
                 </ProtectedRoute>
               } />
               <Route path="/instrutor/perfil" element={

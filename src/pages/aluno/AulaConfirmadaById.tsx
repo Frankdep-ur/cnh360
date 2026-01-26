@@ -8,15 +8,24 @@ import {
   Loader2, 
   AlertCircle,
   Navigation,
-  Car
+  Car,
+  Play,
+  QrCode,
+  User
 } from "lucide-react";
 import { TripChat } from "@/components/maps/TripChat";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/hooks/useAuth";
+import { useLessonWorkflow } from "@/hooks/useLessonWorkflow";
+import { useAulaTimer } from "@/hooks/useAulaTimer";
+import { AulaTimer } from "@/components/aula/AulaTimer";
+import { QRCodeDisplay } from "@/components/qr/QRCodeDisplay";
 
 interface AulaData {
   id: string;
@@ -30,7 +39,21 @@ interface AulaData {
   instrutor_foto?: string;
   instrutor_a_caminho?: boolean;
   instrutor_chegou?: boolean;
+  aluno_confirmou_chegada?: boolean;
+  aula_inicio?: string | null;
+  aula_fim?: string | null;
+  qr_code_data?: string | null;
+  qr_code_expires_at?: string | null;
 }
+
+const STATUS_CONFIG = {
+  confirmada: { label: "Confirmada", color: "bg-primary", icon: Check },
+  em_rota: { label: "Instrutor a caminho", color: "bg-blue-500", icon: Car },
+  aguardando_confirmacao: { label: "Instrutor chegou", color: "bg-amber-500", icon: MapPin },
+  em_andamento: { label: "Em aula", color: "bg-primary", icon: Play },
+  aguardando_qr: { label: "Validando", color: "bg-purple-500", icon: QrCode },
+  concluida: { label: "Concluída", color: "bg-[#4CAF50]", icon: Check },
+};
 
 export default function AulaConfirmadaById() {
   const navigate = useNavigate();
@@ -40,6 +63,13 @@ export default function AulaConfirmadaById() {
   const [loading, setLoading] = useState(true);
   const [aula, setAula] = useState<AulaData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const { executeAction, isLoading: workflowLoading } = useLessonWorkflow();
+  const { elapsedFormatted, elapsedSeconds, canFinish, remainingMinutes } = useAulaTimer(
+    aulaId || null,
+    aula?.aula_inicio || null,
+    aula?.duracao_minutos || 50
+  );
 
   useEffect(() => {
     if (aulaId && user) {
@@ -84,7 +114,7 @@ export default function AulaConfirmadaById() {
 
   function setupRealtimeSubscription() {
     const channel = supabase
-      .channel(`aula-confirmada-${aulaId}`)
+      .channel(`aula-aluno-${aulaId}`)
       .on(
         "postgres_changes",
         {
@@ -97,9 +127,9 @@ export default function AulaConfirmadaById() {
           const newData = payload.new;
           setAula(prev => prev ? { 
             ...prev, 
-            status: newData.status,
-            instrutor_a_caminho: newData.instrutor_a_caminho,
-            instrutor_chegou: newData.instrutor_chegou
+            ...newData,
+            instrutor_nome: prev.instrutor_nome,
+            instrutor_foto: prev.instrutor_foto,
           } : null);
         }
       )
@@ -109,6 +139,11 @@ export default function AulaConfirmadaById() {
       supabase.removeChannel(channel);
     };
   }
+
+  const handleConfirmarChegada = async () => {
+    if (!aulaId) return;
+    await executeAction(aulaId, 'confirmar_chegada');
+  };
 
   const formatLessonDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -157,8 +192,15 @@ export default function AulaConfirmadaById() {
     );
   }
 
-  const instrutorACaminho = aula.instrutor_a_caminho === true;
-  const instrutorChegou = aula.instrutor_chegou === true;
+  const currentStatus = STATUS_CONFIG[aula.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.confirmada;
+  const StatusIcon = currentStatus.icon;
+
+  // Determine UI state
+  const showConfirmButton = aula.status === 'aguardando_confirmacao' && !aula.aluno_confirmou_chegada;
+  const showWaitingForStart = aula.status === 'aguardando_confirmacao' && aula.aluno_confirmou_chegada;
+  const showTimer = aula.status === 'em_andamento';
+  const showQRCode = aula.status === 'aguardando_qr' && aula.qr_code_data;
+  const showCompleted = aula.status === 'concluida';
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
@@ -168,13 +210,25 @@ export default function AulaConfirmadaById() {
       )}>
         {/* Status Icon */}
         <div className="relative mb-8">
-          {instrutorChegou ? (
-            <div className="w-24 h-24 rounded-full bg-[#4CAF50] flex items-center justify-center mx-auto shadow-lg">
-              <Check className="w-12 h-12 text-white" />
-            </div>
-          ) : instrutorACaminho ? (
+          {aula.status === 'em_rota' ? (
             <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center mx-auto shadow-lg animate-pulse">
               <Car className="w-12 h-12 text-white" />
+            </div>
+          ) : aula.status === 'aguardando_confirmacao' ? (
+            <div className="w-24 h-24 rounded-full bg-amber-500 flex items-center justify-center mx-auto shadow-lg">
+              <MapPin className="w-12 h-12 text-white" />
+            </div>
+          ) : aula.status === 'em_andamento' ? (
+            <div className="w-24 h-24 rounded-full bg-primary flex items-center justify-center mx-auto shadow-lg">
+              <Play className="w-12 h-12 text-white" />
+            </div>
+          ) : aula.status === 'aguardando_qr' ? (
+            <div className="w-24 h-24 rounded-full bg-purple-500 flex items-center justify-center mx-auto shadow-lg animate-pulse">
+              <QrCode className="w-12 h-12 text-white" />
+            </div>
+          ) : showCompleted ? (
+            <div className="w-24 h-24 rounded-full bg-[#4CAF50] flex items-center justify-center mx-auto shadow-lg">
+              <Check className="w-12 h-12 text-white" />
             </div>
           ) : (
             <>
@@ -186,97 +240,163 @@ export default function AulaConfirmadaById() {
           )}
         </div>
 
-        {/* Message */}
+        {/* Title & Status Badge */}
+        <Badge className={cn("mb-4 text-white", currentStatus.color)}>
+          {currentStatus.label}
+        </Badge>
+
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          {instrutorChegou 
-            ? "Instrutor chegou!" 
-            : instrutorACaminho 
-              ? "Instrutor a caminho!" 
-              : "Aula confirmada!"}
+          {showCompleted ? "Aula concluída!" :
+           showQRCode ? "Mostre o QR Code" :
+           showTimer ? "Aula em andamento" :
+           showWaitingForStart ? "Aguardando instrutor" :
+           showConfirmButton ? "Instrutor chegou!" :
+           aula.status === 'em_rota' ? "Instrutor a caminho!" :
+           "Aula confirmada!"}
         </h1>
         <p className="text-muted-foreground mb-8">
-          {instrutorChegou 
-            ? "O instrutor está te esperando no local" 
-            : instrutorACaminho 
-              ? "Acompanhe a localização em tempo real" 
-              : "Sua aula prática foi confirmada com sucesso"}
+          {showCompleted ? "Parabéns! Sua aula foi concluída com sucesso." :
+           showQRCode ? "Apresente este código para o instrutor validar" :
+           showTimer ? "Cronômetro ativado. Boa aula!" :
+           showWaitingForStart ? "O instrutor irá iniciar a aula em instantes" :
+           showConfirmButton ? "Confirme sua presença para iniciar a aula" :
+           aula.status === 'em_rota' ? "Acompanhe a localização em tempo real" :
+           "Sua aula prática foi confirmada com sucesso"}
         </p>
 
-        {/* Details Card */}
-        <div className={cn(
-          "bg-card rounded-3xl p-6 shadow-elevated mb-8 text-left transition-all duration-500 delay-200",
-          showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-        )}>
-          <div className="flex items-center gap-4 mb-6">
-            <img
-              src={aula.instrutor_foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"}
-              alt={aula.instrutor_nome}
-              className="w-14 h-14 rounded-xl object-cover"
-            />
-            <div className="flex-1">
-              <h3 className="font-semibold text-foreground">{aula.instrutor_nome}</h3>
-              <p className="text-sm text-muted-foreground">Instrutor de direção</p>
-            </div>
-            {instrutorACaminho && !instrutorChegou && (
-              <div className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-sm font-medium flex items-center gap-1">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                A caminho
-              </div>
+        {/* QR Code Display */}
+        {showQRCode && aula.qr_code_data && (
+          <QRCodeDisplay
+            qrData={aula.qr_code_data}
+            expiresAt={aula.qr_code_expires_at || null}
+            className="mb-8"
+          />
+        )}
+
+        {/* Timer Display */}
+        {showTimer && (
+          <AulaTimer
+            elapsedFormatted={elapsedFormatted}
+            duracaoMinutos={aula.duracao_minutos}
+            elapsedSeconds={elapsedSeconds}
+            canFinish={canFinish}
+            remainingMinutes={remainingMinutes}
+            className="mb-8"
+          />
+        )}
+
+        {/* Confirm Arrival Button */}
+        {showConfirmButton && (
+          <Button
+            variant="hero"
+            size="xl"
+            className="w-full mb-8"
+            onClick={handleConfirmarChegada}
+            disabled={workflowLoading}
+          >
+            {workflowLoading ? (
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            ) : (
+              <Check className="w-5 h-5 mr-2" />
             )}
-          </div>
+            Confirmar Chegada
+          </Button>
+        )}
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-primary" />
+        {/* Waiting for instructor to start */}
+        {showWaitingForStart && (
+          <Card className="p-6 mb-8 bg-primary/5 border-primary/20">
+            <Loader2 className="w-8 h-8 mx-auto mb-3 text-primary animate-spin" />
+            <h3 className="font-semibold text-foreground mb-1">Presença confirmada!</h3>
+            <p className="text-sm text-muted-foreground">
+              Aguarde o instrutor iniciar a aula
+            </p>
+          </Card>
+        )}
+
+        {/* Details Card */}
+        {!showQRCode && !showTimer && (
+          <div className={cn(
+            "bg-card rounded-3xl p-6 shadow-elevated mb-8 text-left transition-all duration-500 delay-200",
+            showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          )}>
+            <div className="flex items-center gap-4 mb-6">
+              {aula.instrutor_foto ? (
+                <img
+                  src={aula.instrutor_foto}
+                  alt={aula.instrutor_nome}
+                  className="w-14 h-14 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center">
+                  <User className="w-6 h-6 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">{aula.instrutor_nome}</h3>
+                <p className="text-sm text-muted-foreground">Instrutor de direção</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Data</p>
-                <p className="font-medium text-foreground capitalize">
-                  {formatLessonDate(aula.data_hora)}
-                </p>
-              </div>
+              {aula.status === 'em_rota' && (
+                <div className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-sm font-medium flex items-center gap-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                  A caminho
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Horário</p>
-                <p className="font-medium text-foreground">
-                  {formatLessonTime(aula.data_hora, aula.duracao_minutos)}
-                </p>
-              </div>
-            </div>
-
-            {aula.ponto_encontro && (
+            <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-primary" />
+                  <Calendar className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Local</p>
-                  <p className="font-medium text-foreground">{aula.ponto_encontro}</p>
+                  <p className="text-sm text-muted-foreground">Data</p>
+                  <p className="font-medium text-foreground capitalize">
+                    {formatLessonDate(aula.data_hora)}
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
 
-          <div className="pt-6 mt-6 border-t border-border flex items-center justify-between">
-            <span className="text-muted-foreground">Valor</span>
-            <span className="text-2xl font-bold text-primary">
-              R$ {Number(aula.valor).toFixed(2).replace('.', ',')}
-            </span>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Horário</p>
+                  <p className="font-medium text-foreground">
+                    {formatLessonTime(aula.data_hora, aula.duracao_minutos)}
+                  </p>
+                </div>
+              </div>
+
+              {aula.ponto_encontro && (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Local</p>
+                    <p className="font-medium text-foreground">{aula.ponto_encontro}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-6 mt-6 border-t border-border flex items-center justify-between">
+              <span className="text-muted-foreground">Valor</span>
+              <span className="text-2xl font-bold text-primary">
+                R$ {Number(aula.valor).toFixed(2).replace('.', ',')}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className={cn(
           "space-y-3 transition-all duration-500 delay-400",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}>
-          {instrutorACaminho && !instrutorChegou && (
+          {aula.status === 'em_rota' && (
             <Button 
               variant="hero" 
               size="xl" 
@@ -299,19 +419,23 @@ export default function AulaConfirmadaById() {
         </div>
 
         {/* Tip */}
-        <div className={cn(
-          "mt-8 p-4 bg-secondary/10 rounded-2xl text-left transition-all duration-500 delay-500",
-          showContent ? "opacity-100" : "opacity-0"
-        )}>
-          <p className="text-sm text-secondary font-medium mb-1">💡 Dica</p>
-          <p className="text-sm text-muted-foreground">
-            Lembre-se de levar um documento com foto e chegar 5 minutos antes no local combinado.
-          </p>
-        </div>
+        {!showCompleted && !showQRCode && !showTimer && (
+          <div className={cn(
+            "mt-8 p-4 bg-secondary/10 rounded-2xl text-left transition-all duration-500 delay-500",
+            showContent ? "opacity-100" : "opacity-0"
+          )}>
+            <p className="text-sm text-secondary font-medium mb-1">💡 Dica</p>
+            <p className="text-sm text-muted-foreground">
+              {showConfirmButton 
+                ? "Confirme a chegada do instrutor para que ele possa iniciar a aula."
+                : "Lembre-se de levar um documento com foto e chegar 5 minutos antes no local combinado."}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Trip Chat */}
-      {aulaId && aula && aula.status !== 'cancelada' && (
+      {aulaId && aula && aula.status !== 'cancelada' && aula.status !== 'concluida' && (
         <TripChat 
           aulaId={aulaId} 
           instructorName={aula.instrutor_nome}
