@@ -1,106 +1,129 @@
-# CNH360 - Plano de Integração WhatsApp
 
-## Status Atual: SendPulse (Ativo)
+# Plano: Integrar Z-API para Notificações WhatsApp
 
-**Data da migração:** 25/01/2026  
-**Provedor anterior:** Twilio (removido)  
-**Provedor atual:** SendPulse WhatsApp Business API
+## Visão Geral
 
----
+Substituir a integração SendPulse (nunca configurada) pela Z-API para enviar notificações WhatsApp automáticas ao instrutor quando o pagamento de uma aula for confirmado.
 
-## Configuração SendPulse
+## Arquitetura Atual
 
-### Secrets Necessários
-
-| Secret | Descrição | Status |
-|--------|-----------|--------|
-| `SENDPULSE_API_USER_ID` | ID do usuário da API SendPulse | ⏳ Pendente |
-| `SENDPULSE_API_SECRET` | Secret da API SendPulse | ⏳ Pendente |
-| `SENDPULSE_WHATSAPP_BOT_ID` | ID do bot WhatsApp configurado | ⏳ Pendente |
-
-### Como Configurar
-
-1. Criar conta em https://sendpulse.com
-2. Acessar **Chatbots > WhatsApp**
-3. Conectar número WhatsApp Business (requer verificação Meta)
-4. Copiar credenciais da API em **Configurações > API**
-5. Adicionar os 3 secrets no projeto
-
----
-
-## Arquitetura da Notificação
-
-```
+```text
 Pagamento Confirmado (Pagar.me)
         ↓
-check-payment-status-pagarme
+check-payment-status-pagarme (Edge Function)
         ↓
-send-whatsapp-notification (Edge Function)
+send-whatsapp-notification (Edge Function) ← MODIFICAR AQUI
         ↓
-SendPulse API (OAuth2 + REST)
-        ↓
-WhatsApp Business → Instrutor
+WhatsApp → Instrutor
 ```
 
-### Fluxo Técnico
-
-1. `check-payment-status-pagarme` detecta pagamento `succeeded`
-2. Chama `send-whatsapp-notification` com payload da aula
-3. Edge Function autentica via OAuth2 no SendPulse
-4. Envia mensagem formatada para o instrutor
+O fluxo já está 100% implementado - só preciso trocar o provedor de SendPulse para Z-API.
 
 ---
 
-## API SendPulse - Referência
+## Fase 1: Adicionar Secrets da Z-API
 
-### Autenticação (OAuth2)
+Criar 2 novos secrets no projeto:
 
-```http
-POST https://api.sendpulse.com/oauth/access_token
+| Secret | Descrição |
+|--------|-----------|
+| `ZAPI_INSTANCE_ID` | ID da instância "CNH360 Teste" |
+| `ZAPI_TOKEN` | Token de integração da instância |
+
+Você precisará fornecer esses valores do seu dashboard Z-API.
+
+---
+
+## Fase 2: Reescrever Edge Function
+
+Arquivo: `supabase/functions/send-whatsapp-notification/index.ts`
+
+### Mudanças:
+
+1. **Remover** todo código SendPulse (OAuth2, getSendPulseAccessToken, sendWhatsAppViaSendPulse)
+2. **Adicionar** função `sendWhatsAppViaZAPI` usando a API REST da Z-API
+3. **Atualizar** comentário no topo do arquivo
+4. **Manter** o mesmo payload de entrada (compatibilidade com `check-payment-status-pagarme`)
+
+### API Z-API - Enviar Texto
+
+```text
+POST https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text
 Content-Type: application/json
 
 {
-  "grant_type": "client_credentials",
-  "client_id": "{SENDPULSE_API_USER_ID}",
-  "client_secret": "{SENDPULSE_API_SECRET}"
+  "phone": "5518981288372",
+  "message": "Pagamento confirmado! 🎉\n..."
 }
 ```
 
-### Enviar Mensagem WhatsApp
+### Mensagem Formatada
 
-```http
-POST https://api.sendpulse.com/whatsapp/contacts/sendByPhone
-Authorization: Bearer {access_token}
-Content-Type: application/json
+```text
+🎉 *Pagamento confirmado!*
 
-{
-  "bot_id": "{SENDPULSE_WHATSAPP_BOT_ID}",
-  "phone": "+5518981288372",
-  "message": {
-    "type": "text",
-    "text": {
-      "body": "Mensagem aqui..."
-    }
-  }
-}
+👤 *Aluno:* João Silva
+📚 *Aula:* Categoria B - 50 min prática
+📅 *Data/Hora:* segunda-feira, 27/01/2026, 14:00
+📍 *Local:* Rua das Flores, 123
+💰 *Valor pago:* R$ 120.00
+
+💬 Acesse o chat no app para falar com o aluno:
+https://cnh360.lovable.app/aluno/chat/[aulaId]
+
+Bora ensinar! 🚗
 ```
 
 ---
 
-## Histórico de Mudanças
+## Fase 3: Atualizar Documentação
 
-| Data | Ação |
-|------|------|
-| 25/01/2026 | Removido Twilio completamente |
-| 25/01/2026 | Migrado para SendPulse |
-| 25/01/2026 | Secrets Twilio deletados |
+Arquivo: `.lovable/plan.md`
+
+Atualizar para refletir a mudança de SendPulse para Z-API.
 
 ---
 
-## Próximos Passos
+## Fase 4: Deploy e Teste
 
-- [ ] Criar conta SendPulse
-- [ ] Conectar WhatsApp Business
-- [ ] Adicionar secrets no projeto
-- [ ] Testar envio de notificação
-- [ ] Validar em produção
+1. Fazer deploy da Edge Function atualizada
+2. Testar chamando a função com dados reais do instrutor Tiago Silva
+3. Verificar se a mensagem chegou no WhatsApp dele
+
+---
+
+## Estrutura Final
+
+```text
+Secrets:
+  ✓ ZAPI_INSTANCE_ID (novo)
+  ✓ ZAPI_TOKEN (novo)
+
+Edge Function:
+  ✓ send-whatsapp-notification → Usando Z-API
+
+Arquivos modificados:
+  - supabase/functions/send-whatsapp-notification/index.ts
+  - .lovable/plan.md
+```
+
+---
+
+## Comparação SendPulse vs Z-API
+
+| Aspecto | SendPulse | Z-API |
+|---------|-----------|-------|
+| Autenticação | OAuth2 (2 chamadas) | Token direto na URL |
+| Endpoint | Complexo | Simples e direto |
+| Suporte BR | Internacional | Brasileiro 🇧🇷 |
+| Setup | Requer bot WhatsApp | Conecta direto |
+
+---
+
+## Próximos Passos Após Aprovação
+
+1. Você me fornece o `ZAPI_INSTANCE_ID` e `ZAPI_TOKEN`
+2. Eu adiciono os secrets no projeto
+3. Eu reescrevo a Edge Function para usar Z-API
+4. Eu atualizo a documentação
+5. Testamos o envio para o instrutor Tiago Silva
