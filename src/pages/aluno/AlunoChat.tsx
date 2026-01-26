@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  MessageCircle,
   Clock,
   ChevronRight,
   Star,
@@ -16,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { TripChat } from "@/components/maps/TripChat";
+import { ChatView } from "@/components/chat/ChatView";
 
 interface Conversa {
   aula_id: string;
@@ -138,37 +137,14 @@ export default function AlunoChat() {
 
   const selectedConversa = conversas.find(c => c.aula_id === selectedAulaId);
 
-  if (selectedAulaId) {
+  if (selectedAulaId && selectedConversa) {
     return (
-      <div className="app-container pb-24">
-        <ComplianceBanner />
-        
-        <div className="px-4 py-6 page-enter">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <button 
-              onClick={() => setSelectedAulaId(null)}
-              className="p-2 rounded-full hover:bg-muted"
-            >
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
-            <h1 className="text-xl font-bold text-foreground">
-              {selectedConversa?.instrutor_nome || 'Chat'}
-            </h1>
-          </div>
-
-          {/* Full screen chat */}
-          <div className="fixed inset-0 top-20 bottom-20 z-40 bg-card">
-            <TripChat 
-              aulaId={selectedAulaId} 
-              instructorName={selectedConversa?.instrutor_nome || undefined}
-              className="!fixed !inset-0 !top-0 !bottom-0" 
-            />
-          </div>
-        </div>
-
-        <BottomNav />
-      </div>
+      <ChatView 
+        aulaId={selectedAulaId} 
+        instructorName={selectedConversa.instrutor_nome || 'Instrutor'}
+        instructorPhoto={selectedConversa.instrutor_foto}
+        onBack={() => setSelectedAulaId(null)} 
+      />
     );
   }
 
