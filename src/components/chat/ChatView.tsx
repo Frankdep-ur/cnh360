@@ -8,15 +8,30 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ComplianceBanner } from '@/components/layout/ComplianceBanner';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { InstructorBottomNav } from '@/components/layout/InstructorBottomNav';
 
 interface ChatViewProps {
   aulaId: string;
-  instructorName: string;
+  contactName?: string;
+  contactPhoto?: string | null;
+  instructorName?: string;
   instructorPhoto?: string | null;
   onBack: () => void;
+  isInstructor?: boolean;
 }
 
-export function ChatView({ aulaId, instructorName, instructorPhoto, onBack }: ChatViewProps) {
+export function ChatView({ 
+  aulaId, 
+  contactName, 
+  contactPhoto,
+  instructorName, 
+  instructorPhoto, 
+  onBack,
+  isInstructor = false 
+}: ChatViewProps) {
+  // Support both old and new prop names
+  const displayName = contactName || instructorName || 'Contato';
+  const displayPhoto = contactPhoto ?? instructorPhoto;
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const { messages, loading, sendMessage } = useTripChat(aulaId);
@@ -67,22 +82,22 @@ export function ChatView({ aulaId, instructorName, instructorPhoto, onBack }: Ch
           <ChevronLeft className="w-5 h-5" />
         </button>
         
-        {instructorPhoto ? (
+        {displayPhoto ? (
           <img 
-            src={instructorPhoto} 
-            alt={instructorName}
+            src={displayPhoto} 
+            alt={displayName}
             className="w-10 h-10 rounded-full object-cover"
           />
         ) : (
           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
             <span className="text-sm font-semibold text-muted-foreground">
-              {instructorName.charAt(0)}
+              {displayName.charAt(0)}
             </span>
           </div>
         )}
         
         <div>
-          <h1 className="font-semibold text-foreground">{instructorName}</h1>
+          <h1 className="font-semibold text-foreground">{displayName}</h1>
           <p className="text-xs text-muted-foreground">Chat da aula</p>
         </div>
       </div>
@@ -156,7 +171,7 @@ export function ChatView({ aulaId, instructorName, instructorPhoto, onBack }: Ch
         </div>
       </div>
 
-      <BottomNav />
+      {isInstructor ? <InstructorBottomNav /> : <BottomNav />}
     </div>
   );
 }

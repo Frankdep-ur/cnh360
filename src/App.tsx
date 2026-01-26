@@ -47,6 +47,7 @@ const InstrutorPerfil = lazy(() => import("./pages/instrutor/InstrutorPerfil"));
 const InstrutorGanhos = lazy(() => import("./pages/instrutor/InstrutorGanhos"));
 const InstrutorAgenda = lazy(() => import("./pages/instrutor/InstrutorAgenda"));
 const InstrutorAulas = lazy(() => import("./pages/instrutor/InstrutorAulas"));
+const InstrutorChat = lazy(() => import("./pages/instrutor/InstrutorChat"));
 const ValidarAulaInstrutor = lazy(() => import("./pages/instrutor/ValidarAulaInstrutor"));
 const InstrutorACaminho = lazy(() => import("./pages/instrutor/InstrutorACaminho"));
 
@@ -233,6 +234,11 @@ const App = () => (
               <Route path="/instrutor/aulas" element={
                 <ProtectedRoute>
                   <InstrutorAulas />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/chat" element={
+                <ProtectedRoute>
+                  <InstrutorChat />
                 </ProtectedRoute>
               } />
               <Route path="/instrutor/a-caminho/:aulaId" element={

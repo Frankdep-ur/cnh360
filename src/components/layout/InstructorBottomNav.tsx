@@ -1,4 +1,4 @@
-import { LayoutDashboard, Calendar, Car, Wallet, User } from "lucide-react";
+import { LayoutDashboard, Calendar, Car, MessageCircle, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +12,7 @@ const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Painel", path: "/instrutor" },
   { icon: Calendar, label: "Agenda", path: "/instrutor/agenda" },
   { icon: Car, label: "Aulas", path: "/instrutor/aulas" },
-  { icon: Wallet, label: "Ganhos", path: "/instrutor/ganhos" },
+  { icon: MessageCircle, label: "Chat", path: "/instrutor/chat" },
   { icon: User, label: "Perfil", path: "/instrutor/perfil" },
 ];
 
