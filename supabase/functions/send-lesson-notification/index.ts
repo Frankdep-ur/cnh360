@@ -161,6 +161,24 @@ serve(async (req) => {
     const lessonPayload = payload as LessonNotificationPayload;
     console.log("Received lesson notification payload:", lessonPayload);
 
+    // Verify payment is confirmed before sending notification
+    const { data: aulaCheck, error: aulaCheckError } = await supabase
+      .from("aulas")
+      .select("payment_confirmed")
+      .eq("id", lessonPayload.aula_id)
+      .single();
+
+    if (aulaCheckError || !aulaCheck?.payment_confirmed) {
+      console.log("Lesson not paid, skipping notification for aula:", lessonPayload.aula_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Lesson not paid - notification skipped" 
+        }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const {
       aula_id,
       aluno_nome,
