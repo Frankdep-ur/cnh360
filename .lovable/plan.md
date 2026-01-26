@@ -1,160 +1,192 @@
 
-# Plano: Criar Chat do Instrutor para Receber Mensagens dos Alunos
+# Plano: Implementar Status de "Mensagem Lida" no Chat
 
-## Problema Identificado
+## Problema Atual
 
-O sistema de chat está funcionando apenas em uma direção:
-- **Aluno Milena** → Envia mensagem para Lucas Felipe ✅
-- **Instrutor Lucas Felipe** → **NÃO TEM** onde ver/responder a mensagem ❌
+Quando o instrutor (Lucas Felipe) abre o chat e visualiza as mensagens da aluna (Milena), ela não sabe que ele leu. Falta o recurso de confirmação de leitura, similar ao WhatsApp (dois checks azuis).
 
-O instrutor só consegue acessar o chat quando está na página `/instrutor/a-caminho/:aulaId`, mas essa página é específica para quando ele está indo buscar o aluno. Ele precisa de uma página de chat dedicada, assim como o aluno tem.
+## Fluxo Desejado
 
----
-
-## Comparação Atual
-
-| Usuário | Menu Chat | Página de Chat | Status |
-|---------|-----------|----------------|--------|
-| Aluno | ✅ `MessageCircle` | `/aluno/chat` | Funcionando |
-| Instrutor | ❌ Não tem | Não existe | **FALTA CRIAR** |
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  ALUNO MILENA                                                    │
+│  Envia mensagem: "Olá, tudo bem?"                               │
+│  Status: ✓ (enviada)                                             │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+              ┌─────────────────────────────────┐
+              │ Tabela: mensagens_aula          │
+              │ ├── read_at: NULL               │
+              └─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  INSTRUTOR LUCAS FELIPE                                          │
+│  Abre o chat → Mensagens são marcadas como lidas                │
+│  read_at = timestamp atual                                       │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+              ┌─────────────────────────────────┐
+              │ Tabela: mensagens_aula          │
+              │ ├── read_at: 2026-01-26 15:30   │
+              └─────────────────────────────────┘
+                                │
+                                ▼ (realtime)
+┌─────────────────────────────────────────────────────────────────┐
+│  ALUNO MILENA                                                    │
+│  Vê atualização em tempo real                                    │
+│  Status: ✓✓ (lida) - com indicador visual                       │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Alterações Necessárias
 
-### 1. Criar Página de Chat do Instrutor
+### 1. Migração de Banco de Dados
 
-**Novo arquivo**: `src/pages/instrutor/InstrutorChat.tsx`
+Adicionar coluna `read_at` na tabela `mensagens_aula`:
 
-Criar uma página idêntica ao `AlunoChat.tsx`, mas adaptada para o instrutor:
-- Listar todas as aulas confirmadas/em andamento
-- Mostrar nome e foto do **aluno** (não do instrutor)
-- Usar o mesmo componente `ChatView` para a conversa
-- Adaptar o `ChatView` para aceitar também dados do aluno
+```sql
+-- Adicionar coluna para marcar quando a mensagem foi lida
+ALTER TABLE public.mensagens_aula 
+ADD COLUMN read_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 
-```typescript
-// Buscar aulas do instrutor
-const { data: instrutor } = await supabase
-  .from('instrutores')
-  .select('id')
-  .eq('user_id', user.id)
-  .single();
+-- Adicionar índice para consultas de mensagens não lidas
+CREATE INDEX idx_mensagens_aula_read_at ON public.mensagens_aula(aula_id, read_at);
 
-// Aulas onde o instrutor participa
-const { data: aulas } = await supabase
-  .from('aulas')
-  .select('id, data_hora, status, aluno_id')
-  .eq('instrutor_id', instrutor.id)
-  .in('status', ['confirmada', 'em_andamento']);
-
-// Buscar dados do aluno para cada aula
-// Usar tabela profiles para nome e avatar
+-- Habilitar realtime para updates na tabela (se ainda não estiver)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.mensagens_aula;
 ```
 
-### 2. Adicionar Rota no App.tsx
+### 2. Atualizar Hook useTripChat
 
-**Arquivo**: `src/App.tsx`
-
-Adicionar a rota para o chat do instrutor:
-
-```typescript
-const InstrutorChat = lazy(() => import("./pages/instrutor/InstrutorChat"));
-
-// Na seção de rotas do instrutor:
-<Route path="/instrutor/chat" element={
-  <ProtectedRoute>
-    <InstrutorChat />
-  </ProtectedRoute>
-} />
-```
-
-### 3. Adicionar Chat no Menu de Navegação do Instrutor
-
-**Arquivo**: `src/components/layout/InstructorBottomNav.tsx`
-
-Adicionar o ícone de chat no menu inferior:
+Modificar o hook para:
+- Incluir o campo `read_at` nas mensagens
+- Adicionar função `markMessagesAsRead` para marcar mensagens como lidas
+- Escutar eventos `UPDATE` além de `INSERT` para atualizar status em tempo real
 
 ```typescript
-import { LayoutDashboard, Calendar, Car, MessageCircle, User } from "lucide-react";
+interface Message {
+  id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  read_at: string | null;  // NOVO
+  isOwn: boolean;
+}
 
-const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Painel", path: "/instrutor" },
-  { icon: Calendar, label: "Agenda", path: "/instrutor/agenda" },
-  { icon: Car, label: "Aulas", path: "/instrutor/aulas" },
-  { icon: MessageCircle, label: "Chat", path: "/instrutor/chat" },  // NOVO
-  { icon: User, label: "Perfil", path: "/instrutor/perfil" },
-];
-```
-
-**Nota**: Remover "Ganhos" do menu para dar espaço ao Chat (ou reorganizar). O acesso a Ganhos pode ficar no Dashboard ou Perfil.
-
-### 4. Adaptar ChatView para Instrutor
-
-**Arquivo**: `src/components/chat/ChatView.tsx`
-
-Tornar o componente mais genérico para aceitar tanto instrutor quanto aluno:
-
-```typescript
-interface ChatViewProps {
-  aulaId: string;
-  contactName: string;        // Nome do contato (instrutor OU aluno)
-  contactPhoto?: string | null;
-  onBack: () => void;
+interface UseTripChatReturn {
+  messages: Message[];
+  loading: boolean;
+  error: string | null;
+  sendMessage: (content: string) => Promise<void>;
+  markMessagesAsRead: () => Promise<void>;  // NOVO
 }
 ```
 
-### 5. Criar Cache Público de Alunos (se necessário)
+### 3. Atualizar ChatView
 
-Se houver problemas de RLS ao buscar dados dos alunos, criar uma tabela cache similar à `instrutores_publico_cache`:
+Modificar o componente para:
+- Chamar `markMessagesAsRead()` quando abrir o chat e quando novas mensagens chegarem
+- Exibir indicador visual de "lida" nas mensagens enviadas pelo usuário
+- Usar ícone de duplo check (CheckCheck) do Lucide
 
-```sql
-CREATE TABLE alunos_publico_cache (
-  id UUID PRIMARY KEY,
-  nome TEXT,
-  foto TEXT,
-  updated_at TIMESTAMP DEFAULT now()
-);
+```typescript
+// Indicador visual nas mensagens próprias
+<span className="text-[10px] text-muted-foreground mt-1 px-1 flex items-center gap-1">
+  {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
+  {msg.isOwn && (
+    msg.read_at ? (
+      <CheckCheck className="w-3 h-3 text-blue-500" />  // Lida
+    ) : (
+      <Check className="w-3 h-3" />  // Enviada
+    )
+  )}
+</span>
 ```
 
-Ou usar a tabela `profiles` diretamente (que já contém `full_name` e `avatar_url`).
+### 4. Corrigir Contador de Não Lidas
 
----
+Atualizar as páginas de listagem de conversas para contar apenas mensagens realmente não lidas:
 
-## Fluxo Corrigido
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  ALUNO MILENA                                                        │
-│  Envia mensagem para Lucas Felipe                                   │
-│  Via: /aluno/chat                                                    │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-              ┌────────────────────────────────┐
-              │ Tabela: mensagens_aula         │
-              │ ├── aula_id                    │
-              │ ├── sender_id = milena         │
-              │ └── content = "Olá!"           │
-              └────────────────┬───────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  INSTRUTOR LUCAS FELIPE                                              │
-│  Recebe notificação / Abre /instrutor/chat                          │
-│  Vê mensagem da Milena e responde                                    │
-└─────────────────────────────────────────────────────────────────────┘
+**InstrutorChat.tsx e AlunoChat.tsx:**
+```typescript
+// Contar mensagens não lidas (do outro usuário E sem read_at)
+const { count } = await supabase
+  .from('mensagens_aula')
+  .select('*', { count: 'exact', head: true })
+  .eq('aula_id', aula.id)
+  .neq('sender_id', user.id)
+  .is('read_at', null);  // NOVO: apenas não lidas
 ```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Arquivos a Modificar
 
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/instrutor/InstrutorChat.tsx` | **CRIAR** - Página de chat do instrutor |
-| `src/App.tsx` | Adicionar rota `/instrutor/chat` |
-| `src/components/layout/InstructorBottomNav.tsx` | Adicionar ícone de Chat |
-| `src/components/chat/ChatView.tsx` | Tornar props mais genéricas |
+| Arquivo | Alteração |
+|---------|-----------|
+| Migração SQL | Adicionar coluna `read_at` |
+| `src/hooks/useTripChat.ts` | Adicionar `markMessagesAsRead()` e escutar updates |
+| `src/components/chat/ChatView.tsx` | Chamar mark as read + exibir indicador visual |
+| `src/pages/instrutor/InstrutorChat.tsx` | Corrigir contador com filtro `read_at` |
+| `src/pages/aluno/AlunoChat.tsx` | Corrigir contador com filtro `read_at` |
+
+---
+
+## Detalhes Técnicos
+
+### Função markMessagesAsRead
+
+```typescript
+const markMessagesAsRead = useCallback(async () => {
+  if (!aulaId || !user) return;
+  
+  // Marcar como lidas apenas mensagens do OUTRO usuário
+  const { error } = await supabase
+    .from('mensagens_aula')
+    .update({ read_at: new Date().toISOString() })
+    .eq('aula_id', aulaId)
+    .neq('sender_id', user.id)
+    .is('read_at', null);
+    
+  if (error) {
+    console.error('Error marking messages as read:', error);
+  }
+}, [aulaId, user]);
+```
+
+### Realtime para Updates
+
+```typescript
+const channel = supabase
+  .channel(`chat-${aulaId}`)
+  .on(
+    'postgres_changes',
+    {
+      event: '*',  // INSERT e UPDATE
+      schema: 'public',
+      table: 'mensagens_aula',
+      filter: `aula_id=eq.${aulaId}`,
+    },
+    (payload) => {
+      if (payload.eventType === 'INSERT') {
+        // Adicionar nova mensagem
+      } else if (payload.eventType === 'UPDATE') {
+        // Atualizar read_at da mensagem existente
+        setMessages(prev => prev.map(m => 
+          m.id === payload.new.id 
+            ? { ...m, read_at: payload.new.read_at }
+            : m
+        ));
+      }
+    }
+  )
+  .subscribe();
+```
 
 ---
 
@@ -162,48 +194,8 @@ Ou usar a tabela `profiles` diretamente (que já contém `full_name` e `avatar_u
 
 Após implementação:
 
-1. **Instrutor Lucas Felipe** abre o app
-2. Vê ícone de **Chat** no menu inferior
-3. Clica e vê lista de conversas com alunos
-4. Vê que **Milena** enviou uma mensagem
-5. Clica na conversa → **Chat abre direto**
-6. Pode responder à Milena
-7. Milena recebe a resposta em tempo real
-
----
-
-## Detalhes Técnicos
-
-### Estrutura da Página InstrutorChat
-
-```typescript
-interface Conversa {
-  aula_id: string;
-  aluno_id: string;
-  aluno_nome: string;
-  aluno_foto: string | null;
-  data_hora: string;
-  status: string;
-  ultima_mensagem: string | null;
-  ultima_mensagem_hora: string | null;
-  mensagens_nao_lidas: number;
-}
-
-// Buscar dados do aluno via profiles
-const { data: alunoProfile } = await supabase
-  .from('profiles')
-  .select('full_name, avatar_url')
-  .eq('id', aluno.user_id)
-  .single();
-```
-
-### Menu Reorganizado
-
-O menu do instrutor passará a ter:
-- Painel
-- Agenda
-- Aulas
-- **Chat** (novo)
-- Perfil
-
-O link para "Ganhos" será acessível pelo Dashboard ou Perfil.
+1. **Aluna Milena** envia mensagem → aparece ✓ (enviada)
+2. **Instrutor Lucas Felipe** abre o chat
+3. Sistema marca automaticamente as mensagens como lidas (`read_at = now()`)
+4. **Aluna Milena** vê em tempo real: ✓✓ azul (lida)
+5. Contador de não lidas mostra corretamente apenas mensagens novas
