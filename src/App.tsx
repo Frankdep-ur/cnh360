@@ -51,6 +51,10 @@ const InstrutorChat = lazy(() => import("./pages/instrutor/InstrutorChat"));
 const ValidarAulaInstrutor = lazy(() => import("./pages/instrutor/ValidarAulaInstrutor"));
 const InstrutorACaminho = lazy(() => import("./pages/instrutor/InstrutorACaminho"));
 const AulaEmAndamento = lazy(() => import("./pages/instrutor/AulaEmAndamento"));
+const HistoricoAulas = lazy(() => import("./pages/instrutor/HistoricoAulas"));
+
+// Lazy loaded pages - Aluno History
+const MeuHistorico = lazy(() => import("./pages/aluno/MeuHistorico"));
 
 // Lazy loaded pages - Autoescola
 const AutoescolaDashboard = lazy(() => import("./pages/autoescola/AutoescolaDashboard"));
@@ -210,6 +214,11 @@ const App = () => (
                   <AlunoChat />
                 </ProtectedRoute>
               } />
+              <Route path="/aluno/historico" element={
+                <ProtectedRoute>
+                  <MeuHistorico />
+                </ProtectedRoute>
+              } />
 
               {/* Instrutor - Protected */}
               <Route path="/instrutor" element={
@@ -255,6 +264,11 @@ const App = () => (
               <Route path="/instrutor/perfil" element={
                 <ProtectedRoute>
                   <InstrutorPerfil />
+                </ProtectedRoute>
+              } />
+              <Route path="/instrutor/historico" element={
+                <ProtectedRoute>
+                  <HistoricoAulas />
                 </ProtectedRoute>
               } />
 

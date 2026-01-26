@@ -8,6 +8,44 @@ interface WorkflowRequest {
   aula_id: string;
   action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr';
   qr_data?: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  device_info?: Record<string, unknown>;
+}
+
+// Helper function to insert audit record
+async function insertAuditRecord(
+  supabase: any,
+  aulaId: string,
+  evento: string,
+  userId: string,
+  latitude?: number,
+  longitude?: number,
+  accuracy?: number,
+  deviceInfo?: Record<string, unknown>,
+  dadosAdicionais?: Record<string, unknown>
+) {
+  try {
+    const { error } = await supabase.from("aulas_auditoria").insert({
+      aula_id: aulaId,
+      evento,
+      user_id: userId,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      precisao_metros: accuracy ?? null,
+      device_info: deviceInfo ?? null,
+      dados_adicionais: dadosAdicionais ?? null,
+    });
+    if (error) {
+      console.error("Failed to insert audit record:", error);
+    } else {
+      console.log(`Audit record inserted: ${evento} for aula ${aulaId}`);
+    }
+  } catch (error) {
+    console.error("Failed to insert audit record:", error);
+    // Don't fail the request for audit errors
+  }
 }
 
 Deno.serve(async (req) => {
@@ -42,7 +80,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: WorkflowRequest = await req.json();
-    const { aula_id, action, qr_data } = body;
+    const { aula_id, action, qr_data, latitude, longitude, accuracy, device_info } = body;
 
     if (!aula_id || !action) {
       return new Response(JSON.stringify({ error: "Missing aula_id or action" }), {
@@ -86,6 +124,8 @@ Deno.serve(async (req) => {
     let notificationBody = "";
     let notifyUserId = "";
     let releasePayment = false;
+    let auditEvento = "";
+    let auditDadosAdicionais: Record<string, unknown> = {};
 
     switch (action) {
       case "em_rota":
@@ -106,6 +146,7 @@ Deno.serve(async (req) => {
         notificationTitle = "Instrutor a caminho! 🚗";
         notificationBody = "O instrutor está se deslocando até você.";
         notifyUserId = aula.alunos.user_id;
+        auditEvento = "em_rota";
         break;
 
       case "cheguei":
@@ -126,6 +167,7 @@ Deno.serve(async (req) => {
         notificationTitle = "Instrutor chegou! 📍";
         notificationBody = "Confirme a presença para iniciar a aula.";
         notifyUserId = aula.alunos.user_id;
+        auditEvento = "cheguei";
         break;
 
       case "confirmar_chegada":
@@ -141,11 +183,29 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+        
+        // Calculate wait time
+        const chegadaEvent = await supabase
+          .from("aulas_auditoria")
+          .select("timestamp")
+          .eq("aula_id", aula_id)
+          .eq("evento", "cheguei")
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .single();
+        
+        let tempoEspera = 0;
+        if (chegadaEvent.data) {
+          tempoEspera = Math.round((Date.now() - new Date(chegadaEvent.data.timestamp).getTime()) / 1000);
+        }
+        
         updateData = { aluno_confirmou_chegada: true };
         systemMessage = "✅ **CNH360:** Aluno confirmou presença. Instrutor pode iniciar a aula!";
         notificationTitle = "Aluno confirmou! ✅";
         notificationBody = "O aluno está pronto. Inicie a aula.";
         notifyUserId = aula.instrutores.user_id;
+        auditEvento = "confirmacao_aluno";
+        auditDadosAdicionais = { tempo_espera_segundos: tempoEspera };
         break;
 
       case "iniciar_aula":
@@ -170,6 +230,7 @@ Deno.serve(async (req) => {
         notificationTitle = "Aula iniciada! 🎓";
         notificationBody = "Boa aula! O cronômetro está rodando.";
         notifyUserId = aula.alunos.user_id;
+        auditEvento = "inicio";
         break;
 
       case "finalizar_aula":
@@ -187,10 +248,12 @@ Deno.serve(async (req) => {
         }
         
         // Validate minimum duration
+        let duracaoSegundos = 0;
         if (aula.aula_inicio) {
           const startTime = new Date(aula.aula_inicio).getTime();
           const now = Date.now();
-          const elapsedMinutes = (now - startTime) / 60000;
+          duracaoSegundos = Math.round((now - startTime) / 1000);
+          const elapsedMinutes = duracaoSegundos / 60;
           const minDuration = aula.duracao_minutos * 0.9; // Allow 10% tolerance
           
           if (elapsedMinutes < minDuration) {
@@ -233,6 +296,8 @@ Deno.serve(async (req) => {
         notificationTitle = "Mostre o QR Code! 📱";
         notificationBody = "Apresente o QR Code no app para o instrutor escanear.";
         notifyUserId = aula.alunos.user_id;
+        auditEvento = "fim";
+        auditDadosAdicionais = { duracao_segundos: duracaoSegundos };
         break;
 
       case "validar_qr":
@@ -264,6 +329,7 @@ Deno.serve(async (req) => {
         }
 
         // Validate QR data
+        let qrHash = "";
         try {
           const scannedQR = JSON.parse(qr_data);
           const storedQR = JSON.parse(aula.qr_code_data);
@@ -274,6 +340,7 @@ Deno.serve(async (req) => {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
+          qrHash = scannedQR.hash;
         } catch {
           return new Response(JSON.stringify({ error: "Formato de QR inválido" }), {
             status: 400,
@@ -291,6 +358,8 @@ Deno.serve(async (req) => {
         notificationBody = `Parabéns! A aula foi validada com sucesso.`;
         notifyUserId = aula.alunos.user_id;
         releasePayment = true;
+        auditEvento = "qr_validado";
+        auditDadosAdicionais = { hash: qrHash };
         break;
 
       default:
@@ -312,6 +381,21 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Insert audit record
+    if (auditEvento) {
+      await insertAuditRecord(
+        supabase,
+        aula_id,
+        auditEvento,
+        user.id,
+        latitude,
+        longitude,
+        accuracy,
+        device_info,
+        Object.keys(auditDadosAdicionais).length > 0 ? auditDadosAdicionais : undefined
+      );
     }
 
     // Insert system message in chat

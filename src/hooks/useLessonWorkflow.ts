@@ -4,8 +4,14 @@ import { toast } from 'sonner';
 
 type WorkflowAction = 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr';
 
+interface GPSData {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+}
+
 interface UseLessonWorkflowReturn {
-  executeAction: (aulaId: string, action: WorkflowAction, qrData?: string) => Promise<boolean>;
+  executeAction: (aulaId: string, action: WorkflowAction, qrData?: string, gpsData?: GPSData) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
 }
@@ -17,7 +23,8 @@ export function useLessonWorkflow(): UseLessonWorkflowReturn {
   const executeAction = useCallback(async (
     aulaId: string, 
     action: WorkflowAction, 
-    qrData?: string
+    qrData?: string,
+    gpsData?: GPSData
   ): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
@@ -27,7 +34,15 @@ export function useLessonWorkflow(): UseLessonWorkflowReturn {
         body: {
           aula_id: aulaId,
           action,
-          qr_data: qrData
+          qr_data: qrData,
+          latitude: gpsData?.latitude,
+          longitude: gpsData?.longitude,
+          accuracy: gpsData?.accuracy,
+          device_info: {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            timestamp: new Date().toISOString()
+          }
         }
       });
 
@@ -45,7 +60,6 @@ export function useLessonWorkflow(): UseLessonWorkflowReturn {
         return false;
       }
 
-      // Success messages based on action
       const successMessages: Record<WorkflowAction, string> = {
         em_rota: 'Você está a caminho! Aluno foi notificado.',
         cheguei: 'Chegada registrada! Aguardando confirmação do aluno.',
