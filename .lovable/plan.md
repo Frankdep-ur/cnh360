@@ -1,62 +1,122 @@
 
 
-# Plano: Limpar Notificacoes de Aulas Nao Pagas
+# Plano: Filtrar Notificacoes Somente para Aulas Pagas
 
 ## Resumo do Problema
-Existem **33 notificacoes** no banco de dados associadas a aulas que nunca foram pagas ou que ja foram deletadas. Isso polui a lista de notificacoes dos instrutores.
+
+Atualmente, o sistema de notificacoes do instrutor tem **2 pontos** que ainda nao verificam se a aula foi paga:
+
+1. **`useInstrutorNotifications.ts`** - Hook que busca aulas pendentes e dispara popup/som/vibracao
+2. **`send-lesson-notification` Edge Function** - Funcao que cria notificacoes no banco
 
 ---
 
-## Tipos de Notificacoes Encontradas
+## Arquivos a Modificar
 
-| Tipo | Quantidade Aprox. | Descricao |
-|------|-------------------|-----------|
-| `nova_aula` | 6+ | Solicitacoes de aula que nunca foram pagas |
-| `instrutor_a_caminho` | 10+ | Notificacoes de aulas invalidas |
-| `aula_confirmada` | 2+ | Confirmacoes de aulas sem pagamento |
-| `aula_recusada` | 8+ | Recusas de aulas sem pagamento |
+| Arquivo | Modificacao |
+|---------|-------------|
+| `src/hooks/useInstrutorNotifications.ts` | Adicionar filtro `payment_confirmed = true` na query |
+| `supabase/functions/send-lesson-notification/index.ts` | Verificar `payment_confirmed` antes de criar notificacao |
 
 ---
 
-## Solucao
+## Mudanca 1: useInstrutorNotifications.ts
 
-Executar uma migracao SQL para deletar todas as notificacoes que:
-1. Tem um `reference_id` (referencia a uma aula)
-2. A aula associada **nao existe** OU **nao foi paga** (`payment_confirmed = false/NULL`)
+### Linha 41-46 - Adicionar filtro de pagamento
 
----
+**Codigo atual:**
+```typescript
+const { data, error } = await supabase
+  .from("aulas")
+  .select("*")
+  .eq("instrutor_id", instrutorId)
+  .eq("status", "pendente")
+  .order("created_at", { ascending: false });
+```
 
-## SQL de Limpeza
+**Codigo corrigido:**
+```typescript
+const { data, error } = await supabase
+  .from("aulas")
+  .select("*")
+  .eq("instrutor_id", instrutorId)
+  .eq("status", "pendente")
+  .eq("payment_confirmed", true)  // NOVA LINHA
+  .order("created_at", { ascending: false });
+```
 
-```sql
--- Deletar notificacoes de aulas que nao foram pagas ou nao existem
-DELETE FROM notifications
-WHERE id IN (
-  SELECT n.id
-  FROM notifications n
-  LEFT JOIN aulas a ON n.reference_id = a.id
-  WHERE n.reference_id IS NOT NULL 
-    AND (
-      a.id IS NULL  -- Aula foi deletada
-      OR a.payment_confirmed = false  -- Pagamento nao confirmado
-      OR a.payment_confirmed IS NULL  -- Pagamento nunca iniciado
-    )
-);
+### Linha 144 - Verificar pagamento no evento realtime
+
+**Codigo atual:**
+```typescript
+if (payload.new && payload.new.status === "pendente") {
+```
+
+**Codigo corrigido:**
+```typescript
+if (payload.new && payload.new.status === "pendente" && payload.new.payment_confirmed === true) {
 ```
 
 ---
 
-## Resultado Esperado
+## Mudanca 2: send-lesson-notification Edge Function
 
-- **33 notificacoes removidas** dos instrutores
-- Lista de notificacoes limpa e precisa
-- Somente aulas legitimas (pagas) terao notificacoes
+### Linha 161-210 - Verificar pagamento antes de notificar
+
+Adicionar verificacao logo apos receber o payload para garantir que a aula tenha pagamento confirmado antes de enviar qualquer notificacao:
+
+```typescript
+// Verificar se a aula tem pagamento confirmado
+const { data: aulaCheck, error: aulaCheckError } = await supabase
+  .from("aulas")
+  .select("payment_confirmed")
+  .eq("id", aula_id)
+  .single();
+
+if (aulaCheckError || !aulaCheck?.payment_confirmed) {
+  console.log("Aula sem pagamento confirmado, ignorando notificacao");
+  return new Response(
+    JSON.stringify({ 
+      success: false, 
+      message: "Lesson not paid - notification skipped" 
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+  );
+}
+```
+
+---
+
+## Fluxo Apos Correcao
+
+```text
+Aluno clica "Pagar"
+       │
+       ▼
+Aula criada (payment_confirmed = false)
+       │
+       ├──► Hook ignora (filtro payment_confirmed)
+       ├──► Edge Function ignora (verificacao payment_confirmed)
+       └──► Nenhuma notificacao enviada
+       │
+       ▼
+Pagamento concluido
+       │
+       ▼
+payment_confirmed = true
+       │
+       ├──► Hook detecta nova aula
+       ├──► Popup + som + vibracao
+       └──► Notificacao in-app criada
+```
 
 ---
 
 ## Checklist de Implementacao
 
-- [ ] Executar migracao SQL para deletar notificacoes orfas
-- [ ] Verificar que as notificacoes foram removidas
-- [ ] Confirmar que notificacoes legitimas permanecem
+- [ ] Adicionar `.eq("payment_confirmed", true)` na query do hook
+- [ ] Verificar `payment_confirmed === true` no handler realtime
+- [ ] Adicionar verificacao de pagamento na Edge Function
+- [ ] Testar que notificacoes nao aparecem para aulas nao pagas
+- [ ] Testar que notificacoes funcionam para aulas pagas
 
