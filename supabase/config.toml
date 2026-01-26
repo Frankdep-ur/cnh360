@@ -31,7 +31,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.check-payment-status-pagarme]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-static-map]
 verify_jwt = true

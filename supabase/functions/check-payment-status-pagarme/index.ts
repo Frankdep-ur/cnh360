@@ -10,6 +10,27 @@ const logStep = (step: string, details?: any) => {
   console.log(`[check-payment-status-pagarme] ${step}`, details ? JSON.stringify(details) : "");
 };
 
+// Validate user authentication
+async function validateAuth(req: Request): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+  
+  const token = authHeader.replace("Bearer ", "");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const { data, error } = await supabase.auth.getUser(token);
+  
+  if (error || !data.user) {
+    return null;
+  }
+  
+  return { userId: data.user.id };
+}
+
 // Map Pagar.me status to simplified status
 function mapStatus(pagarmeStatus: string): string {
   const statusMap: Record<string, string> = {
@@ -131,6 +152,17 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authentication
+    const auth = await validateAuth(req);
+    if (!auth) {
+      logStep("Authentication failed");
+      return new Response(
+        JSON.stringify({ error: "Não autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    logStep("User authenticated", { userId: auth.userId });
+
     const pagarmeApiKey = Deno.env.get("PAGARME_API_KEY");
     if (!pagarmeApiKey) {
       throw new Error("PAGARME_API_KEY não configurada");

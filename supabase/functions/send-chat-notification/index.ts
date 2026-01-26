@@ -6,6 +6,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Validate user authentication and return user info
+async function validateAuth(req: Request): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+  
+  const token = authHeader.replace("Bearer ", "");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const { data, error } = await supabase.auth.getUser(token);
+  
+  if (error || !data.user) {
+    return null;
+  }
+  
+  return { userId: data.user.id };
+}
+
 interface ChatNotificationPayload {
   aula_id: string;
   sender_id: string;
@@ -18,6 +39,17 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authentication
+    const auth = await validateAuth(req);
+    if (!auth) {
+      console.error("Authentication failed");
+      return new Response(
+        JSON.stringify({ error: "Não autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    console.log("User authenticated:", auth.userId);
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -25,6 +57,15 @@ serve(async (req) => {
 
     const payload: ChatNotificationPayload = await req.json();
     console.log("Processing chat notification:", payload);
+
+    // Security: Ensure sender_id matches authenticated user
+    if (payload.sender_id !== auth.userId) {
+      console.error("Sender ID mismatch");
+      return new Response(
+        JSON.stringify({ error: "Não autorizado - ID do remetente inválido" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Get the lesson details to find recipient
     const { data: aula, error: aulaError } = await supabase
