@@ -82,10 +82,12 @@ export function useAulasPendentes() {
           usa_carro_aluno,
           status,
           created_at,
-          transaction_id
+          transaction_id,
+          payment_confirmed
         `)
         .eq("instrutor_id", instrutorData.id)
         .in("status", ["pendente", "confirmada"])
+        .eq("payment_confirmed", true)
         .order("data_hora", { ascending: true });
 
       if (aulasError) {
