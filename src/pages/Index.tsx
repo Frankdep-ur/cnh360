@@ -193,16 +193,17 @@ export default function Index() {
                 const message = encodeURIComponent("Olá! Gostaria de saber mais sobre a CNH360.");
                 window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
               }}
-              className={cn(
-                "fixed bottom-6 right-6 z-50",
-                "w-14 h-14 rounded-full",
-                "bg-[#25D366] hover:bg-[#20bd5a]",
-                "flex items-center justify-center",
-                "shadow-lg hover:shadow-xl",
-                "transition-all duration-300",
-                "hover:scale-110",
-                showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              )}
+            className={cn(
+              "fixed bottom-6 right-6 z-50",
+              "w-14 h-14 rounded-full",
+              "bg-[#25D366] hover:bg-[#20bd5a]",
+              "flex items-center justify-center",
+              "shadow-lg hover:shadow-xl",
+              "transition-all duration-300",
+              "hover:scale-110",
+              "animate-bounce-subtle",
+              showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            )}
               style={{ transitionDelay: "900ms" }}
               aria-label="Falar no WhatsApp"
             >
