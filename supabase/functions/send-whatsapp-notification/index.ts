@@ -3,6 +3,7 @@
 // Migrado de SendPulse para Z-API em 26/01/2026
 // Z-API é um provedor brasileiro com integração direta ao WhatsApp
 // Documentação: https://developer.z-api.io/
+// SECURITY: Esta função deve ser chamada apenas internamente via service role key
 // =============================================================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -15,6 +16,20 @@ const corsHeaders = {
 const logStep = (step: string, details?: any) => {
   console.log(`[send-whatsapp-notification] ${step}`, details ? JSON.stringify(details) : "");
 };
+
+// Validate internal call (service role key only)
+function validateInternalCall(req: Request): boolean {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return false;
+  }
+  
+  const token = authHeader.replace("Bearer ", "");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  
+  // Only allow service role key (internal calls)
+  return token === serviceKey;
+}
 
 interface WhatsAppPayload {
   aulaId: string;
@@ -86,6 +101,15 @@ async function sendWhatsAppViaZAPI(
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validate internal call (service role key only)
+  if (!validateInternalCall(req)) {
+    logStep("Unauthorized: Not an internal call");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized - Internal use only" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {
