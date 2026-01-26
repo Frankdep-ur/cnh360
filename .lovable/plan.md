@@ -1,354 +1,323 @@
 
-# Plano: Fluxo de Aula Anti-Fraude CNH360 (Notificações In-App)
+# Plano: Histórico Detalhado de Aulas com Auditoria GPS
 
-## Visão Geral
+## 1. Relatório Completo das Mudanças Implementadas
 
-Implementar um fluxo de aula completo com múltiplas camadas de validação anti-fraude, onde todas as notificações ocorrem **dentro do aplicativo** através de:
-1. **Mensagens automáticas no chat** da aula (aparecem para ambos)
-2. **Notificações no sino** (NotificationBell)
-3. **Push notifications** do navegador
+### Resumo Executivo
 
-O WhatsApp (Z-API) será usado **apenas para pagamentos**.
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      FLUXO ANTI-FRAUDE CNH360 (In-App)                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  INSTRUTOR                              ALUNO                               │
-│  ─────────                              ─────                               │
-│                                                                             │
-│  [1] Clica "Em Rota" ───────────────→  Notificação no sino +                │
-│      status: 'em_rota'                  Msg automática no chat:             │
-│                                         "🚗 Instrutor a caminho!"           │
-│                                                                             │
-│  [2] Clica "Cheguei" ───────────────→  Notificação no sino +                │
-│      status: 'aguardando_confirmacao'   Msg automática no chat:             │
-│                                         "📍 Instrutor chegou! Confirme."    │
-│                                                                             │
-│                            ←────────── [3] Clica "Confirmar Chegada"        │
-│  Notificação no sino +                  aluno_confirmou_chegada: true       │
-│  Msg automática no chat:                                                    │
-│  "✅ Aluno confirmou presença!"                                             │
-│                                                                             │
-│  [4] Clica "Iniciar Aula" ──────────→  Cronômetro sincronizado inicia       │
-│      status: 'em_andamento'             Msg automática no chat:             │
-│      aula_inicio: timestamp             "🎓 Aula iniciada!"                 │
-│                                                                             │
-│  [5] (Cronômetro >= duração_minutos)                                        │
-│      Botão "Finalizar" liberado                                             │
-│                                                                             │
-│  [6] Clica "Finalizar Aula" ────────→  QR Code dinâmico gerado             │
-│      status: 'aguardando_qr'            Msg automática no chat:             │
-│                                         "📱 Mostre o QR Code!"              │
-│                                                                             │
-│  [7] Escaneia QR do aluno                                                   │
-│      Valida no backend                                                      │
-│      status: 'concluida'                                                    │
-│      ↓                                                                      │
-│  PAGAMENTO LIBERADO + Notificação                                           │
-│                                                                             │
-│  [8] Msg no chat + WhatsApp ────────→  Msg no chat + WhatsApp              │
-│      (pagamento apenas)                 (pagamento apenas)                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Foi implementado um **sistema completo de fluxo de aula anti-fraude** na CNH360, onde todas as etapas são controladas, validadas e registradas para garantir segurança e integridade das aulas práticas.
 
 ---
 
-## Etapa 1: Alterações no Banco de Dados
+### Alterações no Banco de Dados
 
-### Novos campos na tabela `aulas`:
+**Novos campos na tabela `aulas`:**
 
-| Campo | Tipo | Descrição |
+| Campo | Tipo | Propósito |
 |-------|------|-----------|
-| `aluno_confirmou_chegada` | boolean | Aluno confirmou chegada do instrutor |
-| `aula_inicio` | timestamptz | Momento exato que o cronômetro iniciou |
-| `aula_fim` | timestamptz | Momento que o instrutor finalizou |
-| `qr_code_data` | text | Hash único para validação do QR Code |
-| `qr_code_expires_at` | timestamptz | Expiração do QR Code (5 minutos) |
-| `qr_validado` | boolean | QR Code foi escaneado e validado |
+| `aluno_confirmou_chegada` | boolean | Registro de confirmação física do aluno |
+| `aula_inicio` | timestamptz | Timestamp exato do início do cronômetro |
+| `aula_fim` | timestamptz | Timestamp exato do fim da aula |
+| `qr_code_data` | text | Hash criptografado para validação QR |
+| `qr_code_expires_at` | timestamptz | Expiração do QR Code (5 min) |
+| `qr_validado` | boolean | Confirmação de validação por QR |
 
-### Novo campo na tabela `mensagens_aula`:
+**Novo campo na tabela `mensagens_aula`:**
 
-| Campo | Tipo | Descrição |
+| Campo | Tipo | Propósito |
 |-------|------|-----------|
-| `is_system` | boolean | Indica se é mensagem automática do sistema |
+| `is_system` | boolean | Identifica mensagens automáticas do sistema |
 
-### Novos valores no enum `status_aula`:
+**Novos valores no enum `status_aula`:**
 
-Adicionar:
-- `em_rota` - Instrutor saiu e está a caminho
-- `aguardando_confirmacao` - Instrutor chegou, aguardando aluno confirmar
-- `aguardando_qr` - Aula finalizada, aguardando scan do QR
+- `em_rota` - Instrutor a caminho
+- `aguardando_confirmacao` - Instrutor chegou, aguardando aluno
+- `aguardando_qr` - Aula finalizada, aguardando scan QR
 
-### RLS para mensagens do sistema:
+**Índices criados:**
 
-Nova política que permite inserção de mensagens com `is_system = true` via service role (Edge Function).
-
----
-
-## Etapa 2: Nova Edge Function - `lesson-workflow`
-
-Edge Function centralizada para gerenciar todas as transições de status da aula com validações de segurança e envio de notificações in-app.
-
-**Arquivo:** `supabase/functions/lesson-workflow/index.ts`
-
-**Ações suportadas:**
-
-| Ação | Quem chama | Validação | Resultado |
-|------|------------|-----------|-----------|
-| `em_rota` | Instrutor | status = 'confirmada' | status → 'em_rota', notificação + msg chat para aluno |
-| `cheguei` | Instrutor | status = 'em_rota' | status → 'aguardando_confirmacao', notificação + msg chat para aluno |
-| `confirmar_chegada` | Aluno | status = 'aguardando_confirmacao' | aluno_confirmou_chegada = true, notificação + msg chat para instrutor |
-| `iniciar_aula` | Instrutor | aluno_confirmou_chegada = true | status → 'em_andamento', aula_inicio = now(), msg chat |
-| `finalizar_aula` | Instrutor | tempo >= duração | status → 'aguardando_qr', gera qr_code_data, msg chat para aluno |
-| `validar_qr` | Instrutor | QR válido e não expirado | status → 'concluida', libera pagamento, msg chat + WhatsApp |
-
-**Cada ação:**
-1. Valida autenticação JWT
-2. Verifica se usuário é participante da aula
-3. Valida status correto para transição
-4. Atualiza banco de dados
-5. Insere mensagem automática no chat (usando service role)
-6. Insere notificação no sino para o outro participante
-7. Envia push notification
+- `idx_aulas_status` - Performance em queries por status
+- `idx_aulas_instrutor_status` - Performance em queries do instrutor
 
 ---
 
-## Etapa 3: Mensagens Automáticas no Chat
+### Nova Edge Function: `lesson-workflow`
 
-### Solução técnica para mensagens do sistema:
+Uma função centralizada que controla todas as transições de status com validações de segurança:
 
-1. Adicionar campo `is_system` boolean na tabela `mensagens_aula`
-2. Criar política RLS que permite service role inserir mensagens com `is_system = true`
-3. Para `sender_id`, usar o ID do participante que disparou a ação (ex: instrutor clica "Em Rota" → sender_id = instrutor, mas is_system = true)
-4. Frontend exibe mensagens com `is_system = true` com estilo diferenciado (fundo colorido, ícone do sistema)
+| Ação | Quem executa | Validação | Resultado |
+|------|--------------|-----------|-----------|
+| `em_rota` | Instrutor | status = 'confirmada' | Inicia rastreamento GPS, notifica aluno |
+| `cheguei` | Instrutor | status = 'em_rota' | Registra chegada, solicita confirmação |
+| `confirmar_chegada` | Aluno | status = 'aguardando_confirmacao' | Libera início da aula |
+| `iniciar_aula` | Instrutor | aluno_confirmou = true | Inicia cronômetro sincronizado |
+| `finalizar_aula` | Instrutor | tempo >= duração | Gera QR Code criptografado |
+| `validar_qr` | Instrutor | QR válido e não expirado | Conclui aula, libera pagamento |
 
-### Mensagens automáticas:
+**Validações de segurança implementadas:**
 
-| Momento | Mensagem no Chat |
-|---------|------------------|
-| Em rota | "🚗 **CNH360:** Instrutor está a caminho! ETA: X minutos" |
-| Chegou | "📍 **CNH360:** Instrutor chegou no local. Confirme sua presença no app." |
-| Aluno confirmou | "✅ **CNH360:** Aluno confirmou presença. Instrutor pode iniciar a aula." |
-| Aula iniciada | "🎓 **CNH360:** Aula iniciada! Cronômetro ativado." |
-| Aula finalizada | "📱 **CNH360:** Aula finalizada! Aluno, mostre o QR Code para o instrutor." |
-| QR validado | "🎉 **CNH360:** Aula concluída com sucesso! Pagamento liberado." |
-
----
-
-## Etapa 4: Instalar Bibliotecas QR Code
-
-Adicionar ao `package.json`:
-- `qrcode.react` - Gerar QR Codes no app do aluno
-- `html5-qrcode` - Scanner de câmera no app do instrutor
+1. Verificação JWT em todas as chamadas
+2. Verificação se usuário é participante da aula
+3. Validação de status correto para cada transição
+4. Verificação de tempo mínimo antes de finalizar (90% da duração)
+5. QR Code expira em 5 minutos
+6. Hash SHA-256 para validação de QR
 
 ---
 
-## Etapa 5: Componentes Novos
+### Novos Componentes Frontend
 
-### `src/components/qr/QRCodeDisplay.tsx`
-Exibe QR Code dinâmico com dados criptografados da aula.
+**Componentes criados:**
 
-### `src/components/qr/QRCodeScanner.tsx`
-Modal com câmera para escanear QR Code usando html5-qrcode.
+| Componente | Função |
+|------------|--------|
+| `src/components/qr/QRCodeDisplay.tsx` | Exibe QR Code dinâmico com timer de expiração |
+| `src/components/qr/QRCodeScanner.tsx` | Scanner de câmera usando html5-qrcode |
+| `src/components/chat/SystemMessage.tsx` | Mensagens automáticas estilizadas |
+| `src/components/aula/AulaTimer.tsx` | Cronômetro visual sincronizado |
 
-### `src/components/chat/SystemMessage.tsx`
-Componente para exibir mensagens automáticas do sistema com estilo diferenciado.
+**Hooks criados:**
 
-### `src/components/aula/AulaTimer.tsx`
-Cronômetro visual grande que mostra tempo decorrido da aula.
-
----
-
-## Etapa 6: Refatorar Página do Instrutor
-
-### Atualizar: `src/pages/instrutor/InstrutorACaminho.tsx`
-
-Transformar em página completa de gerenciamento da aula com:
-
-1. **Barra de progresso de etapas** (Em rota → Chegou → Aguardando → Em aula → Finalizado)
-
-2. **Botões sequenciais condicionais:**
-   - "Em Rota" (status = 'confirmada')
-   - "Cheguei!" (status = 'em_rota')
-   - "Iniciar Aula" (aluno_confirmou_chegada = true)
-   - Cronômetro visual (status = 'em_andamento')
-   - "Finalizar Aula" (tempo >= duração)
-   - Scanner QR (status = 'aguardando_qr')
-
-3. **Card do aluno** com foto, nome, local
-
-4. **Chat integrado** (TripChat)
-
-5. **Mapa** quando em rota
-
-### Nova rota: `/instrutor/aula/:aulaId`
-
-Redirecionar de `InstrutorACaminho` para esta nova página unificada.
+| Hook | Função |
+|------|--------|
+| `src/hooks/useAulaTimer.ts` | Gerencia cronômetro com sync Realtime |
+| `src/hooks/useLessonWorkflow.ts` | Interface para Edge Function |
 
 ---
 
-## Etapa 7: Refatorar Página do Aluno
+### Páginas Refatoradas
 
-### Atualizar: `src/pages/aluno/AulaConfirmadaById.tsx`
+**Instrutor - `AulaEmAndamento.tsx`:**
+- Barra de progresso visual (5 etapas)
+- Botões condicionais por status
+- Mapa com rastreamento GPS
+- Cronômetro sincronizado
+- Scanner QR integrado
+- Chat com mensagens do sistema
 
-Adicionar estados visuais e interações:
-
-1. **Status "Em Rota"**
-   - Mostrar mapa com localização do instrutor (já existe)
-   - Badge "Instrutor a caminho"
-   - Botão "Rastrear instrutor"
-
-2. **Status "Aguardando Confirmação"**
-   - Card destacado: "Instrutor chegou!"
-   - Botão grande: "Confirmar Chegada" ← **NOVO**
-
-3. **Status "Em Andamento"**
-   - Cronômetro sincronizado em tempo real
-   - Exibir tempo decorrido
-   - Chat disponível
-
-4. **Status "Aguardando QR"**
-   - Gerar QR Code dinâmico com qrcode.react ← **NOVO**
-   - Dados: { aulaId, timestamp, hash }
-   - Instruções: "Mostre este QR para o instrutor"
-   - Timer de expiração (5 min)
-
-5. **Status "Concluída"**
-   - Celebração visual
-   - Resumo da aula
-   - Botão para avaliar
+**Aluno - `AulaConfirmadaById.tsx`:**
+- Status visual dinâmico
+- Botão "Confirmar Chegada"
+- Cronômetro sincronizado
+- Exibição do QR Code
+- Integração com chat
 
 ---
 
-## Etapa 8: Hook do Cronômetro
+### Fluxo de Notificações
 
-### Novo: `src/hooks/useAulaTimer.ts`
+Todas as notificações são **in-app** através de:
 
-```text
-Funcionalidade:
-- Calcula tempo decorrido: now() - aula_inicio
-- Atualiza a cada segundo no frontend
-- Sincroniza via Supabase Realtime (observa updates na aula)
-- Backend valida tempo real ao finalizar
-```
+1. **Mensagens automáticas no chat** - Ambos veem
+2. **Notificações no sino** - Via tabela `notifications`
+3. **Push notifications** - Via `send-push-notification`
+
+**WhatsApp usado apenas para pagamentos** - Enviado via Z-API quando aula é concluída.
 
 ---
 
-## Etapa 9: Fluxo de Liberação de Pagamento
-
-### No `lesson-workflow` ação `validar_qr`:
-
-1. Verificar QR válido e não expirado
-2. Atualizar status para 'concluida'
-3. Chamar `capture-payment-pagarme` (já existe)
-4. Registrar em tabela `pagamentos`
-5. Inserir mensagem final no chat
-6. Inserir notificação no sino para ambos
-7. Enviar WhatsApp via Z-API **apenas para o pagamento**
-
----
-
-## Etapa 10: Atualizar ChatView
-
-### Modificar: `src/components/chat/ChatView.tsx`
-
-Adicionar suporte para mensagens do sistema:
-- Detectar `is_system = true`
-- Renderizar com estilo diferenciado (fundo colorido, centralizado, sem foto de remetente)
-- Exibir ícone do CNH360
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/functions/lesson-workflow/index.ts` | Edge Function central |
-| `src/components/qr/QRCodeDisplay.tsx` | Exibir QR no app do aluno |
-| `src/components/qr/QRCodeScanner.tsx` | Scanner no app do instrutor |
-| `src/components/chat/SystemMessage.tsx` | Mensagem automática estilizada |
-| `src/components/aula/AulaTimer.tsx` | Cronômetro visual |
-| `src/hooks/useAulaTimer.ts` | Hook para cronômetro |
-| `src/pages/instrutor/AulaEmAndamento.tsx` | Página unificada de aula (instrutor) |
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/aluno/AulaConfirmadaById.tsx` | Adicionar confirmação, cronômetro, QR |
-| `src/components/chat/ChatView.tsx` | Suporte a mensagens do sistema |
-| `src/hooks/useTripChat.ts` | Suporte a campo is_system |
-| `src/App.tsx` | Adicionar nova rota |
-| `supabase/config.toml` | Registrar lesson-workflow |
-| `package.json` | Adicionar qrcode.react e html5-qrcode |
-
----
-
-## Resumo das Proteções Anti-Fraude
+### Proteções Anti-Fraude Implementadas
 
 | Proteção | Implementação |
 |----------|---------------|
-| Instrutor não pode iniciar sem aluno confirmar | `aluno_confirmou_chegada` obrigatório |
-| Não pode finalizar antes do tempo | Backend valida `aula_fim - aula_inicio >= duracao` |
-| QR Code expira em 5 minutos | Campo `qr_code_expires_at` |
-| QR Code único por aula | Hash criptografado com `aulaId + timestamp + secret` |
-| Pagamento só libera após QR validado | Captura chamada dentro de `validar_qr` |
-| Todas transições notificadas | Mensagens no chat + sino + push |
+| Início sem confirmação | `aluno_confirmou_chegada` obrigatório |
+| Finalização precoce | Backend valida `tempo >= 90% duração` |
+| QR Code expirado | Campo `qr_code_expires_at` (5 min) |
+| QR Code falsificado | Hash SHA-256 validado no backend |
+| Pagamento indevido | Só libera após `validar_qr` |
+| Rastreamento GPS | Localização salva em `localizacao_tempo_real` |
 
 ---
 
-## Seção Técnica
+## 2. Plano: Histórico de Auditoria Detalhado
 
-### Estrutura do QR Code Data:
+### Objetivo
+
+Criar uma tabela e interface para armazenar e visualizar o histórico completo de cada aula com:
+- Timestamps de cada etapa
+- Localização GPS de validações
+- Dados do cronômetro real
+- Informações de pagamento
+- Trilha de auditoria completa
+
+---
+
+### Etapa 1: Nova Tabela de Auditoria
+
+**Criar tabela `aulas_auditoria`:**
 
 ```text
-{
-  "aulaId": "uuid",
-  "timestamp": "2026-01-26T14:30:00Z",
-  "hash": "sha256(aulaId + timestamp + SECRET_KEY)",
-  "version": 1
-}
+id                  UUID PRIMARY KEY
+aula_id             UUID REFERENCES aulas(id)
+evento              TEXT (em_rota, cheguei, confirmacao_aluno, inicio, fim, qr_validado)
+timestamp           TIMESTAMPTZ
+latitude            NUMERIC
+longitude           NUMERIC
+precisao_metros     NUMERIC
+device_info         JSONB
+user_id             UUID (quem disparou o evento)
+dados_adicionais    JSONB (tempo decorrido, hash QR, etc.)
+created_at          TIMESTAMPTZ
 ```
 
-### Validação do QR no Backend:
+**Índices:**
+- `idx_auditoria_aula_id` - Busca por aula
+- `idx_auditoria_timestamp` - Ordenação cronológica
+
+**RLS:**
+- Participantes podem visualizar auditoria da própria aula
+- Inserção apenas via service role (Edge Function)
+
+---
+
+### Etapa 2: Atualizar Edge Function
+
+Modificar `lesson-workflow` para registrar cada transição na tabela de auditoria com:
+- Captura de GPS no momento da ação
+- Device info (user agent, plataforma)
+- Timestamp preciso
+- Dados contextuais (tempo no cronômetro, etc.)
+
+---
+
+### Etapa 3: Nova Página de Histórico do Instrutor
+
+**Arquivo:** `src/pages/instrutor/HistoricoAulas.tsx`
+
+**Funcionalidades:**
+- Lista de aulas concluídas com filtros (data, aluno)
+- Card expandível para cada aula com:
+  - Timeline visual de eventos
+  - Mapa com pontos GPS
+  - Duração real vs agendada
+  - Status de pagamento
+  - Botão para exportar PDF
+
+---
+
+### Etapa 4: Nova Página de Histórico do Aluno
+
+**Arquivo:** `src/pages/aluno/MeuHistorico.tsx`
+
+**Funcionalidades:**
+- Lista de aulas realizadas
+- Detalhes de cada aula:
+  - Instrutor
+  - Data/hora real
+  - Duração registrada
+  - Horas acumuladas para CNH
+- Certificado de horas práticas (PDF)
+
+---
+
+### Etapa 5: Componente de Timeline de Auditoria
+
+**Arquivo:** `src/components/aula/AuditTrail.tsx`
+
+Exibe visualmente cada etapa:
 
 ```text
-1. Parse JSON do QR escaneado
-2. Verificar se aulaId corresponde
-3. Verificar se não expirou (now < qr_code_expires_at)
-4. Recalcular hash e comparar
-5. Se válido: atualizar status, liberar pagamento
-```
-
-### Inserção de mensagens do sistema:
-
-A Edge Function usa `SUPABASE_SERVICE_ROLE_KEY` para inserir mensagens com `is_system = true`, bypassing RLS que requer `sender_id = auth.uid()`.
-
-### Config da Edge Function:
-
-```text
-[functions.lesson-workflow]
-verify_jwt = true
+┌────────────────────────────────────────────────────┐
+│  🚗 Em Rota                         14:00:32      │
+│     GPS: -23.5505, -46.6333 (±15m)                │
+├────────────────────────────────────────────────────┤
+│  📍 Chegou no local                 14:22:15      │
+│     GPS: -23.5510, -46.6340 (±8m)                 │
+├────────────────────────────────────────────────────┤
+│  ✅ Aluno confirmou                 14:23:01      │
+│     Tempo de espera: 46 segundos                  │
+├────────────────────────────────────────────────────┤
+│  🎓 Aula iniciada                   14:23:45      │
+│     Cronômetro ativado                            │
+├────────────────────────────────────────────────────┤
+│  ⏱️ Aula finalizada                 15:24:02      │
+│     Duração: 60min 17seg                          │
+├────────────────────────────────────────────────────┤
+│  📱 QR validado                     15:25:10      │
+│     Hash: 7a3f...b2c1                             │
+├────────────────────────────────────────────────────┤
+│  💰 Pagamento liberado              15:25:12      │
+│     Valor: R$ 80,00                               │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Ordem de Implementação
+### Etapa 6: Componente de Mapa com Validações GPS
 
-1. **Migration do banco** - Adicionar campos e enum
-2. **Atualizar RLS mensagens** - Permitir inserção de system messages
-3. **Edge Function lesson-workflow** - Lógica central
-4. **Instalar libs QR** - qrcode.react + html5-qrcode
-5. **Componente SystemMessage** - Estilo de mensagem automática
-6. **Atualizar ChatView** - Suporte a is_system
-7. **Componentes QR** - Display + Scanner
-8. **Hook useAulaTimer** - Cronômetro
-9. **Página instrutor AulaEmAndamento** - Interface completa
-10. **Atualizar página aluno** - Confirmação + QR
-11. **Atualizar rotas** - App.tsx
-12. **Testar fluxo completo** - E2E
+**Arquivo:** `src/components/aula/GPSValidationMap.tsx`
+
+Exibe mapa estático com marcadores:
+- Ponto de encontro agendado
+- Local real de chegada
+- Variação de posição durante aula (se houver)
+
+---
+
+### Etapa 7: Exportação de Relatório PDF
+
+**Arquivo:** `src/lib/aulaReportPDF.ts`
+
+Gera PDF com:
+- Dados completos da aula
+- Timeline de eventos
+- Mapa com validações GPS
+- Assinatura digital (hash da auditoria)
+- QR Code de verificação
+
+---
+
+### Etapa 8: Dashboard de Estatísticas
+
+Adicionar cards no `InstrutorDashboard` e `AlunoDashboard`:
+
+**Para instrutor:**
+- Total de horas ministradas
+- Média de duração vs agendado
+- Taxa de conclusão
+
+**Para aluno:**
+- Horas práticas acumuladas
+- Progresso para CNH
+- Próximas etapas
+
+---
+
+### Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| Migration SQL | Tabela `aulas_auditoria` + índices + RLS |
+| `src/pages/instrutor/HistoricoAulas.tsx` | Histórico completo do instrutor |
+| `src/pages/aluno/MeuHistorico.tsx` | Histórico completo do aluno |
+| `src/components/aula/AuditTrail.tsx` | Timeline visual de eventos |
+| `src/components/aula/GPSValidationMap.tsx` | Mapa com pontos GPS |
+| `src/lib/aulaReportPDF.ts` | Geração de PDF |
+| `src/hooks/useAulaAuditoria.ts` | Hook para buscar auditoria |
+
+---
+
+### Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/lesson-workflow/index.ts` | Inserir registros de auditoria |
+| `src/pages/instrutor/InstrutorAulas.tsx` | Link para detalhes de auditoria |
+| `src/pages/instrutor/InstrutorDashboard.tsx` | Cards de estatísticas |
+| `src/pages/aluno/AlunoDashboard.tsx` | Horas acumuladas e histórico |
+| `src/App.tsx` | Novas rotas |
+
+---
+
+### Ordem de Implementação
+
+1. **Migration** - Criar tabela `aulas_auditoria`
+2. **Atualizar lesson-workflow** - Registrar eventos de auditoria
+3. **Hook useAulaAuditoria** - Buscar dados de auditoria
+4. **Componente AuditTrail** - Timeline visual
+5. **Componente GPSValidationMap** - Mapa com pontos
+6. **Página HistoricoAulas (Instrutor)** - Interface completa
+7. **Página MeuHistorico (Aluno)** - Interface completa
+8. **Geração de PDF** - Relatório exportável
+9. **Atualizar dashboards** - Estatísticas
+10. **Testes E2E** - Validar fluxo completo
