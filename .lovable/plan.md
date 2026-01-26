@@ -1,122 +1,66 @@
 
 
-# Plano: Filtrar Notificacoes Somente para Aulas Pagas
+# Plano: Corrigir Autenticação do Cleanup Job
 
-## Resumo do Problema
+## Problema
+A Edge Function `cleanup-abandoned-lessons` está retornando 401 mesmo quando chamada pelo cron job com a anon key correta.
 
-Atualmente, o sistema de notificacoes do instrutor tem **2 pontos** que ainda nao verificam se a aula foi paga:
+## Solução
+Simplificar a validação para ser mais robusta e adicionar logs de debug.
 
-1. **`useInstrutorNotifications.ts`** - Hook que busca aulas pendentes e dispara popup/som/vibracao
-2. **`send-lesson-notification` Edge Function** - Funcao que cria notificacoes no banco
+## Arquivo a Modificar
 
----
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/cleanup-abandoned-lessons/index.ts` | Melhorar validação de auth header |
 
-## Arquivos a Modificar
+## Mudança Proposta
 
-| Arquivo | Modificacao |
-|---------|-------------|
-| `src/hooks/useInstrutorNotifications.ts` | Adicionar filtro `payment_confirmed = true` na query |
-| `supabase/functions/send-lesson-notification/index.ts` | Verificar `payment_confirmed` antes de criar notificacao |
-
----
-
-## Mudanca 1: useInstrutorNotifications.ts
-
-### Linha 41-46 - Adicionar filtro de pagamento
-
-**Codigo atual:**
-```typescript
-const { data, error } = await supabase
-  .from("aulas")
-  .select("*")
-  .eq("instrutor_id", instrutorId)
-  .eq("status", "pendente")
-  .order("created_at", { ascending: false });
-```
-
-**Codigo corrigido:**
-```typescript
-const { data, error } = await supabase
-  .from("aulas")
-  .select("*")
-  .eq("instrutor_id", instrutorId)
-  .eq("status", "pendente")
-  .eq("payment_confirmed", true)  // NOVA LINHA
-  .order("created_at", { ascending: false });
-```
-
-### Linha 144 - Verificar pagamento no evento realtime
-
-**Codigo atual:**
-```typescript
-if (payload.new && payload.new.status === "pendente") {
-```
-
-**Codigo corrigido:**
-```typescript
-if (payload.new && payload.new.status === "pendente" && payload.new.payment_confirmed === true) {
-```
-
----
-
-## Mudanca 2: send-lesson-notification Edge Function
-
-### Linha 161-210 - Verificar pagamento antes de notificar
-
-Adicionar verificacao logo apos receber o payload para garantir que a aula tenha pagamento confirmado antes de enviar qualquer notificacao:
+Atualizar a função `validateRequest` para:
+1. Fazer comparação case-insensitive do header
+2. Adicionar logs para debug
+3. Aceitar também o header `apikey` que o Supabase usa
 
 ```typescript
-// Verificar se a aula tem pagamento confirmado
-const { data: aulaCheck, error: aulaCheckError } = await supabase
-  .from("aulas")
-  .select("payment_confirmed")
-  .eq("id", aula_id)
-  .single();
-
-if (aulaCheckError || !aulaCheck?.payment_confirmed) {
-  console.log("Aula sem pagamento confirmado, ignorando notificacao");
-  return new Response(
-    JSON.stringify({ 
-      success: false, 
-      message: "Lesson not paid - notification skipped" 
-    }),
-    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-  );
+function validateRequest(req: Request): boolean {
+  // Log all headers for debugging
+  console.log("Request headers received");
+  
+  // Check for edge secret header (internal calls)
+  const edgeSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
+  const providedSecret = req.headers.get("x-edge-secret");
+  if (edgeSecret && providedSecret === edgeSecret) {
+    console.log("Validated via edge secret");
+    return true;
+  }
+  
+  // Check for apikey header (Supabase standard)
+  const apiKey = req.headers.get("apikey");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  
+  if (apiKey && (apiKey === anonKey || apiKey === serviceKey)) {
+    console.log("Validated via apikey header");
+    return true;
+  }
+  
+  // Check for Authorization header (cron job calls)
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (authHeader) {
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (token === anonKey || token === serviceKey) {
+      console.log("Validated via Authorization header");
+      return true;
+    }
+  }
+  
+  console.log("No valid authentication found");
+  return false;
 }
 ```
 
----
-
-## Fluxo Apos Correcao
-
-```text
-Aluno clica "Pagar"
-       │
-       ▼
-Aula criada (payment_confirmed = false)
-       │
-       ├──► Hook ignora (filtro payment_confirmed)
-       ├──► Edge Function ignora (verificacao payment_confirmed)
-       └──► Nenhuma notificacao enviada
-       │
-       ▼
-Pagamento concluido
-       │
-       ▼
-payment_confirmed = true
-       │
-       ├──► Hook detecta nova aula
-       ├──► Popup + som + vibracao
-       └──► Notificacao in-app criada
-```
-
----
-
-## Checklist de Implementacao
-
-- [ ] Adicionar `.eq("payment_confirmed", true)` na query do hook
-- [ ] Verificar `payment_confirmed === true` no handler realtime
-- [ ] Adicionar verificacao de pagamento na Edge Function
-- [ ] Testar que notificacoes nao aparecem para aulas nao pagas
-- [ ] Testar que notificacoes funcionam para aulas pagas
+## Resultado Esperado
+- Cron job executa com sucesso a cada 10 minutos
+- Aulas abandonadas são limpas automaticamente
+- Logs mostram "Validated via Authorization header" quando cron roda
 
