@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { PixPaymentModal } from "@/components/payment/PixPaymentModal";
+import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const paymentMethods = [
@@ -181,6 +182,10 @@ export default function AgendarAula() {
 
   // PIX payment state
   const [showPixModal, setShowPixModal] = useState(false);
+
+  // Card payment state (transparent checkout)
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [pendingLessonId, setPendingLessonId] = useState<string | null>(null);
 
   // Location state - captured early for better UX
   const [studentLocation, setStudentLocation] = useState<{
@@ -391,42 +396,53 @@ export default function AgendarAula() {
         return;
       }
 
-      // For card payments, redirect to Pagar.me checkout
+      // For card payments, create pending lesson first then open transparent checkout modal
       if (selectedPayment === "credit") {
         toast({
-          title: "Criando pagamento...",
-          description: "Você será redirecionado para o checkout seguro.",
+          title: "Preparando pagamento...",
+          description: "Aguarde enquanto preparamos o checkout.",
         });
 
-        const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
-          "create-lesson-payment-pagarme",
-          {
-            body: {
-              amount: totalPrice,
-              duration,
-              instructorId: instructor.id,
-              useOwnCar,
-              meetingPoint,
-              scheduledDate: calculatedScheduledDate,
-              studentLat,
-              studentLng,
-            },
-          }
-        );
+        // Get aluno_id first
+        const { data: alunoData, error: alunoError } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
 
-        if (paymentError) {
-          console.error("Error creating payment:", paymentError);
-          throw new Error("Erro ao criar pagamento. Tente novamente.");
+        if (alunoError || !alunoData) {
+          throw new Error("Complete seu cadastro de aluno primeiro.");
         }
 
-        if (!paymentData?.checkoutUrl) {
-          throw new Error("Erro ao processar pagamento - URL do checkout não gerada");
+        // Create pending lesson in database (same as PIX flow)
+        const { data: aulaData, error: aulaError } = await supabase
+          .from("aulas")
+          .insert({
+            aluno_id: alunoData.id,
+            instrutor_id: instructor.id,
+            data_hora: calculatedScheduledDate,
+            duracao_minutos: duration * 60,
+            valor: totalPrice,
+            usa_carro_aluno: useOwnCar,
+            ponto_encontro: meetingPoint,
+            latitude_aluno: studentLat,
+            longitude_aluno: studentLng,
+            status: "pendente",
+          })
+          .select()
+          .single();
+
+        if (aulaError) {
+          console.error("Error creating lesson:", aulaError);
+          throw new Error("Erro ao criar aula no sistema");
         }
 
-        console.log("Payment created, redirecting to checkout:", paymentData);
+        console.log("[AgendarAula] Lesson created for card payment:", aulaData.id);
         
-        // Redirect to Pagar.me checkout
-        window.location.href = paymentData.checkoutUrl;
+        // Open transparent checkout modal
+        setPendingLessonId(aulaData.id);
+        setShowCardModal(true);
+        setLoading(false);
         return;
       }
 
@@ -455,6 +471,26 @@ export default function AgendarAula() {
     });
     setShowPixModal(false);
     navigate(`/aluno/aula-solicitada/${aulaId}`);
+  };
+
+  const handleCardSuccess = () => {
+    toast({
+      title: "Pagamento autorizado!",
+      description: "Aguardando confirmação do instrutor.",
+    });
+    setShowCardModal(false);
+    if (pendingLessonId) {
+      navigate(`/aluno/aula-solicitada/${pendingLessonId}`);
+    }
+  };
+
+  const handleCardModalClose = () => {
+    setShowCardModal(false);
+    // Note: lesson remains as "pendente" in database - instructor can still accept
+    toast({
+      title: "Pagamento pendente",
+      description: "Você pode tentar novamente na tela de aulas.",
+    });
   };
 
   return (
@@ -699,6 +735,19 @@ export default function AgendarAula() {
         studentLng={studentLocation?.lng || null}
         onSuccess={handlePixSuccess}
       />
+
+      {/* Card Payment Modal (Transparent Checkout) */}
+      {pendingLessonId && (
+        <PaymentCheckout
+          open={showCardModal}
+          onClose={handleCardModalClose}
+          onPaymentComplete={handleCardSuccess}
+          amount={totalPrice}
+          lessonId={pendingLessonId}
+          instructorName={instructor.name}
+          lessonDate={`${day} às ${time}`}
+        />
+      )}
     </div>
   );
 }
