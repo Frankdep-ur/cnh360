@@ -1,94 +1,50 @@
 
-# Plano: Checkout Simplificado de Cartão de Crédito
 
-## Diagnóstico do Problema
+# Plano: Limpar Recipients Recusados dos Instrutores
 
-O checkout atual usa o **checkout hosted** da Pagar.me que redireciona para a página externa deles. Esse checkout sempre exige endereço completo (CEP, logradouro, número, bairro, cidade, UF) e não há como desabilitar esses campos na configuração da API.
+## Status Atual
 
-## Solução Proposta
+| Instrutor | Recipient ID | Status |
+|-----------|-------------|--------|
+| Lucas Felipe Fagundes Tamaio | `re_cmkwzjtkr8l6x0k9tefzqy2sh` | ❌ refused |
+| Frank Alexandre | `re_cmkwzwh308baq0m9tepw1f8j1` | ⚠️ provável refused |
 
-Migrar de **checkout hosted** para **checkout transparente** já existente no sistema.
+## Resultado do Teste de Pagamento
 
-### Comparação dos Fluxos
+✅ **O PIX funcionou!** A correção implementada está funcionando:
+- Sistema detectou recipient `refused`
+- Prosseguiu sem split (100% vai para plataforma)
+- Pagamento gerou QR Code normalmente
 
-| Checkout Hosted (atual) | Checkout Transparente (proposto) |
-|-------------------------|----------------------------------|
-| Redireciona para página Pagar.me | Formulário próprio no app |
-| Exige endereço completo | Apenas dados do cartão |
-| Sem controle visual | Design personalizado |
-| UX fragmentada | UX integrada |
+## Ação Necessária
 
-## Campos do Checkout Simplificado
+Limpar o campo `pagarme_recipient_id` dos dois instrutores no banco de dados para permitir que eles recadastrem seus dados bancários.
 
-**Cartão de Crédito (4 campos apenas):**
-- Número do cartão
-- Nome no cartão  
-- Validade (mês/ano)
-- CVV
+## Comando SQL
 
-**PIX (já simplificado):**
-- Apenas gera QR Code automaticamente
-
-## Alterações Técnicas
-
-### 1. Modificar `AgendarAula.tsx`
-
-Quando usuário seleciona "Cartão de Crédito":
-- **Antes:** Chama `create-lesson-payment-pagarme` → redireciona para checkout hosted
-- **Depois:** Cria aula pendente → abre modal `PaymentCheckout` → processa via checkout transparente
-
-### 2. Ajustar Fluxo de Criação de Aula
-
-Criar a aula com status `pendente` antes do pagamento, permitindo usar o `PaymentCheckout` existente que já recebe o `lessonId`.
-
-### 3. Arquivos Modificados
-
-```text
-src/pages/aluno/AgendarAula.tsx
-├── Remover redirecionamento para checkout hosted
-├── Adicionar abertura do modal PaymentCheckout para cartão
-└── Criar aula antes do pagamento (igual ao PIX)
+```sql
+UPDATE instrutores 
+SET pagarme_recipient_id = NULL, updated_at = now()
+WHERE id IN (
+  'a9b56ebf-4830-4104-924e-e987dbe7abce',
+  '2cf27a10-3034-431a-bb92-89b08f90adf5'
+);
 ```
 
-## Fluxo Simplificado
+## Impacto
 
-```text
-Usuário seleciona Cartão
-         ↓
-  Cria aula (pendente)
-         ↓
- Abre modal PaymentCheckout
-         ↓
-┌─────────────────────────────┐
-│  Número do cartão           │
-│  Nome no cartão             │
-│  Validade    CVV            │
-│                             │
-│     [Pagar R$ 10,00]        │
-│                             │
-│  🔒 Dados criptografados    │
-└─────────────────────────────┘
-         ↓
- Tokeniza via SDK Pagar.me
-         ↓
- Envia cardHash criptografado
-         ↓
-   Pagamento autorizado
-         ↓
-  Redireciona para confirmação
-```
+- Os instrutores poderão acessar o formulário de "Configurar Conta Bancária" novamente
+- Ao recadastrar, um novo recipient será criado na Pagar.me
+- Até o recadastro, pagamentos continuam funcionando (sem split)
 
-## Vantagens
+## Próximos Passos (para os instrutores)
 
-- Reduz de 8+ campos para apenas 4 campos
-- Elimina fricção do redirecionamento externo
-- Mantém conformidade PCI (tokenização no frontend)
-- Melhora taxa de conversão
-- UX consistente com o design do app
+1. Acessar perfil → "Configurar Conta Bancária"
+2. Preencher dados bancários corretos
+3. Garantir que o documento (CPF) confere com o titular da conta
+4. Sistema criará novo recipient na Pagar.me
 
-## Conformidade e Segurança
+## Tempo Estimado
 
-A solução mantém total conformidade com PCI-DSS:
-- Dados sensíveis são tokenizados via SDK Pagar.me no navegador
-- Apenas o `cardHash` criptografado vai para o backend
-- Número do cartão e CVV nunca trafegam em texto plano
+Menos de 1 minuto para executar.
+
