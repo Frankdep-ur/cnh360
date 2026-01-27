@@ -90,6 +90,33 @@ serve(async (req) => {
       .eq("id", instructorId)
       .single();
 
+    // Verify recipient status before including in split
+    let instructorRecipientValid = false;
+    if (instrutorData?.pagarme_recipient_id) {
+      try {
+        const recipientResponse = await fetch(
+          `https://api.pagar.me/core/v5/recipients/${instrutorData.pagarme_recipient_id}`,
+          {
+            headers: {
+              "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+            },
+          }
+        );
+        if (recipientResponse.ok) {
+          const recipientInfo = await recipientResponse.json();
+          // Only include in split if recipient is active
+          instructorRecipientValid = recipientInfo.status === "active";
+          logStep("Instructor recipient status", { 
+            recipientId: instrutorData.pagarme_recipient_id, 
+            status: recipientInfo.status,
+            valid: instructorRecipientValid 
+          });
+        }
+      } catch (err) {
+        logStep("Error checking recipient status", { error: err });
+      }
+    }
+
     // Calculate split (50/50 for test)
     const platformFeeCents = Math.round(amountCents * 0.50);
     const instructorAmountCents = amountCents - platformFeeCents;
@@ -152,8 +179,8 @@ serve(async (req) => {
       },
     };
 
-    // Add split rules if instructor has recipient_id
-    if (instrutorData?.pagarme_recipient_id) {
+    // Add split rules only if instructor has valid active recipient
+    if (instructorRecipientValid && instrutorData?.pagarme_recipient_id) {
       orderPayload.payments[0].split = [
         {
           amount: platformFeeCents,
@@ -174,6 +201,10 @@ serve(async (req) => {
           },
         },
       ];
+      logStep("Split added with instructor recipient");
+    } else {
+      // No split - 100% goes to platform (instructor not configured or refused)
+      logStep("No split - instructor recipient not valid or missing");
     }
 
     logStep("Creating PIX order", orderPayload);
