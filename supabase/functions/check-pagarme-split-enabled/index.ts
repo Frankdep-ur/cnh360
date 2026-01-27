@@ -11,7 +11,6 @@ const logStep = (step: string, details?: any) => {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,7 +31,7 @@ serve(async (req) => {
       );
     }
 
-    // First check: Try to list recipients (basic connectivity)
+    // Step 1: Try to list recipients - this is the definitive test
     logStep("Step 1: Checking if we can list recipients");
     
     const listResponse = await fetch("https://api.pagar.me/core/v5/recipients?page=1&size=1", {
@@ -53,35 +52,47 @@ serve(async (req) => {
       logStep("Failed to parse list response as JSON");
     }
 
-    // If listing fails with 412 or forbidden, Split is definitely not enabled
-    if (!listResponse.ok) {
-      const isDisabled =
-        listResponse.status === 412 ||
-        listData.message?.toLowerCase().includes("action_forbidden") ||
-        listData.message?.toLowerCase().includes("not allowed");
-
-      if (isDisabled) {
-        logStep("Split not enabled - cannot even list recipients");
-        return new Response(
-          JSON.stringify({
-            enabled: false,
-            reason: "split_not_enabled",
-            message: "A funcionalidade de Split/Marketplace não está habilitada na conta Pagar.me"
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-        );
-      }
+    // If listing succeeds with 200, Split is definitely enabled!
+    if (listResponse.status === 200) {
+      logStep("Split/Marketplace is ENABLED - list recipients succeeded");
+      return new Response(
+        JSON.stringify({
+          enabled: true,
+          reason: "list_recipients_ok",
+          message: "Sistema de pagamentos configurado corretamente"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
-    // Second check: Try to create a recipient with COMPLETE payload
-    // This forces Pagar.me to check permissions, not just validate data
-    logStep("Step 2: Testing if we can create recipients (dry-run with complete payload)");
+    // Check if listing failed due to permission issues
+    const listErrorMessage = (listData.message || "").toLowerCase();
+    const isListPermissionDenied =
+      listErrorMessage.includes("action_forbidden") ||
+      listErrorMessage.includes("not allowed") ||
+      listErrorMessage.includes("company it not allowed");
+
+    if (isListPermissionDenied) {
+      logStep("Split NOT enabled - list recipients permission denied", { message: listData.message });
+      return new Response(
+        JSON.stringify({
+          enabled: false,
+          reason: "list_permission_denied",
+          message: "A funcionalidade de Split/Marketplace não está habilitada na conta Pagar.me"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // Step 2: If listing had an unexpected error, try creating a test recipient
+    // This forces Pagar.me to check permissions more thoroughly
+    logStep("Step 2: Testing recipient creation permissions");
     
     const testPayload = {
       code: `test-split-check-${Date.now()}`,
       register_information: {
         type: "individual",
-        document: "00000000191", // CPF válido de teste
+        document: "00000000191",
         name: "TESTE SPLIT CHECK",
         email: "teste@teste.com",
         birthdate: "1990-01-01",
@@ -105,9 +116,8 @@ serve(async (req) => {
         holder_name: "TESTE SPLIT CHECK",
         holder_type: "individual",
         holder_document: "00000000191",
-        bank: "001", // Banco do Brasil
+        bank: "001",
         branch_number: "0001",
-        branch_check_digit: "",
         account_number: "12345",
         account_check_digit: "6",
         type: "checking"
@@ -138,12 +148,11 @@ serve(async (req) => {
       logStep("Failed to parse create response as JSON");
     }
 
-    // Check if the creation attempt was blocked due to permissions (not validation)
     const createErrorMessage = (createData.message || "").toLowerCase();
     const errorDetails = JSON.stringify(createData.errors || []).toLowerCase();
 
-    const isCreationBlocked = 
-      createResponse.status === 412 ||
+    // Check if it's a PERMISSION error (Split not enabled)
+    const isPermissionError = 
       createErrorMessage.includes("action_forbidden") ||
       createErrorMessage.includes("not allowed to create") ||
       createErrorMessage.includes("company it not allowed") ||
@@ -151,7 +160,7 @@ serve(async (req) => {
       errorDetails.includes("action_forbidden") ||
       errorDetails.includes("not allowed");
 
-    if (isCreationBlocked) {
+    if (isPermissionError) {
       logStep("Split NOT enabled - creation blocked by permissions", { 
         status: createResponse.status,
         message: createData.message,
@@ -167,38 +176,41 @@ serve(async (req) => {
       );
     }
 
-    // If we got here with validation errors (400/422), it means permission check PASSED
-    // and only the test data was invalid - which is expected and good!
-    if (createResponse.status === 400 || createResponse.status === 422) {
-      // Verify it's a validation error and not a permission error
-      const hasValidationErrors = createData.errors?.some((e: any) => {
-        const msg = (e.message || "").toLowerCase();
-        return msg.includes("invalid") || 
-               msg.includes("required") || 
-               msg.includes("must be") ||
-               msg.includes("already exists") ||
-               msg.includes("cpf") ||
-               msg.includes("document");
+    // Check if it's a VALIDATION error (Split is enabled, just bad test data)
+    const isValidationError =
+      createErrorMessage.includes("invalid_parameter") ||
+      createErrorMessage.includes("invalid format") ||
+      createErrorMessage.includes("invalid") ||
+      createErrorMessage.includes("required") ||
+      createErrorMessage.includes("must be") ||
+      createErrorMessage.includes("already exists") ||
+      createErrorMessage.includes("cpf") ||
+      createErrorMessage.includes("document") ||
+      createErrorMessage.includes("agencia") ||
+      createErrorMessage.includes("branch");
+
+    // If we got validation errors (400, 412, 422), it means permission check PASSED
+    if (isValidationError && !isPermissionError) {
+      logStep("Split/Marketplace is ENABLED - validation errors confirm access", {
+        status: createResponse.status,
+        errorsCount: createData.errors?.length,
+        message: createData.message
       });
-      
-      if (hasValidationErrors || !isCreationBlocked) {
-        logStep("Split/Marketplace is ENABLED - validation errors confirm access", {
-          status: createResponse.status,
-          errorsCount: createData.errors?.length
-        });
-        return new Response(
-          JSON.stringify({
-            enabled: true,
-            reason: "ok",
-            message: "Sistema de pagamentos configurado corretamente"
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-        );
-      }
+      return new Response(
+        JSON.stringify({
+          enabled: true,
+          reason: "validation_error_confirms_access",
+          message: "Sistema de pagamentos configurado corretamente"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
-    // Unexpected response - log and assume it might work
-    logStep("Unexpected create response, assuming enabled", { status: createResponse.status });
+    // For any other status (including 400, 412, 422 with unknown errors), assume enabled
+    // since we couldn't definitively prove it's disabled
+    logStep("Assuming Split enabled - no definitive permission denial detected", { 
+      status: createResponse.status 
+    });
     return new Response(
       JSON.stringify({
         enabled: true,
