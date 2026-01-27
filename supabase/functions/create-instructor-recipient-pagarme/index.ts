@@ -163,7 +163,12 @@ serve(async (req) => {
         throw new Error("Endereço completo é obrigatório para pessoa física");
       }
 
-      registerInfo.birthdate = birthdate; // Format: YYYY-MM-DD
+      // Converter data para formato DD/MM/YYYY se estiver em YYYY-MM-DD
+      const birthdateParts = birthdate.split("-");
+      const formattedBirthdate = birthdateParts.length === 3 
+        ? `${birthdateParts[2]}/${birthdateParts[1]}/${birthdateParts[0]}`
+        : birthdate;
+      registerInfo.birthdate = formattedBirthdate;
       registerInfo.monthly_income = monthlyIncome || 300000; // Em centavos (R$ 3.000,00)
       registerInfo.professional_occupation = professionalOccupation || "instrutor_transito";
       registerInfo.address = {
