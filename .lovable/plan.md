@@ -1,65 +1,130 @@
 
-# Plano: Limpeza de Todas as Aulas do Sistema
+# Plano: Corrigir Verificação do Split/Marketplace Pagar.me
 
-## Objetivo
-Limpar todas as aulas e dados relacionados no banco de dados para reiniciar o sistema com a nova implementação anti-fraude.
+## Contexto
 
-## Dados Encontrados para Limpeza
+A equipe da Pagar.me confirmou que o **Split/Marketplace está habilitado** na conta. Porém, a função de verificação (`check-pagarme-split-enabled`) está retornando `enabled: false` incorretamente.
 
-| Tabela | Registros | Descrição |
-|--------|-----------|-----------|
-| `aulas` | 1 | Aula confirmada entre Lucas e Milena |
-| `mensagens_aula` | 5 | Mensagens de chat da aula |
-| `aulas_auditoria` | 0 | Nenhum registro |
-| `validacoes_gps` | 0 | Nenhum registro |
-| `localizacao_tempo_real` | 1 | Registro de localização |
-| `notifications` | 5 | Notificações relacionadas |
+### Análise do Problema
 
-## Ordem de Execução (respeitando foreign keys)
-
-A limpeza será feita na ordem correta para evitar erros de constraint:
-
-1. **Deletar `aulas_auditoria`** - Referencia `aulas`
-2. **Deletar `mensagens_aula`** - Referencia `aulas`
-3. **Deletar `validacoes_gps`** - Referencia `aulas`
-4. **Deletar `localizacao_tempo_real`** - Registros órfãos
-5. **Deletar `notifications`** - Limpar notificações de aula
-6. **Deletar `aulas`** - Tabela principal
-
-## SQL a Executar
-
-```sql
--- 1. Limpar auditoria
-DELETE FROM aulas_auditoria;
-
--- 2. Limpar mensagens de chat das aulas
-DELETE FROM mensagens_aula;
-
--- 3. Limpar validações GPS
-DELETE FROM validacoes_gps;
-
--- 4. Limpar localização em tempo real
-DELETE FROM localizacao_tempo_real;
-
--- 5. Limpar notificações relacionadas a aulas
-DELETE FROM notifications 
-WHERE type IN ('aula_confirmada', 'aula_recusada', 'aula_solicitada', 
-               'instrutor_a_caminho', 'em_rota', 'chegou', 
-               'aula_iniciada', 'aula_concluida', 'chat_message');
-
--- 6. Limpar todas as aulas
-DELETE FROM aulas;
+**Logs atuais:**
+```
+Step 1: List recipients → status: 200 ✅ (passou!)
+Step 2: Create test response → status: 412, message: "invalid_parameter | agencia_dv | Invalid format"
 ```
 
-## Resultado Esperado
+**Interpretação errada:** O código trata TODO status 412 como "permissão negada", mas na verdade:
+- `invalid_parameter | agencia_dv` = erro de **validação de dados** (Split FUNCIONA!)
+- `action_forbidden` / `not allowed` = erro de **permissão** (Split desabilitado)
 
-Após a limpeza:
-- Painel do instrutor: Vazio, sem aulas pendentes ou confirmadas
-- Painel do aluno: Vazio, sem próximas aulas
-- Sistema pronto para testar o novo fluxo anti-fraude completo
+O passo 1 passou com status 200 (listou recebedores com sucesso), o que já indica que o Split está funcionando. O erro no passo 2 é apenas porque o payload de teste tem dados bancários inválidos.
 
-## Próximos Passos Após Limpeza
+---
 
-1. Criar uma nova aula de teste via painel do aluno
-2. Completar pagamento (confirmar payment_confirmed = true)
-3. Testar fluxo completo: Em Rota → Cheguei → Confirmar Chegada → Iniciar → Cronômetro → Finalizar → QR Code → Scan → Pagamento
+## Correções Necessárias
+
+### 1. Atualizar Edge Function `check-pagarme-split-enabled`
+
+**Mudanças:**
+- Não tratar status 412 como bloqueio automático
+- Analisar o **conteúdo** da mensagem de erro, não apenas o status HTTP
+- Se a mensagem contém `invalid_parameter`, `invalid format`, etc → Split está OK
+- Apenas bloquear se a mensagem contiver `action_forbidden`, `not allowed`, `company it not allowed`
+
+**Nova lógica:**
+```text
+┌─────────────────────────────────────────────────────────┐
+│                    VERIFICAÇÃO SPLIT                     │
+├─────────────────────────────────────────────────────────┤
+│ 1. Listar recebedores (GET /recipients)                 │
+│    └─ Status 200 → Split provavelmente OK               │
+│    └─ Status 412 + "action_forbidden" → Split OFF       │
+│                                                          │
+│ 2. Tentar criar recebedor de teste (POST /recipients)   │
+│    └─ Status 400/422 + erro validação → Split OK        │
+│    └─ Status 412 + "invalid_parameter" → Split OK       │
+│    └─ Status 412 + "action_forbidden" → Split OFF       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 2. Simplificar Payload de Teste
+
+Usar dados bancários mais realistas para evitar erros de formato:
+- branch_check_digit: remover ou deixar vazio corretamente
+- Usar formato válido esperado pela API
+
+---
+
+## Impacto
+
+Após esta correção:
+- O formulário de cadastro bancário do instrutor (`BankAccountSetup`) vai funcionar
+- Instrutores poderão configurar suas contas bancárias para receber pagamentos
+- O Split 50/50 entre plataforma e instrutor funcionará corretamente
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/check-pagarme-split-enabled/index.ts` | Corrigir lógica de detecção |
+
+---
+
+## Seção Técnica
+
+### Código Atual (Problemático)
+```javascript
+const isCreationBlocked = 
+  createResponse.status === 412 ||  // ← ERRO: trata TODO 412 como bloqueio
+  createErrorMessage.includes("action_forbidden") ||
+  // ...
+```
+
+### Código Corrigido
+```javascript
+// Verificar se é erro de PERMISSÃO (Split desabilitado)
+const isPermissionError = 
+  createErrorMessage.includes("action_forbidden") ||
+  createErrorMessage.includes("not allowed to create") ||
+  createErrorMessage.includes("company it not allowed") ||
+  createErrorMessage.includes("is not allowed") ||
+  errorDetails.includes("action_forbidden") ||
+  errorDetails.includes("not allowed");
+
+// Verificar se é erro de VALIDAÇÃO (Split funciona, dados inválidos)
+const isValidationError =
+  createErrorMessage.includes("invalid_parameter") ||
+  createErrorMessage.includes("invalid format") ||
+  createErrorMessage.includes("invalid") ||
+  createErrorMessage.includes("required") ||
+  createErrorMessage.includes("must be");
+
+// Se é erro de validação, Split está OK!
+if (isValidationError && !isPermissionError) {
+  return { enabled: true, reason: "validation_error_confirms_access" };
+}
+
+// Se é erro de permissão, Split não está habilitado
+if (isPermissionError) {
+  return { enabled: false, reason: "permission_denied" };
+}
+```
+
+### Estratégia Alternativa (Mais Simples)
+Se o passo 1 (listar recebedores) retornar status 200, considerar Split habilitado imediatamente, sem necessidade do passo 2:
+
+```javascript
+if (listResponse.status === 200) {
+  return { enabled: true, reason: "list_recipients_ok" };
+}
+```
+
+---
+
+## Estimativa de Tempo
+
+- Desenvolvimento: 5 minutos
+- Teste e validação: 2 minutos
+- **Total: ~7 minutos**
