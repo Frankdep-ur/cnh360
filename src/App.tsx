@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
+import { GlobalLessonConfirmationModal } from "@/components/aula/GlobalLessonConfirmationModal";
 
 // Critical pages - load immediately
 import Index from "./pages/Index";
@@ -85,6 +86,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          {/* Global modal for instructor arrival - blocks screen until confirmed */}
+          <GlobalLessonConfirmationModal />
           <Suspense fallback={<PageSkeleton />}>
             <Routes>
               {/* Public */}
