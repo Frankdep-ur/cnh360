@@ -151,7 +151,8 @@ export default function InstrutorACaminho() {
       stopTracking();
       
       toast.success("Aluno notificado que você chegou!");
-      navigate(`/instrutor/validar-aula?aulaId=${aulaId}`);
+      // Redireciona para a página correta de gerenciamento de aula
+      navigate(`/instrutor/aula/${aulaId}`);
     } catch (err) {
       console.error("Error:", err);
       toast.error("Erro ao notificar chegada");
