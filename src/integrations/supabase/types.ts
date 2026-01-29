@@ -66,6 +66,7 @@ export type Database = {
         Row: {
           aluno_confirmou_chegada: boolean | null
           aluno_id: string
+          aluno_pronto_para_aula: boolean | null
           aula_fim: string | null
           aula_inicio: string | null
           codigo_validacao: string | null
@@ -85,6 +86,9 @@ export type Database = {
           ponto_encontro: string | null
           qr_code_data: string | null
           qr_code_expires_at: string | null
+          qr_code_inicio_data: string | null
+          qr_code_inicio_expires_at: string | null
+          qr_inicio_validado: boolean | null
           qr_validado: boolean | null
           status: Database["public"]["Enums"]["status_aula"]
           transaction_id: string | null
@@ -97,6 +101,7 @@ export type Database = {
         Insert: {
           aluno_confirmou_chegada?: boolean | null
           aluno_id: string
+          aluno_pronto_para_aula?: boolean | null
           aula_fim?: string | null
           aula_inicio?: string | null
           codigo_validacao?: string | null
@@ -116,6 +121,9 @@ export type Database = {
           ponto_encontro?: string | null
           qr_code_data?: string | null
           qr_code_expires_at?: string | null
+          qr_code_inicio_data?: string | null
+          qr_code_inicio_expires_at?: string | null
+          qr_inicio_validado?: boolean | null
           qr_validado?: boolean | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null
@@ -128,6 +136,7 @@ export type Database = {
         Update: {
           aluno_confirmou_chegada?: boolean | null
           aluno_id?: string
+          aluno_pronto_para_aula?: boolean | null
           aula_fim?: string | null
           aula_inicio?: string | null
           codigo_validacao?: string | null
@@ -147,6 +156,9 @@ export type Database = {
           ponto_encontro?: string | null
           qr_code_data?: string | null
           qr_code_expires_at?: string | null
+          qr_code_inicio_data?: string | null
+          qr_code_inicio_expires_at?: string | null
+          qr_inicio_validado?: boolean | null
           qr_validado?: boolean | null
           status?: Database["public"]["Enums"]["status_aula"]
           transaction_id?: string | null

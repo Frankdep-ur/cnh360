@@ -6,7 +6,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface WorkflowRequest {
   aula_id: string;
-  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr';
+  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr' | 'confirmar_inicio_aluno' | 'validar_qr_inicio' | 'recusar_inicio_aluno';
   qr_data?: string;
   latitude?: number;
   longitude?: number;
@@ -162,10 +162,39 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        updateData = { status: "aguardando_confirmacao", instrutor_chegou: true };
+
+        // Generate QR Code for start
+        const qrInicioTimestamp = new Date().toISOString();
+        const qrInicioPayload = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: qrInicioTimestamp,
+          type: "inicio",
+          version: 2
+        });
+        const qrInicioEncoder = new TextEncoder();
+        const qrInicioData = qrInicioEncoder.encode(qrInicioPayload + Deno.env.get("EDGE_FUNCTION_SECRET"));
+        const qrInicioHashBuffer = await crypto.subtle.digest("SHA-256", qrInicioData);
+        const qrInicioHashArray = Array.from(new Uint8Array(qrInicioHashBuffer));
+        const qrInicioHashHex = qrInicioHashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        
+        const qrCodeInicioData = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: qrInicioTimestamp,
+          hash: qrInicioHashHex,
+          type: "inicio",
+          version: 2
+        });
+
+        updateData = { 
+          status: "aguardando_confirmacao", 
+          instrutor_chegou: true,
+          qr_code_inicio_data: qrCodeInicioData,
+          qr_code_inicio_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+          aluno_pronto_para_aula: false
+        };
         systemMessage = "📍 **CNH360:** Instrutor chegou no local. Confirme sua presença no app!";
         notificationTitle = "Instrutor chegou! 📍";
-        notificationBody = "Confirme a presença para iniciar a aula.";
+        notificationBody = "Confirme sua presença para iniciar a aula.";
         notifyUserId = aula.alunos.user_id;
         auditEvento = "cheguei";
         break;
@@ -208,14 +237,145 @@ Deno.serve(async (req) => {
         auditDadosAdicionais = { tempo_espera_segundos: tempoEspera };
         break;
 
+      case "confirmar_inicio_aluno":
+        if (!isAluno) {
+          return new Response(JSON.stringify({ error: "Apenas aluno pode confirmar início" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_confirmacao") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        updateData = { 
+          aluno_pronto_para_aula: true,
+          aluno_confirmou_chegada: true
+        };
+        systemMessage = "✅ **CNH360:** Aluno confirmou presença. Escaneie o QR Code do aluno!";
+        notificationTitle = "Aluno pronto! ✅";
+        notificationBody = "Escaneie o QR Code no celular do aluno para iniciar.";
+        notifyUserId = aula.instrutores.user_id;
+        auditEvento = "aluno_confirmou_inicio";
+        break;
+
+      case "recusar_inicio_aluno":
+        if (!isAluno) {
+          return new Response(JSON.stringify({ error: "Apenas aluno pode recusar" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_confirmacao") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Don't change status, just log the refusal
+        updateData = { aluno_pronto_para_aula: false };
+        systemMessage = "❌ **CNH360:** Aluno informou que não está no local.";
+        notificationTitle = "Aluno não está no local ❌";
+        notificationBody = "O aluno informou que não pode iniciar a aula agora.";
+        notifyUserId = aula.instrutores.user_id;
+        auditEvento = "aluno_recusou_inicio";
+        break;
+
+      case "validar_qr_inicio":
+        if (!isInstrutor) {
+          return new Response(JSON.stringify({ error: "Apenas instrutor pode validar QR de início" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_confirmacao") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!aula.aluno_pronto_para_aula) {
+          return new Response(JSON.stringify({ error: "Aluno ainda não confirmou presença" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!qr_data) {
+          return new Response(JSON.stringify({ error: "QR code data required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Validate QR expiration
+        if (aula.qr_code_inicio_expires_at && new Date(aula.qr_code_inicio_expires_at) < new Date()) {
+          return new Response(JSON.stringify({ error: "QR Code expirado. Peça ao aluno para confirmar novamente." }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Validate QR data
+        let qrInicioHash = "";
+        try {
+          const scannedQR = JSON.parse(qr_data);
+          const storedQR = JSON.parse(aula.qr_code_inicio_data);
+          
+          if (scannedQR.type !== "inicio") {
+            return new Response(JSON.stringify({ error: "Tipo de QR Code inválido. Use o QR de início." }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          if (scannedQR.aulaId !== storedQR.aulaId || scannedQR.hash !== storedQR.hash) {
+            return new Response(JSON.stringify({ error: "QR Code inválido" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          qrInicioHash = scannedQR.hash;
+        } catch {
+          return new Response(JSON.stringify({ error: "Formato de QR inválido" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        updateData = { 
+          status: "em_andamento",
+          qr_inicio_validado: true,
+          aula_inicio: new Date().toISOString(),
+          instrutor_a_caminho: false
+        };
+        systemMessage = "🎓 **CNH360:** Aula iniciada! Cronômetro ativado.";
+        notificationTitle = "Aula iniciada! 🎓";
+        notificationBody = "Boa aula! O cronômetro está rodando.";
+        notifyUserId = aula.alunos.user_id;
+        auditEvento = "qr_inicio_validado";
+        auditDadosAdicionais = { hash: qrInicioHash };
+        break;
+
       case "iniciar_aula":
+        // LEGACY: Keep for backward compatibility, but prefer validar_qr_inicio
         if (!isInstrutor) {
           return new Response(JSON.stringify({ error: "Apenas instrutor pode iniciar" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (!aula.aluno_confirmou_chegada) {
+        // Check if we have the new QR flow active
+        if (aula.qr_code_inicio_data && !aula.qr_inicio_validado) {
+          return new Response(JSON.stringify({ error: "Escaneie o QR Code do aluno para iniciar" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!aula.aluno_confirmou_chegada && !aula.aluno_pronto_para_aula) {
           return new Response(JSON.stringify({ error: "Aluno ainda não confirmou presença" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },

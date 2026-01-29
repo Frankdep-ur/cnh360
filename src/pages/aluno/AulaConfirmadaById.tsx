@@ -26,6 +26,8 @@ import { useLessonWorkflow } from "@/hooks/useLessonWorkflow";
 import { useAulaTimer } from "@/hooks/useAulaTimer";
 import { AulaTimer } from "@/components/aula/AulaTimer";
 import { QRCodeDisplay } from "@/components/qr/QRCodeDisplay";
+import { LessonStartConfirmationModal } from "@/components/aula/LessonStartConfirmationModal";
+import { toast } from "sonner";
 
 interface AulaData {
   id: string;
@@ -40,10 +42,13 @@ interface AulaData {
   instrutor_a_caminho?: boolean;
   instrutor_chegou?: boolean;
   aluno_confirmou_chegada?: boolean;
+  aluno_pronto_para_aula?: boolean;
   aula_inicio?: string | null;
   aula_fim?: string | null;
   qr_code_data?: string | null;
   qr_code_expires_at?: string | null;
+  qr_code_inicio_data?: string | null;
+  qr_code_inicio_expires_at?: string | null;
 }
 
 const STATUS_CONFIG = {
@@ -145,6 +150,20 @@ export default function AulaConfirmadaById() {
     await executeAction(aulaId, 'confirmar_chegada');
   };
 
+  const handleConfirmarInicio = async () => {
+    if (!aulaId) return;
+    const success = await executeAction(aulaId, 'confirmar_inicio_aluno');
+    if (!success) {
+      toast.error("Erro ao confirmar início");
+    }
+  };
+
+  const handleRecusarInicio = () => {
+    if (!aulaId) return;
+    executeAction(aulaId, 'recusar_inicio_aluno');
+    toast.info("Você informou que não está no local");
+  };
+
   const formatLessonDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
@@ -196,14 +215,40 @@ export default function AulaConfirmadaById() {
   const StatusIcon = currentStatus.icon;
 
   // Determine UI state
-  const showConfirmButton = aula.status === 'aguardando_confirmacao' && !aula.aluno_confirmou_chegada;
-  const showWaitingForStart = aula.status === 'aguardando_confirmacao' && aula.aluno_confirmou_chegada;
+  const showStartModal = aula.status === 'aguardando_confirmacao' && !aula.aluno_pronto_para_aula;
+  const showStartQRCode = aula.status === 'aguardando_confirmacao' && aula.aluno_pronto_para_aula;
+  const showConfirmButton = false; // Legacy - replaced by modal
+  const showWaitingForStart = false; // Legacy - replaced by QR flow
   const showTimer = aula.status === 'em_andamento';
   const showQRCode = aula.status === 'aguardando_qr' && aula.qr_code_data;
   const showCompleted = aula.status === 'concluida';
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
+    <>
+      {/* Full-screen blocking modal for start confirmation */}
+      <LessonStartConfirmationModal
+        isOpen={showStartModal || showStartQRCode}
+        aula={{
+          id: aula.id,
+          ponto_encontro: aula.ponto_encontro,
+          valor: aula.valor,
+          duracao_minutos: aula.duracao_minutos,
+          data_hora: aula.data_hora,
+          qr_code_inicio_data: aula.qr_code_inicio_data,
+          qr_code_inicio_expires_at: aula.qr_code_inicio_expires_at,
+          aluno_pronto_para_aula: aula.aluno_pronto_para_aula,
+        }}
+        instrutor={{
+          nome: aula.instrutor_nome || 'Instrutor',
+          foto: aula.instrutor_foto,
+        }}
+        onConfirm={handleConfirmarInicio}
+        onReject={handleRecusarInicio}
+        isConfirming={workflowLoading}
+        isWaitingForScan={showStartQRCode}
+      />
+
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
       <div className={cn(
         "max-w-md w-full text-center transition-all duration-700",
         showContent ? "opacity-100 scale-100" : "opacity-0 scale-95"
@@ -442,5 +487,6 @@ export default function AulaConfirmadaById() {
         />
       )}
     </div>
+    </>
   );
 }
