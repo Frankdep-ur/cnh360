@@ -163,14 +163,14 @@ export default function ValidacaoAula() {
 
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto space-y-6">
-          {/* RENACH Integration Notice */}
+          {/* Integration Notice - RENACH text removed */}
           <div className="bg-secondary/5 border border-secondary/20 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <Shield className="w-5 h-5 text-secondary" />
               <div>
-                <h3 className="font-medium text-foreground text-sm">Registro Automático RENACH</h3>
+                <h3 className="font-medium text-foreground text-sm">Registro Automático</h3>
                 <p className="text-xs text-muted-foreground">
-                  Esta aula será registrada automaticamente no sistema do DETRAN
+                  Esta aula será registrada automaticamente no sistema
                 </p>
               </div>
             </div>
@@ -338,7 +338,7 @@ export default function ValidacaoAula() {
                 
                 <div className="mt-4 flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 rounded-full bg-primary-foreground animate-pulse" />
-                  <span>GPS ativo • Registrando no RENACH</span>
+                  <span>GPS ativo • Registrando aula</span>
                 </div>
               </div>
 
@@ -364,7 +364,7 @@ export default function ValidacaoAula() {
                 </div>
                 <h2 className="text-2xl font-bold text-primary mb-2">Aula Validada!</h2>
                 <p className="text-muted-foreground mb-4">
-                  {status.totalMinutes} minutos registrados no RENACH
+                  {status.totalMinutes} minutos registrados com sucesso
                 </p>
                 
                 <div className="bg-background rounded-xl p-4 text-left space-y-2">
@@ -381,7 +381,7 @@ export default function ValidacaoAula() {
                     <CheckCircle2 className="w-4 h-4 text-primary" />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Log RENACH</span>
+                    <span className="text-sm text-muted-foreground">Registro da aula</span>
                     <CheckCircle2 className="w-4 h-4 text-primary" />
                   </div>
                 </div>
