@@ -45,9 +45,12 @@ interface AulaData {
   valor: number;
   duracao_minutos: number;
   aluno_confirmou_chegada: boolean;
+  aluno_pronto_para_aula: boolean;
+  qr_inicio_validado: boolean;
   aula_inicio: string | null;
   aula_fim: string | null;
   qr_code_data: string | null;
+  qr_code_inicio_data: string | null;
 }
 
 const STEP_CONFIG = {
@@ -66,6 +69,7 @@ export default function AulaEmAndamento() {
   const [aula, setAula] = useState<AulaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showQRInicioScanner, setShowQRInicioScanner] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   
   const { currentLocation, isTracking, startTracking, stopTracking } = useRealtimeLocation();
@@ -130,6 +134,9 @@ export default function AulaEmAndamento() {
         ...aulaData,
         aluno_nome: alunoNome,
         aluno_foto: alunoFoto,
+        aluno_pronto_para_aula: aulaData.aluno_pronto_para_aula || false,
+        qr_inicio_validado: aulaData.qr_inicio_validado || false,
+        qr_code_inicio_data: aulaData.qr_code_inicio_data || null,
       });
 
     } catch (err) {
@@ -187,6 +194,19 @@ export default function AulaEmAndamento() {
       navigate(`/instrutor`);
     } else {
       setQrError("QR Code inválido ou expirado. Tente regenerar.");
+    }
+  };
+
+  const handleQRInicioScan = async (qrData: string) => {
+    if (!aulaId) return;
+    setQrError(null);
+    
+    const success = await executeAction(aulaId, 'validar_qr_inicio', qrData);
+    if (success) {
+      setShowQRInicioScanner(false);
+      // Aula will change to em_andamento via realtime
+    } else {
+      setQrError("QR Code inválido ou expirado. Peça ao aluno para confirmar novamente.");
     }
   };
 
@@ -391,8 +411,8 @@ export default function AulaEmAndamento() {
             </>
           )}
 
-          {/* Status: aguardando_confirmacao -> Waiting for student */}
-          {aula.status === 'aguardando_confirmacao' && !aula.aluno_confirmou_chegada && (
+          {/* Status: aguardando_confirmacao -> Waiting for student to confirm */}
+          {aula.status === 'aguardando_confirmacao' && !aula.aluno_pronto_para_aula && (
             <Card className="p-6 text-center bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
               <Loader2 className="w-8 h-8 mx-auto mb-3 text-amber-500 animate-spin" />
               <h3 className="font-semibold text-foreground mb-1">Aguardando confirmação</h3>
@@ -402,22 +422,27 @@ export default function AulaEmAndamento() {
             </Card>
           )}
 
-          {/* Status: aguardando_confirmacao + aluno confirmou -> Show "Iniciar Aula" */}
-          {aula.status === 'aguardando_confirmacao' && aula.aluno_confirmou_chegada && (
-            <Button
-              variant="hero"
-              size="xl"
-              className="w-full"
-              onClick={() => handleAction('iniciar_aula')}
-              disabled={workflowLoading}
-            >
-              {workflowLoading ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              ) : (
-                <Play className="w-5 h-5 mr-2" />
-              )}
-              Iniciar Aula
-            </Button>
+          {/* Status: aguardando_confirmacao + aluno pronto -> Scan QR to start */}
+          {aula.status === 'aguardando_confirmacao' && aula.aluno_pronto_para_aula && (
+            <div className="space-y-3">
+              <Card className="p-4 text-center bg-primary/5 border-primary/20">
+                <QrCode className="w-8 h-8 mx-auto mb-2 text-primary" />
+                <h3 className="font-semibold text-foreground mb-1">Aluno confirmou presença!</h3>
+                <p className="text-sm text-muted-foreground">
+                  Escaneie o QR Code no celular do aluno para iniciar
+                </p>
+              </Card>
+              <Button
+                variant="hero"
+                size="xl"
+                className="w-full"
+                onClick={() => setShowQRInicioScanner(true)}
+                disabled={workflowLoading}
+              >
+                <QrCode className="w-5 h-5 mr-2" />
+                Escanear QR Code do Aluno
+              </Button>
+            </div>
           )}
 
           {/* Status: em_andamento -> Show "Finalizar" (conditionally enabled) */}
@@ -500,7 +525,7 @@ export default function AulaEmAndamento() {
         <TripChat aulaId={aulaId} />
       )}
 
-      {/* QR Scanner Modal */}
+      {/* QR Scanner Modal for end of lesson */}
       <QRCodeScanner
         open={showQRScanner}
         onClose={() => {
@@ -508,6 +533,18 @@ export default function AulaEmAndamento() {
           setQrError(null);
         }}
         onScan={handleQRScan}
+        isLoading={workflowLoading}
+        error={qrError}
+      />
+
+      {/* QR Scanner Modal for start of lesson */}
+      <QRCodeScanner
+        open={showQRInicioScanner}
+        onClose={() => {
+          setShowQRInicioScanner(false);
+          setQrError(null);
+        }}
+        onScan={handleQRInicioScan}
         isLoading={workflowLoading}
         error={qrError}
       />
