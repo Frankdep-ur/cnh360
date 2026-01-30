@@ -14,6 +14,8 @@ export function GlobalLessonConfirmationModal() {
     isConfirming,
     confirmStart,
     rejectStart,
+    refreshQR,
+    cancelLesson,
   } = useGlobalLessonMonitor();
 
   // Don't render if no lesson is awaiting confirmation
@@ -43,6 +45,8 @@ export function GlobalLessonConfirmationModal() {
       }}
       onConfirm={confirmStart}
       onReject={rejectStart}
+      onRefreshQR={refreshQR}
+      onCancelLesson={cancelLesson}
       isConfirming={isConfirming}
       isWaitingForScan={showQRPhase}
     />
