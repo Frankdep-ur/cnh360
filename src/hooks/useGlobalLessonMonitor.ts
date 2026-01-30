@@ -21,6 +21,8 @@ interface UseGlobalLessonMonitorReturn {
   isConfirming: boolean;
   confirmStart: () => Promise<void>;
   rejectStart: () => void;
+  refreshQR: () => Promise<void>;
+  cancelLesson: () => Promise<void>;
 }
 
 /**
@@ -205,10 +207,35 @@ export function useGlobalLessonMonitor(): UseGlobalLessonMonitorReturn {
     executeAction(activeLesson.id, 'recusar_inicio_aluno');
   }, [activeLesson, executeAction]);
 
+  // Refresh QR Code
+  const refreshQR = useCallback(async () => {
+    if (!activeLesson) return;
+    
+    const success = await executeAction(activeLesson.id, 'regenerar_qr_inicio');
+    
+    if (success) {
+      // Refetch to get new QR code data
+      setTimeout(checkForAwaitingLesson, 500);
+    }
+  }, [activeLesson, executeAction, checkForAwaitingLesson]);
+
+  // Cancel lesson
+  const cancelLesson = useCallback(async () => {
+    if (!activeLesson) return;
+    
+    const success = await executeAction(activeLesson.id, 'cancelar_aula_aluno');
+    
+    if (success) {
+      setActiveLesson(null);
+    }
+  }, [activeLesson, executeAction]);
+
   return {
     activeLesson,
     isConfirming: isLoading,
     confirmStart,
     rejectStart,
+    refreshQR,
+    cancelLesson,
   };
 }

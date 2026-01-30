@@ -6,7 +6,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface WorkflowRequest {
   aula_id: string;
-  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr' | 'confirmar_inicio_aluno' | 'validar_qr_inicio' | 'recusar_inicio_aluno';
+  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr' | 'confirmar_inicio_aluno' | 'validar_qr_inicio' | 'recusar_inicio_aluno' | 'regenerar_qr_inicio' | 'cancelar_aula_aluno';
   qr_data?: string;
   latitude?: number;
   longitude?: number;
@@ -565,6 +565,86 @@ Deno.serve(async (req) => {
         notificationBody = "Um novo código foi gerado. Apresente ao instrutor.";
         notifyUserId = aula.alunos.user_id;
         auditEvento = "regenerar_qr";
+        break;
+
+      case "regenerar_qr_inicio":
+        if (!isAluno) {
+          return new Response(JSON.stringify({ error: "Apenas aluno pode regenerar QR de início" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_confirmacao") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!aula.aluno_pronto_para_aula) {
+          return new Response(JSON.stringify({ error: "Aluno não confirmou presença ainda" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Generate new start QR code
+        const regenQrInicioTimestamp = new Date().toISOString();
+        const regenQrInicioPayload = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: regenQrInicioTimestamp,
+          type: "inicio",
+          version: 2
+        });
+        const regenQrInicioEncoder = new TextEncoder();
+        const regenQrInicioData = regenQrInicioEncoder.encode(regenQrInicioPayload + Deno.env.get("EDGE_FUNCTION_SECRET"));
+        const regenQrInicioHashBuffer = await crypto.subtle.digest("SHA-256", regenQrInicioData);
+        const regenQrInicioHashArray = Array.from(new Uint8Array(regenQrInicioHashBuffer));
+        const regenQrInicioHashHex = regenQrInicioHashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        
+        const regenQrCodeInicioData = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: regenQrInicioTimestamp,
+          hash: regenQrInicioHashHex,
+          type: "inicio",
+          version: 2
+        });
+
+        updateData = { 
+          qr_code_inicio_data: regenQrCodeInicioData,
+          qr_code_inicio_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        };
+        systemMessage = "🔄 **CNH360:** Novo QR Code de início gerado!";
+        notificationTitle = "Novo QR Code! 📱";
+        notificationBody = "O aluno gerou um novo QR Code. Escaneie para iniciar a aula.";
+        notifyUserId = aula.instrutores.user_id;
+        auditEvento = "regenerar_qr_inicio";
+        break;
+
+      case "cancelar_aula_aluno":
+        if (!isAluno) {
+          return new Response(JSON.stringify({ error: "Apenas aluno pode cancelar neste momento" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!["aguardando_confirmacao", "em_rota"].includes(aula.status)) {
+          return new Response(JSON.stringify({ error: "Não é possível cancelar neste momento" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        updateData = { 
+          status: "cancelada",
+          aluno_pronto_para_aula: false,
+          qr_code_inicio_data: null,
+          qr_code_inicio_expires_at: null
+        };
+        systemMessage = "❌ **CNH360:** Aula cancelada pelo aluno.";
+        notificationTitle = "Aula cancelada ❌";
+        notificationBody = "O aluno cancelou a aula.";
+        notifyUserId = aula.instrutores.user_id;
+        auditEvento = "cancelar_aula_aluno";
         break;
 
       default:
