@@ -15,6 +15,12 @@ export interface AuditoriaEvento {
   created_at: string;
 }
 
+export interface AvaliacaoData {
+  nota: number;
+  comentario: string | null;
+  created_at: string;
+}
+
 export interface AulaComAuditoria {
   id: string;
   data_hora: string;
@@ -30,6 +36,8 @@ export interface AulaComAuditoria {
   instrutor_nome?: string;
   instrutor_foto?: string | null;
   auditoria: AuditoriaEvento[];
+  avaliacao?: AvaliacaoData | null;
+  mensagens_count?: number;
 }
 
 export function useAulaAuditoria(aulaId?: string) {
@@ -212,12 +220,31 @@ export function useAulasConcluidas(role: "instrutor" | "aluno") {
             .eq("aula_id", aula.id)
             .order("timestamp", { ascending: true });
 
+          // Get rating for this lesson
+          const { data: avaliacaoData } = await supabase
+            .from("avaliacoes")
+            .select("nota, comentario, created_at")
+            .eq("aula_id", aula.id)
+            .single();
+
+          // Count messages
+          const { count: mensagensCount } = await supabase
+            .from("mensagens_aula")
+            .select("*", { count: "exact", head: true })
+            .eq("aula_id", aula.id);
+
           return {
             ...aula,
             ...(role === "instrutor"
               ? { aluno_nome: participantInfo.nome, aluno_foto: participantInfo.foto }
               : { instrutor_nome: participantInfo.nome, instrutor_foto: participantInfo.foto }),
             auditoria: (auditoriaData as AuditoriaEvento[]) || [],
+            avaliacao: avaliacaoData ? {
+              nota: avaliacaoData.nota,
+              comentario: avaliacaoData.comentario,
+              created_at: avaliacaoData.created_at
+            } : null,
+            mensagens_count: mensagensCount || 0,
           } as AulaComAuditoria;
         })
       );
