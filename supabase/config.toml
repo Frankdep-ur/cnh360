@@ -25,7 +25,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.capture-payment-pagarme]
-verify_jwt = true
+verify_jwt = false
 
 [functions.cancel-payment-pagarme]
 verify_jwt = true

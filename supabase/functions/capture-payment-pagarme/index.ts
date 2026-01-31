@@ -21,27 +21,44 @@ serve(async (req) => {
       throw new Error("PAGARME_API_KEY não configurada");
     }
 
-    // Auth
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization")!;
-    const token = authHeader.replace("Bearer ", "");
-    
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
-    
-    if (userError || !userData.user) {
-      throw new Error("Usuário não autenticado");
+    // Check for authentication - support both user JWT and internal calls
+    const authHeader = req.headers.get("Authorization");
+    let isInternalCall = false;
+    let userId: string | null = null;
+
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      
+      // Try to authenticate as user
+      const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+      const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+      
+      if (!userError && userData.user) {
+        userId = userData.user.id;
+        logStep("User authenticated", { userId });
+      } else {
+        // Invalid user token but has auth header - treat as internal call
+        isInternalCall = true;
+        logStep("Internal call detected (invalid user token)");
+      }
+    } else {
+      // No auth header = internal call from another Edge Function
+      isInternalCall = true;
+      logStep("Internal call detected (no auth header)");
     }
-    const user = userData.user;
-    logStep("User authenticated", { userId: user.id });
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { aulaId } = await req.json();
-    logStep("Capture request", { aulaId });
+    logStep("Capture request", { aulaId, isInternalCall });
+
+    if (!aulaId) {
+      throw new Error("aulaId é obrigatório");
+    }
 
     // Get lesson data
     const { data: aulaData, error: aulaError } = await supabase
@@ -51,12 +68,16 @@ serve(async (req) => {
       .single();
 
     if (aulaError || !aulaData) {
+      logStep("Lesson not found", { aulaId, error: aulaError });
       throw new Error("Aula não encontrada");
     }
 
-    // Verify the user is the instructor
-    if (aulaData.instrutores.user_id !== user.id) {
-      throw new Error("Apenas o instrutor pode capturar o pagamento");
+    // Authorization check: if not internal call, verify the user is the instructor
+    if (!isInternalCall) {
+      if (userId !== aulaData.instrutores.user_id) {
+        logStep("Unauthorized", { userId, instructorUserId: aulaData.instrutores.user_id });
+        throw new Error("Apenas o instrutor pode capturar o pagamento");
+      }
     }
 
     const transactionId = aulaData.transaction_id;
@@ -82,28 +103,66 @@ serve(async (req) => {
     );
 
     if (!orderResponse.ok) {
+      const errorText = await orderResponse.text();
+      logStep("Failed to fetch order from Pagar.me", { transactionId, error: errorText });
       throw new Error("Erro ao buscar pedido no Pagar.me");
     }
 
     const orderData = await orderResponse.json();
-    logStep("Order fetched", { status: orderData.status });
+    logStep("Order fetched", { status: orderData.status, transactionId });
 
     // Check if already captured/paid
     if (orderData.status === "paid") {
-      logStep("Order already paid");
+      logStep("Order already paid, recording in database");
+      
+      // Record payment if not already recorded
+      const { data: existingPayment } = await supabase
+        .from("pagamentos")
+        .select("id")
+        .eq("aula_id", aulaId)
+        .single();
+
+      if (!existingPayment) {
+        const valorBruto = Number(aulaData.valor);
+        const taxaPlataforma = valorBruto * 0.50; // 50% split
+        const valorInstrutor = valorBruto - taxaPlataforma;
+
+        await supabase.from("pagamentos").insert({
+          aula_id: aulaId,
+          aluno_id: aulaData.aluno_id,
+          instrutor_id: aulaData.instrutor_id,
+          valor_bruto: valorBruto,
+          taxa_plataforma: taxaPlataforma,
+          valor_instrutor: valorInstrutor,
+          metodo: "cartao_credito",
+          status: "aprovado",
+          external_id: transactionId,
+          pago_em: new Date().toISOString(),
+        });
+        logStep("Payment recorded for already-paid order");
+      }
+
       return new Response(
         JSON.stringify({ success: true, message: "Pagamento já capturado" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Check if order is canceled
+    if (orderData.status === "canceled" || orderData.status === "failed") {
+      logStep("Order is canceled/failed", { status: orderData.status });
+      throw new Error(`Pedido ${orderData.status} - não é possível capturar`);
+    }
+
     // Get charge_id for capture
     const chargeId = orderData.charges?.[0]?.id;
     if (!chargeId) {
+      logStep("No charge found", { orderData });
       throw new Error("Charge não encontrado no pedido");
     }
 
     // Capture the charge
+    logStep("Capturing charge", { chargeId });
     const captureResponse = await fetch(
       `https://api.pagar.me/core/v5/charges/${chargeId}/capture`,
       {
@@ -125,11 +184,11 @@ serve(async (req) => {
     }
 
     const captureData = await captureResponse.json();
-    logStep("Payment captured", { chargeId, status: captureData.status });
+    logStep("Payment captured successfully", { chargeId, status: captureData.status });
 
     // Calculate amounts for payment record
     const valorBruto = Number(aulaData.valor);
-    const taxaPlataforma = valorBruto * 0.50; // 50% test split
+    const taxaPlataforma = valorBruto * 0.50; // 50% split
     const valorInstrutor = valorBruto - taxaPlataforma;
 
     // Record payment in database
@@ -151,6 +210,8 @@ serve(async (req) => {
     if (pagamentoError) {
       logStep("Error recording payment", pagamentoError);
       // Don't throw - payment was captured, just log the error
+    } else {
+      logStep("Payment recorded in database");
     }
 
     return new Response(
