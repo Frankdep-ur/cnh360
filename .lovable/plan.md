@@ -1,278 +1,141 @@
 
-# Plano: Sistema Completo de Histórico e Persistência de Dados
 
-## Diagnóstico Completo
+# Plano: Correção da Consulta de Saldo do Instrutor
 
-### Problemas Identificados
+## Diagnóstico
 
-| Problema | Causa | Impacto |
-|----------|-------|---------|
-| **Conversas desaparecem** | Chat só mostra aulas com status `confirmada` ou `em_andamento` | Histórico de conversas perdido após conclusão |
-| **Feedbacks não visíveis** | Página de histórico não exibe avaliações | Alunos não veem feedbacks que deixaram |
-| **Instrutor sem histórico de chat** | Mesmo filtro de status `confirmada`/`em_andamento` | Instrutor não acessa conversas passadas |
-| **Dados estão completos no DB** | ✅ Mensagens e avaliações estão salvas | Problema é de **visualização**, não de armazenamento |
+| Status Atual | Dados |
+|-------------|-------|
+| Pagamento no banco | ✅ R$ 4,52 para Frank Alexandre |
+| Saldo Pagar.me | ❌ R$ 0,00 (retornando zero) |
+| Status do Recipient | `"affiliation"` (em processo de ativação) |
 
-### Evidências do Banco de Dados
+### Por Que o Saldo Mostra Zero
 
-```text
-Mensagens por status de aula:
-- concluida: 13 mensagens ✅ (dados existem)
-- em_rota: 6 mensagens
-- cancelada: 5 mensagens
-- confirmada: 0 mensagens
-- pendente: 0 mensagens
+A Pagar.me **não libera fundos** enquanto o recipient estiver em status `affiliation`. Isso significa que mesmo com pagamentos processados via split, o saldo na API mostra R$ 0,00 até que a conta seja totalmente ativada.
 
-Avaliações salvas: 2 ✅ (com comentários)
-Trilha de auditoria: 18 eventos ✅ (completa)
-```
-
-**Conclusão**: Os dados estão sendo armazenados corretamente. O problema é que as **interfaces de chat e histórico não exibem dados de aulas concluídas**.
+A Edge Function `get-instructor-balance-pagarme` consulta **apenas** a API da Pagar.me, ignorando os pagamentos já registrados no banco de dados.
 
 ---
 
-## Solução Proposta
+## Solução: Saldo Híbrido (Pagar.me + Banco Local)
 
-### 1. Expandir Acesso ao Chat para Aulas Concluídas
+A função vai consultar **duas fontes**:
 
-Atualmente o chat filtra apenas `['confirmada', 'em_andamento']`. Precisamos adicionar `'concluida'` para preservar o histórico.
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  ANTES: Chat só disponível durante a aula                    │
-│  .in('status', ['confirmada', 'em_andamento'])               │
-├──────────────────────────────────────────────────────────────┤
-│  DEPOIS: Chat disponível também após conclusão               │
-│  .in('status', ['confirmada', 'em_andamento', 'concluida'])  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 2. Adicionar Visualização de Avaliações no Histórico
-
-A página `MeuHistorico.tsx` e `HistoricoAulas.tsx` não mostram as avaliações. Vamos adicionar:
-
-- Nota (estrelas) que o aluno deu
-- Comentário do feedback
-- Data da avaliação
-
-### 3. Separar Conversas Ativas de Histórico
-
-Criar abas ou seções para organizar melhor:
+1. **Pagar.me** - Saldo oficial quando a conta estiver ativa
+2. **Banco de dados local** - Soma dos `valor_instrutor` da tabela `pagamentos` quando a conta estiver em processo de ativação
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  📱 TELA DE CHAT                                            │
-│                                                             │
-│  ┌─────────────────┐ ┌─────────────────┐                   │
-│  │   ✉️ Ativas     │ │   📚 Histórico  │                   │
-│  └─────────────────┘ └─────────────────┘                   │
-│                                                             │
-│  [Lista de conversas filtradas por aba selecionada]         │
+│  get-instructor-balance-pagarme                             │
+├─────────────────────────────────────────────────────────────┤
+│  1. Consulta saldo na Pagar.me                              │
+│  2. Verifica status do recipient                            │
+│     ├── status = "active"                                   │
+│     │   └── Retorna saldo da Pagar.me ✅                    │
+│     └── status = "affiliation" / "refused"                  │
+│         └── Consulta soma de pagamentos no banco local      │
+│             └── Retorna como "pendente de liberação" 🔄     │
 └─────────────────────────────────────────────────────────────┘
-```
-
-### 4. Adicionar Seção de Feedback no Histórico de Aulas
-
-```text
-┌────────────────────────────────────────────┐
-│  Aula com João Silva - 31/01              │
-│  ✅ Validada | 50 min                      │
-├────────────────────────────────────────────┤
-│  🏆 Sua Avaliação                          │
-│  ⭐⭐⭐⭐⭐ (5/5)                          │
-│  "Ótimo. Me ajudou muitíssimo"            │
-│  Enviada em 31/01/2026                     │
-├────────────────────────────────────────────┤
-│  💬 Ver Conversa                    [>]   │
-├────────────────────────────────────────────┤
-│  📋 Trilha de Auditoria             [v]   │
-└────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-### 1. `src/pages/aluno/AlunoChat.tsx`
+### 1. `supabase/functions/get-instructor-balance-pagarme/index.ts`
 
-**Mudanças:**
-- Adicionar `'concluida'` ao filtro de status
-- Adicionar abas "Ativas" / "Histórico"
-- Distinguir visualmente aulas concluídas (read-only para novas mensagens)
-
-### 2. `src/pages/instrutor/InstrutorChat.tsx`
-
-**Mudanças:**
-- Adicionar `'concluida'` ao filtro de status
-- Adicionar abas "Ativas" / "Histórico"
-- Distinguir visualmente aulas concluídas
-
-### 3. `src/pages/aluno/MeuHistorico.tsx`
-
-**Mudanças:**
-- Buscar avaliação associada à aula
-- Exibir nota e comentário na expansão do accordion
-- Adicionar botão para ver conversa completa
-
-### 4. `src/pages/instrutor/HistoricoAulas.tsx`
-
-**Mudanças:**
-- Buscar avaliação recebida para cada aula
-- Exibir nota e comentário do aluno
-- Adicionar botão para ver conversa completa
-
-### 5. `src/hooks/useAulaAuditoria.ts`
-
-**Mudanças:**
-- Expandir `AulaComAuditoria` para incluir avaliação
-- Buscar dados da tabela `avaliacoes` junto com auditoria
-
-### 6. `src/components/chat/ChatView.tsx`
-
-**Mudanças:**
-- Adicionar prop `readOnly` para aulas concluídas
-- Esconder input de mensagem quando read-only
-- Mostrar banner informativo "Esta conversa está arquivada"
-
----
-
-## Arquivos a Criar
-
-### 1. `src/components/history/LessonRatingDisplay.tsx`
-
-Componente para exibir avaliação de forma consistente:
+Adicionar consulta ao banco de dados quando a conta estiver em processo de ativação:
 
 ```typescript
-interface LessonRatingDisplayProps {
-  nota: number;
-  comentario: string | null;
-  dataAvaliacao: string;
+// Após obter dados do recipient...
+const recipientStatus = balanceData.recipient?.status || "unknown";
+
+// Se a conta ainda não está ativa, buscar ganhos do banco local
+if (recipientStatus !== "active" || balance.available === 0) {
+  const { data: pagamentosData } = await supabase
+    .from("pagamentos")
+    .select("valor_instrutor, status")
+    .eq("instrutor_id", instrutorData.id)
+    .eq("status", "aprovado");
+
+  const ganhosPendentes = pagamentosData?.reduce(
+    (sum, p) => sum + (p.valor_instrutor || 0), 0
+  ) || 0;
+
+  // Adicionar aos waiting_funds (a receber)
+  balance.waitingFunds = ganhosPendentes;
 }
 ```
 
-### 2. `src/components/history/ChatHistoryButton.tsx`
+### 2. Adicionar Campo `recipientStatus` na Resposta
 
-Botão para abrir histórico de chat de uma aula específica:
+Para mostrar o aviso correto na interface:
 
 ```typescript
-interface ChatHistoryButtonProps {
-  aulaId: string;
-  participantName: string;
-  participantPhoto: string | null;
+return new Response(JSON.stringify({
+  success: true,
+  balance,
+  recipientId,
+  recipientStatus,  // NOVO: "active", "affiliation", etc.
+  message: recipientStatus === "affiliation" 
+    ? "Sua conta está em processo de ativação. Os ganhos serão liberados em breve."
+    : null
+}));
+```
+
+### 3. `src/components/instrutor/InstructorBalanceCard.tsx`
+
+Exibir aviso quando a conta estiver em processo de ativação:
+
+```tsx
+{recipientStatus === "affiliation" && (
+  <Alert className="border-amber-200 bg-amber-50">
+    <Clock className="w-4 h-4 text-amber-600" />
+    <AlertDescription className="text-amber-700">
+      Sua conta bancária está em processo de ativação na operadora de pagamentos. 
+      Os valores serão liberados para saque em até 48 horas.
+    </AlertDescription>
+  </Alert>
+)}
+```
+
+### 4. `src/pages/instrutor/InstrutorGanhos.tsx`
+
+Adicionar estado para o `recipientStatus` e exibir valores corretos:
+
+```tsx
+const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
+
+// Na função fetchBalance:
+if (data?.recipientStatus) {
+  setRecipientStatus(data.recipientStatus);
 }
 ```
 
 ---
 
-## Fluxo de Dados Corrigido
-
-```text
-[Banco de Dados]
-      │
-      ├── mensagens_aula (todas as mensagens) ───────────────────┐
-      │                                                          │
-      ├── avaliacoes (feedbacks) ────────────────────────────────┤
-      │                                                          │
-      ├── aulas_auditoria (trilha de eventos) ───────────────────┤
-      │                                                          ▼
-      │                                              ┌─────────────────────┐
-      │                                              │  INTERFACE UNIFICADA│
-      │                                              ├─────────────────────┤
-      │                                              │  • Chat (ativo/hist)│
-      │                                              │  • Avaliação         │
-      │                                              │  • Auditoria GPS     │
-      │                                              │  • Comprovante PDF   │
-      │                                              └─────────────────────┘
-      │
-[Aulas concluídas agora visíveis em todas as interfaces]
-```
-
----
-
-## Persistência e Integridade
-
-### Verificações a Implementar
-
-1. **Contador de mensagens por aula** - Exibir "15 mensagens" no histórico
-2. **Indicador de avaliação pendente** - Se não avaliou, mostrar "Avaliar"
-3. **Ordenação por data** - Mais recentes primeiro
-4. **Cache local** - Usar React Query para cache inteligente
-
-### Políticas RLS Existentes
-
-As políticas já permitem acesso correto:
-
-```sql
--- mensagens_aula: Participantes podem ver mensagens
-USING (EXISTS (SELECT 1 FROM aulas a JOIN alunos al ... WHERE al.user_id = auth.uid() OR i.user_id = auth.uid()))
-
--- avaliacoes: Público pode ver todas
-USING (true)
-```
-
-**Não há necessidade de alterar RLS** - o problema é apenas na camada de UI.
-
----
-
-## Interface Atualizada do Aluno - Chat
+## Interface Atualizada
 
 ```text
 ┌────────────────────────────────────────────┐
-│  Conversas                                 │
+│  💰 Meus Ganhos                            │
+├────────────────────────────────────────────┤
+│  ⚠️ Sua conta está em ativação             │
+│  Os valores serão liberados em até 48h.    │
+├────────────────────────────────────────────┤
 │                                            │
-│  ┌────────────┐ ┌────────────┐            │
-│  │ 🔔 Ativas  │ │ 📚 Arquivo │            │
-│  └────────────┘ └────────────┘            │
+│  Saldo Disponível                          │
+│  R$ 0,00                                   │
+│  Liberado para saque                       │
 │                                            │
-│  ┌──────────────────────────────────────┐ │
-│  │ 👤 Ricardo (Instrutor)               │ │
-│  │ ✅ Aula concluída                    │ │
-│  │ Última: "Ótimo trabalho hoje!"       │ │
-│  │ 📝 15 mensagens                      │ │
-│  └──────────────────────────────────────┘ │
+│  ┌──────────────┐ ┌──────────────┐        │
+│  │   Pendente   │ │   Este mês   │        │
+│  │   R$ 4,52    │ │   R$ 4,52    │        │
+│  │   Liberação  │ │   Líquido    │        │
+│  │   em 48h     │ │              │        │
+│  └──────────────┘ └──────────────┘        │
 │                                            │
-│  ┌──────────────────────────────────────┐ │
-│  │ 👤 Ana (Instrutora)                  │ │
-│  │ ✅ Aula concluída                    │ │
-│  │ Última: "Até a próxima!"             │ │
-│  │ 📝 8 mensagens                       │ │
-│  └──────────────────────────────────────┘ │
-└────────────────────────────────────────────┘
-```
-
----
-
-## Interface Atualizada - Histórico com Feedback
-
-```text
-┌────────────────────────────────────────────┐
-│  ◀ Meu Histórico                           │
-│                                            │
-│  📊 Progresso para CNH                     │
-│  ████████████░░░░ 75%                      │
-│  15h de 20h mínimas                        │
-│                                            │
-│  ┌──────────────────────────────────────┐ │
-│  │ 👤 Ricardo Gomes       31/01 ✅      │ │
-│  │    50 min | R$ 80                    │ │
-│  └──────────────────────────────────────┘ │
-│    ▼ Detalhes                              │
-│  ┌──────────────────────────────────────┐ │
-│  │ 🏆 Minha Avaliação                   │ │
-│  │ ⭐⭐⭐⭐⭐ Excelente                   │ │
-│  │ "Ótimo. Me ajudou muitíssimo"        │ │
-│  │ 31/01/2026 às 20:50                  │ │
-│  ├──────────────────────────────────────┤ │
-│  │ 💬 Ver Conversa (15 mensagens)   [>] │ │
-│  ├──────────────────────────────────────┤ │
-│  │ 📋 Trilha de Auditoria           [v] │ │
-│  │    • 19:08 - Instrutor a caminho     │ │
-│  │    • 19:08 - Instrutor chegou        │ │
-│  │    • 19:21 - Aula iniciada           │ │
-│  │    • 20:16 - Aula finalizada         │ │
-│  │    • 20:49 - QR Code validado        │ │
-│  ├──────────────────────────────────────┤ │
-│  │ 📥 Baixar Comprovante                │ │
-│  └──────────────────────────────────────┘ │
 └────────────────────────────────────────────┘
 ```
 
@@ -282,104 +145,42 @@ USING (true)
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `AlunoChat.tsx` | **MODIFICAR** | Adicionar status `concluida` + abas |
-| `InstrutorChat.tsx` | **MODIFICAR** | Adicionar status `concluida` + abas |
-| `MeuHistorico.tsx` | **MODIFICAR** | Exibir avaliação + botão ver conversa |
-| `HistoricoAulas.tsx` | **MODIFICAR** | Exibir avaliação + botão ver conversa |
-| `useAulaAuditoria.ts` | **MODIFICAR** | Incluir dados de avaliação |
-| `ChatView.tsx` | **MODIFICAR** | Adicionar modo read-only |
-| `LessonRatingDisplay.tsx` | **CRIAR** | Componente de exibição de avaliação |
-| `ChatHistoryButton.tsx` | **CRIAR** | Botão para abrir histórico de chat |
+| `get-instructor-balance-pagarme/index.ts` | **MODIFICAR** | Consultar banco local + retornar status do recipient |
+| `InstructorBalanceCard.tsx` | **MODIFICAR** | Exibir aviso de conta em ativação |
+| `InstrutorGanhos.tsx` | **MODIFICAR** | Tratar recipientStatus e mostrar valores corretos |
 
 ---
 
 ## Seção Técnica
 
-### Estrutura de Dados Expandida
+### Query para Calcular Ganhos Locais
 
-```typescript
-// useAulaAuditoria.ts - Nova interface
-interface AulaComAuditoria {
-  id: string;
-  data_hora: string;
-  duracao_minutos: number;
-  status: string;
-  valor: number;
-  // ... campos existentes
-  
-  // NOVOS CAMPOS
-  avaliacao?: {
-    nota: number;
-    comentario: string | null;
-    created_at: string;
-  } | null;
-  mensagens_count?: number;
-}
+```sql
+SELECT 
+  SUM(valor_instrutor) as total_pendente,
+  COUNT(*) as total_aulas
+FROM pagamentos
+WHERE instrutor_id = '2cf27a10-3034-431a-bb92-89b08f90adf5'
+  AND status = 'aprovado';
 ```
 
-### Query para Buscar Avaliações
+Resultado esperado para Frank Alexandre: **R$ 4,52** (1 aula concluída)
+
+### Status do Recipient na Pagar.me
+
+| Status | Significado | Ação no App |
+|--------|-------------|-------------|
+| `active` | Conta ativa | Mostra saldo real da Pagar.me |
+| `affiliation` | Em processo de ativação | Mostra ganhos locais como "pendente" |
+| `refused` | Conta recusada | Solicita recadastro bancário |
+| `suspended` | Conta suspensa | Mostra aviso de contato suporte |
+
+### Lógica de Prioridade
 
 ```typescript
-// No useAulasConcluidas
-const { data: avaliacaoData } = await supabase
-  .from("avaliacoes")
-  .select("nota, comentario, created_at")
-  .eq("aula_id", aula.id)
-  .single();
-
-// Contar mensagens
-const { count: mensagensCount } = await supabase
-  .from("mensagens_aula")
-  .select("*", { count: "exact", head: true })
-  .eq("aula_id", aula.id);
+// Ordem de prioridade para mostrar saldo:
+// 1. Se Pagar.me available > 0 → mostrar available
+// 2. Se status = affiliation → mostrar soma do banco como waitingFunds
+// 3. Se status = refused → mostrar erro e pedir recadastro
 ```
 
-### Abas no Chat
-
-```typescript
-type ChatTab = 'ativas' | 'historico';
-
-const [activeTab, setActiveTab] = useState<ChatTab>('ativas');
-
-// Filtro baseado na aba
-const filteredConversas = conversas.filter(c => {
-  if (activeTab === 'ativas') {
-    return ['confirmada', 'em_andamento', 'em_rota', 'aguardando_confirmacao'].includes(c.status);
-  } else {
-    return c.status === 'concluida';
-  }
-});
-```
-
-### ChatView Read-Only
-
-```typescript
-interface ChatViewProps {
-  aulaId: string;
-  // ... outros props
-  readOnly?: boolean;
-}
-
-// No componente
-{readOnly ? (
-  <div className="p-3 border-t bg-muted/50 text-center">
-    <p className="text-sm text-muted-foreground">
-      📚 Esta conversa está arquivada
-    </p>
-  </div>
-) : (
-  <div className="p-3 border-t">
-    {/* Input normal */}
-  </div>
-)}
-```
-
----
-
-## Benefícios Esperados
-
-1. **Histórico completo** - Todas as conversas preservadas e acessíveis
-2. **Feedbacks visíveis** - Alunos veem suas avaliações anteriores
-3. **Instrutores informados** - Veem feedback recebido de cada aula
-4. **Integridade garantida** - Dados já existem, apenas precisam ser exibidos
-5. **Experiência profissional** - Organização clara entre ativo/histórico
