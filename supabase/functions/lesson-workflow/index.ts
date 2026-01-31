@@ -6,7 +6,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface WorkflowRequest {
   aula_id: string;
-  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr' | 'confirmar_inicio_aluno' | 'validar_qr_inicio' | 'recusar_inicio_aluno' | 'regenerar_qr_inicio' | 'cancelar_aula_aluno';
+  action: 'em_rota' | 'cheguei' | 'confirmar_chegada' | 'iniciar_aula' | 'finalizar_aula' | 'validar_qr' | 'regenerar_qr' | 'confirmar_inicio_aluno' | 'validar_qr_inicio' | 'recusar_inicio_aluno' | 'regenerar_qr_inicio' | 'cancelar_aula_aluno' | 'regenerar_qr_aluno';
   qr_data?: string;
   latitude?: number;
   longitude?: number;
@@ -645,6 +645,52 @@ Deno.serve(async (req) => {
         notificationBody = "O aluno cancelou a aula.";
         notifyUserId = aula.instrutores.user_id;
         auditEvento = "cancelar_aula_aluno";
+        break;
+
+      case "regenerar_qr_aluno":
+        // Allow student to regenerate finalization QR code
+        if (!isAluno) {
+          return new Response(JSON.stringify({ error: "Apenas aluno pode regenerar QR de finalização" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aula.status !== "aguardando_qr") {
+          return new Response(JSON.stringify({ error: "Status inválido para esta ação" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Generate new finalization QR code
+        const regenQrAlunoTimestamp = new Date().toISOString();
+        const regenQrAlunoPayload = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: regenQrAlunoTimestamp,
+          version: 1
+        });
+        const regenQrAlunoEncoder = new TextEncoder();
+        const regenQrAlunoData = regenQrAlunoEncoder.encode(regenQrAlunoPayload + Deno.env.get("EDGE_FUNCTION_SECRET"));
+        const regenQrAlunoHashBuffer = await crypto.subtle.digest("SHA-256", regenQrAlunoData);
+        const regenQrAlunoHashArray = Array.from(new Uint8Array(regenQrAlunoHashBuffer));
+        const regenQrAlunoHashHex = regenQrAlunoHashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        
+        const regenQrCodeAlunoData = JSON.stringify({
+          aulaId: aula_id,
+          timestamp: regenQrAlunoTimestamp,
+          hash: regenQrAlunoHashHex,
+          version: 1
+        });
+
+        updateData = { 
+          qr_code_data: regenQrCodeAlunoData,
+          qr_code_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        };
+        systemMessage = "🔄 **CNH360:** Novo QR Code de finalização gerado!";
+        notificationTitle = "Novo QR Code! 📱";
+        notificationBody = "O aluno gerou um novo QR Code de finalização. Escaneie para concluir.";
+        notifyUserId = aula.instrutores.user_id;
+        auditEvento = "regenerar_qr_aluno";
         break;
 
       default:

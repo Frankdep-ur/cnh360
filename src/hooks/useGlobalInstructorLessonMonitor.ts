@@ -12,15 +12,22 @@ interface ActiveLesson {
   aluno_pronto_para_aula: boolean;
   qr_code_inicio_data: string | null;
   qr_code_inicio_expires_at: string | null;
+  qr_code_data: string | null;
+  qr_code_expires_at: string | null;
   ponto_encontro: string | null;
   valor: number;
   duracao_minutos: number;
   data_hora: string;
+  aula_inicio: string | null;
+  aula_fim: string | null;
 }
+
+export type ScanType = 'inicio' | 'fim' | null;
 
 interface UseGlobalInstructorLessonMonitorReturn {
   activeLesson: ActiveLesson | null;
   needsQRScan: boolean;
+  scanType: ScanType;
   isScanning: boolean;
   isLoading: boolean;
   scanQR: (qrData: string) => Promise<boolean>;
@@ -76,6 +83,7 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
     if (!instrutorId) return;
 
     try {
+      // Monitor both 'aguardando_confirmacao' (start) and 'aguardando_qr' (end)
       const { data: aulas, error } = await supabase
         .from('aulas')
         .select(`
@@ -84,17 +92,21 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
           aluno_pronto_para_aula,
           qr_code_inicio_data,
           qr_code_inicio_expires_at,
+          qr_code_data,
+          qr_code_expires_at,
           ponto_encontro,
           valor,
           duracao_minutos,
           data_hora,
+          aula_inicio,
+          aula_fim,
           alunos!inner(
             id,
             user_id
           )
         `)
         .eq('instrutor_id', instrutorId)
-        .in('status', ['aguardando_confirmacao'])
+        .in('status', ['aguardando_confirmacao', 'aguardando_qr'])
         .order('data_hora', { ascending: true })
         .limit(1);
 
@@ -121,17 +133,29 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
           aluno_pronto_para_aula: aula.aluno_pronto_para_aula || false,
           qr_code_inicio_data: aula.qr_code_inicio_data,
           qr_code_inicio_expires_at: aula.qr_code_inicio_expires_at,
+          qr_code_data: aula.qr_code_data,
+          qr_code_expires_at: aula.qr_code_expires_at,
           ponto_encontro: aula.ponto_encontro,
           valor: Number(aula.valor),
           duracao_minutos: aula.duracao_minutos,
           data_hora: aula.data_hora,
+          aula_inicio: aula.aula_inicio,
+          aula_fim: aula.aula_fim,
         };
 
         setActiveLesson(lesson);
 
         // Check if needs QR scan
-        if (aula.status === 'aguardando_confirmacao' && aula.aluno_pronto_para_aula && !dismissed) {
-          setNeedsQRScan(true);
+        // Case 1: Start scan - aguardando_confirmacao with aluno_pronto
+        // Case 2: End scan - aguardando_qr
+        if (!dismissed) {
+          if (aula.status === 'aguardando_confirmacao' && aula.aluno_pronto_para_aula) {
+            setNeedsQRScan(true);
+          } else if (aula.status === 'aguardando_qr') {
+            setNeedsQRScan(true);
+          } else {
+            setNeedsQRScan(false);
+          }
         } else {
           setNeedsQRScan(false);
         }
@@ -183,6 +207,18 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
     };
   }, [instrutorId, fetchActiveLesson]);
 
+  // Determine scan type based on lesson status
+  const currentScanType: ScanType = (() => {
+    if (!activeLesson) return null;
+    if (activeLesson.status === 'aguardando_confirmacao' && activeLesson.aluno_pronto_para_aula) {
+      return 'inicio';
+    }
+    if (activeLesson.status === 'aguardando_qr') {
+      return 'fim';
+    }
+    return null;
+  })();
+
   // Scan QR Code
   const scanQR = useCallback(async (qrData: string): Promise<boolean> => {
     if (!activeLesson) return false;
@@ -190,7 +226,9 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
     setIsScanning(true);
     
     try {
-      const success = await executeAction(activeLesson.id, 'validar_qr_inicio', qrData);
+      // Use different action based on scan type
+      const action = currentScanType === 'inicio' ? 'validar_qr_inicio' : 'validar_qr';
+      const success = await executeAction(activeLesson.id, action, qrData);
       
       if (success) {
         setNeedsQRScan(false);
@@ -206,7 +244,7 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
     } finally {
       setIsScanning(false);
     }
-  }, [activeLesson, executeAction]);
+  }, [activeLesson, executeAction, currentScanType]);
 
   // Dismiss scanner (temporary)
   const dismissScanner = useCallback(() => {
@@ -217,6 +255,7 @@ export function useGlobalInstructorLessonMonitor(): UseGlobalInstructorLessonMon
   return {
     activeLesson,
     needsQRScan,
+    scanType: currentScanType,
     isScanning: isScanning || isWorkflowLoading,
     isLoading,
     scanQR,

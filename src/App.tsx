@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
 import { GlobalLessonConfirmationModal } from "@/components/aula/GlobalLessonConfirmationModal";
+import { GlobalLessonFinalizationModal } from "@/components/aula/GlobalLessonFinalizationModal";
 import { GlobalInstructorQRScanner } from "@/components/aula/GlobalInstructorQRScanner";
 
 // Critical pages - load immediately
@@ -89,7 +90,9 @@ const App = () => (
         <AuthProvider>
           {/* Global modal for instructor arrival - blocks student screen until confirmed */}
           <GlobalLessonConfirmationModal />
-          {/* Global scanner for instructor - auto-opens when student is ready */}
+          {/* Global modal for lesson finalization - blocks student screen until QR scanned */}
+          <GlobalLessonFinalizationModal />
+          {/* Global scanner for instructor - auto-opens when student is ready (start or end) */}
           <GlobalInstructorQRScanner />
           <Suspense fallback={<PageSkeleton />}>
             <Routes>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { 
@@ -11,11 +11,13 @@ import {
   Camera,
   CheckCircle2,
   Scan,
-  AlertTriangle
+  AlertTriangle,
+  Timer,
+  PartyPopper
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useGlobalInstructorLessonMonitor } from '@/hooks/useGlobalInstructorLessonMonitor';
-import { differenceInSeconds } from 'date-fns';
+import { useGlobalInstructorLessonMonitor, ScanType } from '@/hooks/useGlobalInstructorLessonMonitor';
+import { differenceInSeconds, differenceInMinutes } from 'date-fns';
 
 type ScannerPhase = 'confirmation' | 'scanning' | 'validating' | 'success';
 
@@ -23,6 +25,7 @@ export function GlobalInstructorQRScanner() {
   const { 
     activeLesson, 
     needsQRScan, 
+    scanType,
     isScanning: isValidating, 
     scanQR,
     dismissScanner 
@@ -35,6 +38,23 @@ export function GlobalInstructorQRScanner() {
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Determine which QR expiry to use based on scan type
+  const qrExpiresAt = useMemo(() => {
+    if (!activeLesson) return null;
+    return scanType === 'inicio' 
+      ? activeLesson.qr_code_inicio_expires_at 
+      : activeLesson.qr_code_expires_at;
+  }, [activeLesson, scanType]);
+
+  // Calculate elapsed time for finalization
+  const elapsedTime = useMemo(() => {
+    if (!activeLesson?.aula_inicio) return null;
+    const startTime = new Date(activeLesson.aula_inicio);
+    const endTime = activeLesson.aula_fim ? new Date(activeLesson.aula_fim) : new Date();
+    const minutes = differenceInMinutes(endTime, startTime);
+    return `${minutes} min`;
+  }, [activeLesson?.aula_inicio, activeLesson?.aula_fim]);
 
   // Reset to confirmation phase when modal opens
   useEffect(() => {
@@ -57,10 +77,10 @@ export function GlobalInstructorQRScanner() {
 
   // QR Code expiration countdown
   useEffect(() => {
-    if (!activeLesson?.qr_code_inicio_expires_at || !needsQRScan) return;
+    if (!qrExpiresAt || !needsQRScan) return;
 
     const updateCountdown = () => {
-      const expiresAt = new Date(activeLesson.qr_code_inicio_expires_at!);
+      const expiresAt = new Date(qrExpiresAt);
       const now = new Date();
       const secondsRemaining = differenceInSeconds(expiresAt, now);
 
@@ -77,7 +97,7 @@ export function GlobalInstructorQRScanner() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [activeLesson?.qr_code_inicio_expires_at, needsQRScan]);
+  }, [qrExpiresAt, needsQRScan]);
 
   // Stop scanner when not in scanning phase
   const stopScanner = useCallback(async () => {
@@ -118,10 +138,13 @@ export function GlobalInstructorQRScanner() {
     if (success) {
       setPhase('success');
     } else {
-      setScanError('QR Code inválido ou expirado. Peça ao aluno para atualizar.');
+      const errorMsg = scanType === 'inicio'
+        ? 'QR Code inválido ou expirado. Peça ao aluno para atualizar.'
+        : 'QR Code inválido ou expirado. Peça ao aluno para gerar novo.';
+      setScanError(errorMsg);
       setPhase('confirmation');
     }
-  }, [scanQR, stopScanner]);
+  }, [scanQR, stopScanner, scanType]);
 
   // Start camera when entering scanning phase
   const startCamera = useCallback(async () => {
@@ -176,26 +199,43 @@ export function GlobalInstructorQRScanner() {
 
   if (!needsQRScan || !activeLesson) return null;
 
+  // Determine UI based on scan type
+  const isStartScan = scanType === 'inicio';
+  const headerTitle = isStartScan ? 'Iniciar Aula' : 'Concluir Aula';
+  const headerSubtitle = isStartScan 
+    ? 'O aluno está pronto para a aula' 
+    : 'Escaneie para finalizar e liberar pagamento';
+  const headerIcon = isStartScan ? QrCode : PartyPopper;
+  const HeaderIconComponent = headerIcon;
+  const headerBgColor = isStartScan ? 'bg-primary' : 'bg-green-500';
+  const buttonText = isStartScan 
+    ? 'Escanear QR Code do Aluno' 
+    : 'Escanear QR para CONCLUIR';
+  const successTitle = isStartScan ? 'Aula Iniciada!' : 'Aula Concluída!';
+  const successMessage = isStartScan 
+    ? 'O cronômetro começou. Boa aula!' 
+    : 'Pagamento liberado! Parabéns pela aula.';
+
   return (
     <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", headerBgColor)}>
             {phase === 'scanning' ? (
-              <Camera className="w-5 h-5 text-primary-foreground" />
+              <Camera className="w-5 h-5 text-white" />
             ) : (
-              <QrCode className="w-5 h-5 text-primary-foreground" />
+              <HeaderIconComponent className="w-5 h-5 text-white" />
             )}
           </div>
           <div>
             <h1 className="font-bold text-foreground">
-              {phase === 'scanning' ? 'Escaneando...' : 'Iniciar Aula'}
+              {phase === 'scanning' ? 'Escaneando...' : headerTitle}
             </h1>
             <p className="text-xs text-muted-foreground">
               {phase === 'scanning' 
                 ? 'Aponte para o QR Code do aluno' 
-                : 'O aluno está pronto para a aula'}
+                : headerSubtitle}
             </p>
           </div>
         </div>
@@ -229,9 +269,21 @@ export function GlobalInstructorQRScanner() {
                 )}
                 <div className="flex-1">
                   <h3 className="font-bold text-lg text-foreground">{activeLesson.aluno_nome}</h3>
-                  <div className="flex items-center gap-1 text-sm text-green-600 mt-1">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Presença confirmada</span>
+                  <div className={cn(
+                    "flex items-center gap-1 text-sm mt-1",
+                    isStartScan ? "text-green-600" : "text-primary"
+                  )}>
+                    {isStartScan ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Presença confirmada</span>
+                      </>
+                    ) : (
+                      <>
+                        <Timer className="w-4 h-4" />
+                        <span>Duração: {elapsedTime || `${activeLesson.duracao_minutos} min`}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -311,9 +363,11 @@ export function GlobalInstructorQRScanner() {
                     Como funciona
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    1. Clique em "Escanear QR Code" abaixo<br />
+                    1. Clique no botão abaixo<br />
                     2. Aponte a câmera para o celular do aluno<br />
-                    3. A aula iniciará automaticamente após a validação
+                    {isStartScan 
+                      ? '3. A aula iniciará automaticamente após a validação'
+                      : '3. O pagamento será liberado automaticamente'}
                   </p>
                 </div>
               </div>
@@ -328,12 +382,12 @@ export function GlobalInstructorQRScanner() {
             <Button
               variant="hero"
               size="xl"
-              className="w-full"
+              className={cn("w-full", !isStartScan && "bg-green-600 hover:bg-green-700")}
               onClick={startCamera}
               disabled={qrExpiryCountdown === 'Expirado'}
             >
               <Camera className="w-5 h-5 mr-2" />
-              Escanear QR Code do Aluno
+              {buttonText}
             </Button>
             
             <Button
@@ -367,13 +421,28 @@ export function GlobalInstructorQRScanner() {
               <div className="flex-1 bg-black/50" />
               <div className="w-64 h-64 relative">
                 {/* Corner decorations */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
+                <div className={cn(
+                  "absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-lg",
+                  isStartScan ? "border-primary" : "border-green-500"
+                )} />
+                <div className={cn(
+                  "absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-lg",
+                  isStartScan ? "border-primary" : "border-green-500"
+                )} />
+                <div className={cn(
+                  "absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-lg",
+                  isStartScan ? "border-primary" : "border-green-500"
+                )} />
+                <div className={cn(
+                  "absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-lg",
+                  isStartScan ? "border-primary" : "border-green-500"
+                )} />
                 
                 {/* Scanning animation line */}
-                <div className="absolute inset-x-4 top-1/2 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent animate-pulse" />
+                <div className={cn(
+                  "absolute inset-x-4 top-1/2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                  isStartScan ? "via-primary" : "via-green-500"
+                )} />
               </div>
               <div className="flex-1 bg-black/50" />
             </div>
@@ -381,7 +450,9 @@ export function GlobalInstructorQRScanner() {
             {/* Bottom overlay with instructions */}
             <div className="flex-1 bg-black/50 flex flex-col items-center justify-start pt-8">
               <p className="text-white text-center text-sm font-medium px-4">
-                Posicione o QR Code do aluno dentro do quadro
+                {isStartScan 
+                  ? 'Posicione o QR Code do aluno dentro do quadro'
+                  : 'Escaneie o QR Code para CONCLUIR a aula'}
               </p>
               <p className="text-white/60 text-center text-xs mt-2 px-4">
                 A câmera irá detectar automaticamente
@@ -411,20 +482,37 @@ export function GlobalInstructorQRScanner() {
           </div>
           <h2 className="text-xl font-bold text-foreground mb-2">Validando...</h2>
           <p className="text-muted-foreground text-center">
-            Verificando QR Code e iniciando a aula
+            {isStartScan 
+              ? 'Verificando QR Code e iniciando a aula'
+              : 'Concluindo aula e liberando pagamento'}
           </p>
         </div>
       )}
 
       {phase === 'success' && (
         <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center mb-6">
-            <CheckCircle2 className="w-12 h-12 text-white" />
+          <div className={cn(
+            "w-24 h-24 rounded-full flex items-center justify-center mb-6",
+            isStartScan ? "bg-green-500" : "bg-green-500"
+          )}>
+            {isStartScan ? (
+              <CheckCircle2 className="w-12 h-12 text-white" />
+            ) : (
+              <PartyPopper className="w-12 h-12 text-white" />
+            )}
           </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Aula Iniciada!</h2>
+          <h2 className="text-xl font-bold text-foreground mb-2">{successTitle}</h2>
           <p className="text-muted-foreground text-center">
-            O cronômetro começou. Boa aula!
+            {successMessage}
           </p>
+          {!isStartScan && (
+            <div className="mt-4 px-6 py-3 bg-green-500/10 rounded-xl">
+              <p className="text-green-600 font-bold text-lg">
+                R$ {activeLesson.valor.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-green-600 text-sm">creditado na sua conta</p>
+            </div>
+          )}
         </div>
       )}
     </div>
