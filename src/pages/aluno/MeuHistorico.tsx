@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card } from "@/components/ui/card";
@@ -21,20 +21,21 @@ import {
   ChevronLeft,
   Award,
   GraduationCap,
-  Star,
+  MessageCircle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAulasConcluidas } from "@/hooks/useAulaAuditoria";
 import { AuditTrail } from "@/components/aula/AuditTrail";
+import { LessonRatingDisplay } from "@/components/history/LessonRatingDisplay";
 import { generateAulaReportPDF, generateCertificadoHorasPDF } from "@/lib/aulaReportPDF";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
 
 export default function MeuHistorico() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { aulas, loading } = useAulasConcluidas("aluno");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingCertificado, setDownloadingCertificado] = useState(false);
@@ -269,17 +270,42 @@ export default function MeuHistorico() {
                     </div>
                   </AccordionTrigger>
 
-                  <AccordionContent className="px-4 pb-4">
+                  <AccordionContent className="px-4 pb-4 space-y-4">
                     {/* Location */}
                     {aula.ponto_encontro && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 pb-4 border-b">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground pb-4 border-b">
                         <MapPin className="w-4 h-4" />
                         <span>{aula.ponto_encontro}</span>
                       </div>
                     )}
 
+                    {/* Rating Display */}
+                    {aula.avaliacao && (
+                      <LessonRatingDisplay
+                        nota={aula.avaliacao.nota}
+                        comentario={aula.avaliacao.comentario}
+                        dataAvaliacao={aula.avaliacao.created_at}
+                        isOwn={true}
+                      />
+                    )}
+
+                    {/* View Chat Button */}
+                    {aula.mensagens_count && aula.mensagens_count > 0 && (
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => navigate('/aluno/chat', { state: { openAulaId: aula.id } })}
+                      >
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        <span className="flex-1 text-left">Ver Conversa</span>
+                        <span className="text-xs text-muted-foreground">
+                          {aula.mensagens_count} {aula.mensagens_count === 1 ? 'mensagem' : 'mensagens'}
+                        </span>
+                      </Button>
+                    )}
+
                     {/* Audit Trail */}
-                    <div className="mb-4">
+                    <div>
                       <h4 className="font-semibold text-sm text-foreground mb-3">
                         Trilha de Auditoria
                       </h4>

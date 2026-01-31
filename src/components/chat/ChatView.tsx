@@ -18,6 +18,7 @@ interface ChatViewProps {
   instructorPhoto?: string | null;
   onBack: () => void;
   isInstructor?: boolean;
+  readOnly?: boolean;
 }
 
 export function ChatView({ 
@@ -27,7 +28,8 @@ export function ChatView({
   instructorName, 
   instructorPhoto, 
   onBack,
-  isInstructor = false 
+  isInstructor = false,
+  readOnly = false
 }: ChatViewProps) {
   // Support both old and new prop names
   const displayName = contactName || instructorName || 'Contato';
@@ -167,31 +169,39 @@ export function ChatView({
       </div>
 
       {/* Input Area */}
-      <div className="p-3 border-t border-border bg-card mb-20">
-        <div className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Digite uma mensagem..."
-            className="flex-1 rounded-full bg-muted border-0"
-            disabled={sending}
-          />
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={!message.trim() || sending}
-            className="rounded-full shrink-0"
-          >
-            {sending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
+      {readOnly ? (
+        <div className="p-4 border-t border-border bg-muted/50 mb-20 text-center">
+          <p className="text-sm text-muted-foreground">
+            📚 Esta conversa está arquivada
+          </p>
         </div>
-      </div>
+      ) : (
+        <div className="p-3 border-t border-border bg-card mb-20">
+          <div className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Digite uma mensagem..."
+              className="flex-1 rounded-full bg-muted border-0"
+              disabled={sending}
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!message.trim() || sending}
+              className="rounded-full shrink-0"
+            >
+              {sending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {isInstructor ? <InstructorBottomNav /> : <BottomNav />}
     </div>

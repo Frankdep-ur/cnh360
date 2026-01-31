@@ -5,11 +5,14 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Clock,
   ChevronRight,
   Star,
-  MessagesSquare
+  MessagesSquare,
+  Archive,
+  MessageCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,7 +31,13 @@ interface Conversa {
   ultima_mensagem: string | null;
   ultima_mensagem_hora: string | null;
   mensagens_nao_lidas: number;
+  mensagens_count: number;
 }
+
+type ChatTab = 'ativas' | 'historico';
+type StatusAula = "aguardando_confirmacao" | "aguardando_qr" | "cancelada" | "concluida" | "confirmada" | "em_andamento" | "em_rota" | "pendente";
+
+const ACTIVE_STATUSES: StatusAula[] = ['confirmada', 'em_andamento', 'em_rota', 'aguardando_confirmacao', 'aguardando_qr'];
 
 export default function AlunoChat() {
   const { user } = useAuth();
@@ -36,6 +45,7 @@ export default function AlunoChat() {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAulaId, setSelectedAulaId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ChatTab>('ativas');
 
   // Abrir chat automaticamente se vier com openAulaId no state
   useEffect(() => {
@@ -44,6 +54,12 @@ export default function AlunoChat() {
       const conversaExiste = conversas.find(c => c.aula_id === openAulaId);
       if (conversaExiste) {
         setSelectedAulaId(openAulaId);
+        // Set the right tab based on the conversation status
+        if (conversaExiste.status === 'concluida') {
+          setActiveTab('historico');
+        } else {
+          setActiveTab('ativas');
+        }
         // Limpar o state para evitar reabrir ao navegar
         window.history.replaceState({}, document.title);
       }
@@ -68,7 +84,7 @@ export default function AlunoChat() {
         return;
       }
 
-      // Fetch aulas that can have chat (confirmada or em_andamento)
+      // Fetch aulas that can have chat (confirmada, em_andamento, or concluida)
       const { data: aulasData, error } = await supabase
         .from('aulas')
         .select(`
@@ -78,7 +94,7 @@ export default function AlunoChat() {
           instrutor_id
         `)
         .eq('aluno_id', aluno.id)
-        .in('status', ['confirmada', 'em_andamento'])
+        .in('status', [...ACTIVE_STATUSES, 'concluida'])
         .order('data_hora', { ascending: false });
 
       if (error) {
@@ -107,12 +123,18 @@ export default function AlunoChat() {
             .single();
 
           // Count unread messages (messages from instrutor that haven't been read)
-          const { count } = await supabase
+          const { count: unreadCount } = await supabase
             .from('mensagens_aula')
             .select('*', { count: 'exact', head: true })
             .eq('aula_id', aula.id)
             .neq('sender_id', user.id)
             .is('read_at', null);
+
+          // Count total messages
+          const { count: totalCount } = await supabase
+            .from('mensagens_aula')
+            .select('*', { count: 'exact', head: true })
+            .eq('aula_id', aula.id);
 
           return {
             aula_id: aula.id,
@@ -124,7 +146,8 @@ export default function AlunoChat() {
             status: aula.status,
             ultima_mensagem: mensagemData?.content || null,
             ultima_mensagem_hora: mensagemData?.created_at || null,
-            mensagens_nao_lidas: count || 0
+            mensagens_nao_lidas: unreadCount || 0,
+            mensagens_count: totalCount || 0
           };
         })
       );
@@ -137,14 +160,29 @@ export default function AlunoChat() {
   }, [user]);
 
   const selectedConversa = conversas.find(c => c.aula_id === selectedAulaId);
+  
+  // Filter conversations based on active tab
+  const filteredConversas = conversas.filter(c => {
+    if (activeTab === 'ativas') {
+      return ACTIVE_STATUSES.includes(c.status as StatusAula);
+    } else {
+      return c.status === 'concluida';
+    }
+  });
+
+  // Count for tabs
+  const activeCount = conversas.filter(c => ACTIVE_STATUSES.includes(c.status as StatusAula)).length;
+  const historyCount = conversas.filter(c => c.status === 'concluida').length;
 
   if (selectedAulaId && selectedConversa) {
+    const isReadOnly = selectedConversa.status === 'concluida';
     return (
       <ChatView 
         aulaId={selectedAulaId} 
-        instructorName={selectedConversa.instrutor_nome || 'Instrutor'}
-        instructorPhoto={selectedConversa.instrutor_foto}
+        contactName={selectedConversa.instrutor_nome || 'Instrutor'}
+        contactPhoto={selectedConversa.instrutor_foto}
         onBack={() => setSelectedAulaId(null)} 
+        readOnly={isReadOnly}
       />
     );
   }
@@ -158,6 +196,30 @@ export default function AlunoChat() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Conversas</h1>
         </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChatTab)}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="ativas" className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4" />
+              Ativas
+              {activeCount > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs px-1.5">
+                  {activeCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="historico" className="flex items-center gap-2">
+              <Archive className="w-4 h-4" />
+              Arquivo
+              {historyCount > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs px-1.5">
+                  {historyCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Lista de Conversas */}
         {loading ? (
@@ -174,17 +236,21 @@ export default function AlunoChat() {
               </Card>
             ))}
           </div>
-        ) : conversas.length === 0 ? (
+        ) : filteredConversas.length === 0 ? (
           <Card className="p-8 shadow-card text-center">
             <MessagesSquare className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-            <h3 className="font-semibold text-foreground mb-1">Nenhuma conversa ativa</h3>
+            <h3 className="font-semibold text-foreground mb-1">
+              {activeTab === 'ativas' ? 'Nenhuma conversa ativa' : 'Nenhuma conversa arquivada'}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Você poderá conversar com instrutores quando tiver aulas confirmadas
+              {activeTab === 'ativas' 
+                ? 'Você poderá conversar com instrutores quando tiver aulas confirmadas'
+                : 'Conversas de aulas concluídas aparecerão aqui'}
             </p>
           </Card>
         ) : (
           <div className="space-y-3">
-            {conversas.map((conversa) => (
+            {filteredConversas.map((conversa) => (
               <Card 
                 key={conversa.aula_id} 
                 className="p-4 shadow-card cursor-pointer hover:bg-muted/50 transition-colors"
@@ -207,6 +273,11 @@ export default function AlunoChat() {
                     )}
                     {conversa.status === 'em_andamento' && (
                       <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-card" />
+                    )}
+                    {conversa.status === 'concluida' && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-muted rounded-full border-2 border-card flex items-center justify-center">
+                        <Archive className="w-2.5 h-2.5 text-muted-foreground" />
+                      </div>
                     )}
                   </div>
                   
@@ -235,16 +306,29 @@ export default function AlunoChat() {
                       <p className="text-sm text-muted-foreground truncate flex-1">
                         {conversa.ultima_mensagem || 'Nenhuma mensagem ainda'}
                       </p>
-                      {conversa.mensagens_nao_lidas > 0 && (
+                      {activeTab === 'ativas' && conversa.mensagens_nao_lidas > 0 && (
                         <Badge className="bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-w-[20px] text-center">
                           {conversa.mensagens_nao_lidas}
                         </Badge>
+                      )}
+                      {activeTab === 'historico' && conversa.mensagens_count > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {conversa.mensagens_count} msg
+                        </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                       <Clock className="w-3 h-3" />
-                      <span>Aula: {format(new Date(conversa.data_hora), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                      <span>
+                        {activeTab === 'ativas' ? 'Aula: ' : ''}
+                        {format(new Date(conversa.data_hora), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </span>
+                      {conversa.status === 'concluida' && (
+                        <Badge variant="outline" className="ml-2 text-xs py-0">
+                          Concluída
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
