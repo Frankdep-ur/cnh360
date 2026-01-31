@@ -1,258 +1,343 @@
 
+# Plano: Sincronização Global do Fluxo de Finalização de Aula
 
-# Plano: Persistência de Estado e Redirecionamento Automático para Aulas
+## Diagnóstico do Problema
 
-## Problema Identificado
+O sistema atual possui dois fluxos de QR Code:
 
-O sistema atual trata o QR Code como uma **tela estática** em vez de um **estado persistente da aula**. Isso causa os seguintes problemas:
+| Fluxo | Status | Aluno | Instrutor |
+|-------|--------|-------|-----------|
+| **INÍCIO** (✅ Funciona) | `aguardando_confirmacao` | Modal global bloqueante | Scanner global automático |
+| **FINALIZAÇÃO** (❌ Quebrado) | `aguardando_qr` | **Só aparece se estiver na página da aula** | Scanner manual na página |
 
-### Para o Aluno:
-- O QR Code aparece em tela cheia ✅
-- Mas o aluno fica **travado sem ações** (não pode atualizar ou cancelar)
-- Se reabrir o app, precisa navegar manualmente
+### O Que Está Faltando
 
-### Para o Instrutor:
-- Se sair do app e voltar, **perde o ponto de escaneamento**
-- Não é redirecionado automaticamente para a câmera
-- Precisa navegar manualmente até a aula
+1. **Para o ALUNO**: Não existe um monitor global que detecte quando a aula entra em `aguardando_qr` e exiba o QR Code de finalização em tela cheia.
 
-## Solução Proposta
+2. **Para o INSTRUTOR**: O `useGlobalInstructorLessonMonitor` monitora apenas `aguardando_confirmacao`, não monitora `aguardando_qr` para o scan de finalização.
 
-### 1. Hook Global para Instrutor: `useGlobalInstructorLessonMonitor.ts`
+3. **Persistência**: Se o aluno ou instrutor sair do app durante o status `aguardando_qr`, não há redirecionamento automático ao voltar.
 
-Similar ao hook do aluno, este hook irá:
-- Monitorar aulas ativas do instrutor em tempo real
-- Detectar quando há uma aula em `aguardando_confirmacao` com `aluno_pronto_para_aula = true`
-- Redirecionar automaticamente para a tela de escaneamento de QR
+---
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  INSTRUTOR ABRE O APP                                       │
-│                                                             │
-│  Hook verifica: Tenho aula em aguardando_confirmacao?       │
-│     │                                                       │
-│     ├─► SIM + aluno_pronto = true                          │
-│     │      → Redireciona para /instrutor/aula/:id          │
-│     │      → Abre scanner de QR automaticamente            │
-│     │                                                       │
-│     ├─► SIM + aluno_pronto = false                         │
-│     │      → Redireciona para /instrutor/aula/:id          │
-│     │      → Mostra "Aguardando confirmação do aluno"       │
-│     │                                                       │
-│     └─► NÃO                                                 │
-│           → Fluxo normal do dashboard                       │
-└─────────────────────────────────────────────────────────────┘
-```
+## Solução: Espelhar o Fluxo de Início para o Fluxo de Fim
 
-### 2. Componente Global para Instrutor: `GlobalInstructorQRScanner.tsx`
-
-- Montado no `App.tsx` (como o modal do aluno)
-- Quando `aluno_pronto_para_aula = true`, exibe modal de scanner em tela cheia
-- Prioridade máxima (z-[9999])
-- Persiste mesmo que o instrutor navegue para outra página
-
-### 3. Melhorias no Modal do Aluno (`LessonStartConfirmationModal.tsx`)
-
-Adicionar opções de ação quando estiver exibindo o QR Code:
+Vamos criar componentes e hooks paralelos para a finalização:
 
 ```text
-┌────────────────────────────────────────────┐
-│                                            │
-│     📱 Mostre este QR Code                 │
-│                                            │
-│     ┌──────────────────────┐              │
-│     │     [QR CODE]        │              │
-│     │                      │              │
-│     └──────────────────────┘              │
-│                                            │
-│     Expira em: 2:45                        │
-│     ⏳ Aguardando instrutor escanear...    │
-│                                            │
-│  ┌────────────────────────────────────┐   │  ← NOVO
-│  │  🔄 Atualizar QR Code              │   │
-│  └────────────────────────────────────┘   │
-│                                            │
-│  ┌────────────────────────────────────┐   │  ← NOVO
-│  │  ❌ Cancelar aula                  │   │
-│  └────────────────────────────────────┘   │
-│                                            │
-└────────────────────────────────────────────┘
-```
-
-### 4. Fluxo de Estados Persistente
-
-O estado da aula determina **automaticamente** a tela de ambos:
-
-```text
-ESTADO DA AULA          │ APP ALUNO               │ APP INSTRUTOR
-────────────────────────┼─────────────────────────┼─────────────────────────
-confirmada              │ Página normal           │ Botão "Em Rota"
-em_rota                 │ Rastrear instrutor      │ Mapa + "Cheguei"
-aguardando_confirmacao  │ Modal bloqueante        │ Aguardando confirmação
-  + aluno_pronto=false  │   "Confirmar início"    │   
-aguardando_confirmacao  │ Modal com QR Code       │ Modal com Scanner QR
-  + aluno_pronto=true   │   (com ações)           │   (abre automaticamente)
-em_andamento            │ Cronômetro              │ Cronômetro + Finalizar
-aguardando_qr           │ QR Code final           │ Scanner QR final
-concluida               │ Sucesso                 │ Sucesso
+┌──────────────────────────────────────────────────────────────────────────┐
+│  INÍCIO DA AULA (já existe)      │  FINALIZAÇÃO (a criar)               │
+├──────────────────────────────────┼───────────────────────────────────────┤
+│  useGlobalLessonMonitor          │  useGlobalLessonFinalizationMonitor   │
+│  GlobalLessonConfirmationModal   │  GlobalLessonFinalizationModal        │
+│  LessonStartConfirmationModal    │  LessonEndConfirmationModal           │
+├──────────────────────────────────┼───────────────────────────────────────┤
+│  useGlobalInstructorLessonMonitor│  (expandir para incluir aguardando_qr)│
+│  GlobalInstructorQRScanner       │  (expandir para incluir fase de fim)  │
+└──────────────────────────────────┴───────────────────────────────────────┘
 ```
 
 ---
 
 ## Arquivos a Criar
 
-### 1. `src/hooks/useGlobalInstructorLessonMonitor.ts`
+### 1. `src/hooks/useGlobalLessonFinalizationMonitor.ts`
 
-Hook que monitora aulas ativas do instrutor e retorna:
-- `activeLesson` - aula que precisa de atenção
-- `needsQRScan` - se o aluno já confirmou e espera scan
-- `aulaId` - ID para navegação/ação
+Hook para o ALUNO que monitora aulas em status `aguardando_qr`:
 
-### 2. `src/components/aula/GlobalInstructorQRScanner.tsx`
+- Detecta quando a aula muda para `aguardando_qr`
+- Fornece os dados do QR Code de finalização (`qr_code_data`)
+- Permite regenerar o QR Code se expirar
+- Usa Realtime + polling como fallback
 
-Componente modal que:
-- Detecta quando `aluno_pronto_para_aula = true`
-- Exibe scanner de QR em tela cheia
-- Fecha automaticamente quando aula muda para `em_andamento`
+### 2. `src/components/aula/GlobalLessonFinalizationModal.tsx`
+
+Componente global para o ALUNO montado no `App.tsx`:
+
+- Modal fullscreen bloqueante (z-[9999])
+- Exibe QR Code de finalização em tela cheia
+- Mostra contador de expiração
+- Botão "Atualizar QR Code"
+- Aguarda o instrutor escanear para fechar automaticamente
+
+### 3. `src/components/aula/LessonEndConfirmationModal.tsx`
+
+Componente UI do modal de finalização:
+
+- QR Code grande e claro
+- Mensagem "Mostre para o instrutor validar a aula"
+- Countdown de expiração
+- Botão para regenerar QR
+- Animação de "Aguardando escaneamento..."
 
 ---
 
 ## Arquivos a Modificar
 
-### 1. `src/App.tsx`
+### 1. `src/hooks/useGlobalInstructorLessonMonitor.ts`
 
-Adicionar o componente `GlobalInstructorQRScanner` junto ao `GlobalLessonConfirmationModal`
+Expandir para também monitorar status `aguardando_qr`:
 
-### 2. `src/components/aula/LessonStartConfirmationModal.tsx`
+```typescript
+// Atual: só monitora 'aguardando_confirmacao'
+.in('status', ['aguardando_confirmacao'])
 
-Adicionar:
-- Botão "Atualizar QR Code" (chama ação `regenerar_qr_inicio`)
-- Botão "Cancelar aula" (com confirmação)
-- Status mais claro do estado atual
+// Modificar para:
+.in('status', ['aguardando_confirmacao', 'aguardando_qr'])
+```
 
-### 3. `src/hooks/useLessonWorkflow.ts`
+Adicionar lógica para distinguir:
+- `aguardando_confirmacao` + `aluno_pronto = true` → Scan de INÍCIO
+- `aguardando_qr` → Scan de FINALIZAÇÃO
 
-Adicionar nova action: `regenerar_qr_inicio`
+### 2. `src/components/aula/GlobalInstructorQRScanner.tsx`
 
-### 4. `supabase/functions/lesson-workflow/index.ts`
+Expandir para suportar dois modos de escaneamento:
 
-Adicionar handler para `regenerar_qr_inicio` que:
-- Gera novo QR Code de início
-- Atualiza `qr_code_inicio_data` e `qr_code_inicio_expires_at`
+- Modo INÍCIO: valida `qr_code_inicio_data` → chama `validar_qr_inicio`
+- Modo FINALIZAÇÃO: valida `qr_code_data` → chama `validar_qr`
+
+Adicionar indicação visual clara de qual fase está:
+- "Escanear para INICIAR aula" (modo início)
+- "Escanear para CONCLUIR aula" (modo fim)
+
+### 3. `src/App.tsx`
+
+Adicionar o novo componente global:
+
+```tsx
+<GlobalLessonConfirmationModal />     {/* Já existe - início */}
+<GlobalLessonFinalizationModal />     {/* NOVO - fim */}
+<GlobalInstructorQRScanner />         {/* Já existe - expandir */}
+```
+
+### 4. `src/hooks/useLessonWorkflow.ts`
+
+Verificar se a action `regenerar_qr` (para o aluno regenerar QR de fim) está disponível. Atualmente só o instrutor pode regenerar - precisamos permitir que o aluno também regenere.
+
+### 5. `supabase/functions/lesson-workflow/index.ts`
+
+Adicionar nova action `regenerar_qr_aluno` que permite ao ALUNO regenerar o QR de finalização:
+
+```typescript
+case "regenerar_qr_aluno":
+  if (!isAluno) throw "Apenas aluno pode regenerar";
+  if (aula.status !== "aguardando_qr") throw "Status inválido";
+  // Gerar novo qr_code_data e qr_code_expires_at
+```
 
 ---
 
-## Comportamento Esperado
+## Fluxo Completo de Finalização
 
-### Cenário: Instrutor sai e volta ao app
+```text
+[Instrutor]                    [Sistema]                    [Aluno]
+     |                              |                           |
+     |--"Finalizar aula"---------->|                           |
+     |  (90% duração mínima)       |                           |
+     |                              |--status = aguardando_qr   |
+     |                              |--qr_code_data gerado      |
+     |                              |--Notificação push-------->|
+     |                              |                           |
+     |                              |<--Hook detecta mudança----|
+     |                              |--Modal fullscreen-------->|
+     |                              |                           |--QR Code exibido
+     |                              |                           |
+     |<--Hook detecta status=qr----|                           |
+     |--Scanner abre automatico    |                           |
+     |                              |                           |
+     |--Scan QR-------------------->|                           |
+     |                              |--validar_qr               |
+     |                              |--status = concluida       |
+     |                              |--capture-payment-pagarme  |
+     |                              |--Split 50/50              |
+     |                              |--Notificação pagamento--->|
+     |                              |                           |
+     |<--"Pagamento liberado!"-----|--Modal fecha              |
+```
 
-1. Instrutor clicou "Cheguei" → status = `aguardando_confirmacao`
-2. Instrutor fecha o app
-3. Aluno confirma presença → `aluno_pronto_para_aula = true`
-4. Instrutor reabre o app
-5. **NOVO**: Hook detecta estado e abre scanner automaticamente
-6. Instrutor escaneia QR → aula inicia
+---
 
-### Cenário: Aluno precisa regenerar QR
+## Persistência de Estado
 
-1. Aluno confirmou presença → exibe QR Code
-2. QR expira (5 minutos)
-3. **NOVO**: Aluno clica "Atualizar QR Code"
-4. Backend gera novo QR
-5. Aluno mostra novo QR para instrutor
+### Cenário: Aluno sai do app durante `aguardando_qr`
 
-### Cenário: Aluno quer cancelar
+1. Instrutor clica "Finalizar" → status = `aguardando_qr`
+2. Modal aparece para o aluno com QR
+3. **Aluno fecha o app**
+4. Aluno reabre o app
+5. **NOVO**: `useGlobalLessonFinalizationMonitor` detecta aula em `aguardando_qr`
+6. Modal reabre automaticamente com QR Code
+7. Se expirou, botão "Atualizar" gera novo QR
 
-1. Aluno confirmou presença → exibe QR Code
-2. **NOVO**: Aluno clica "Cancelar aula"
-3. Modal de confirmação aparece
-4. Se confirmar, aula é cancelada e ambos são notificados
+### Cenário: Instrutor sai do app durante `aguardando_qr`
+
+1. Instrutor clicou "Finalizar" → status = `aguardando_qr`
+2. **Instrutor fecha o app**
+3. Instrutor reabre o app
+4. **NOVO**: `useGlobalInstructorLessonMonitor` detecta aula em `aguardando_qr`
+5. Scanner de finalização abre automaticamente
+6. Instrutor escaneia → aula concluída
+
+---
+
+## Liberação de Pagamento
+
+O fluxo de pagamento já está implementado corretamente:
+
+1. `validar_qr` (instrutor escaneia QR de fim)
+2. `releasePayment = true`
+3. Chama `capture-payment-pagarme`
+4. Pagar.me captura a transação
+5. Split 50/50 aplicado automaticamente
+6. Notificação enviada ao instrutor (in-app + WhatsApp)
+7. Saldo atualizado no dashboard
+
+---
+
+## Interface do Aluno - Modal de Finalização
+
+```text
+┌────────────────────────────────────────────┐
+│           🎓 Aula finalizada!              │
+│                                            │
+│    Mostre o QR Code para o instrutor       │
+│                                            │
+│     ┌──────────────────────┐              │
+│     │     [QR CODE]        │              │
+│     │    (finalização)     │              │
+│     └──────────────────────┘              │
+│                                            │
+│     ⏱️ Expira em: 3:45                    │
+│     ⏳ Aguardando instrutor escanear...    │
+│                                            │
+│  ┌────────────────────────────────────┐   │
+│  │  🔄 Atualizar QR Code              │   │
+│  └────────────────────────────────────┘   │
+│                                            │
+│  🔒 A validação garante o pagamento       │
+│     correto ao instrutor                   │
+└────────────────────────────────────────────┘
+```
+
+---
+
+## Interface do Instrutor - Scanner de Finalização
+
+```text
+┌────────────────────────────────────────────┐
+│  🎯 Concluir Aula                    [X]   │
+├────────────────────────────────────────────┤
+│                                            │
+│     ┌──────────────────┐                  │
+│     │   [Foto Aluno]   │                  │
+│     └──────────────────┘                  │
+│     João Silva                             │
+│     ✅ Aula de 50 min concluída           │
+│                                            │
+│     💰 Valor: R$ 10,00                    │
+│     📍 Local: Centro - Rua X              │
+│                                            │
+├────────────────────────────────────────────┤
+│  ⏱️ QR expira em 4:32                     │
+│                                            │
+│  ┌────────────────────────────────────┐   │
+│  │  📷 Escanear QR para CONCLUIR      │   │
+│  └────────────────────────────────────┘   │
+│                                            │
+│  Após o scan, o pagamento será liberado    │
+└────────────────────────────────────────────┘
+```
+
+---
+
+## Resumo das Mudanças
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `useGlobalLessonFinalizationMonitor.ts` | **CRIAR** | Monitora `aguardando_qr` para o aluno |
+| `GlobalLessonFinalizationModal.tsx` | **CRIAR** | Modal fullscreen com QR de fim |
+| `LessonEndConfirmationModal.tsx` | **CRIAR** | UI do modal de finalização |
+| `useGlobalInstructorLessonMonitor.ts` | **MODIFICAR** | Adicionar monitoramento de `aguardando_qr` |
+| `GlobalInstructorQRScanner.tsx` | **MODIFICAR** | Adicionar modo de finalização |
+| `App.tsx` | **MODIFICAR** | Adicionar `GlobalLessonFinalizationModal` |
+| `useLessonWorkflow.ts` | **MODIFICAR** | Adicionar action `regenerar_qr_aluno` |
+| `lesson-workflow/index.ts` | **MODIFICAR** | Handler para `regenerar_qr_aluno` |
 
 ---
 
 ## Seção Técnica
 
-### Estrutura do `useGlobalInstructorLessonMonitor.ts`
+### Estrutura do `useGlobalLessonFinalizationMonitor.ts`
 
 ```typescript
-interface UseGlobalInstructorLessonMonitorReturn {
+interface UseGlobalLessonFinalizationMonitorReturn {
   activeLesson: {
     id: string;
     status: string;
-    aluno_nome: string;
-    aluno_foto: string | null;
-    aluno_pronto_para_aula: boolean;
-    qr_code_inicio_data: string | null;
+    qr_code_data: string | null;
+    qr_code_expires_at: string | null;
+    instrutor_nome: string;
+    instrutor_foto: string | null;
+    valor: number;
+    duracao_minutos: number;
   } | null;
-  needsQRScan: boolean;
-  isScanning: boolean;
-  scanQR: (qrData: string) => Promise<boolean>;
+  isRefreshing: boolean;
+  refreshQR: () => Promise<void>;
 }
 ```
 
 ### Lógica de Detecção
 
 ```typescript
-// No hook do instrutor
-const checkForActiveLesson = async () => {
+const checkForFinalizationLesson = async () => {
   const { data: aulas } = await supabase
     .from('aulas')
     .select('*')
-    .eq('instrutor_id', instrutorId)
-    .in('status', ['aguardando_confirmacao', 'em_andamento', 'aguardando_qr'])
+    .eq('aluno_id', alunoId)
+    .eq('status', 'aguardando_qr')  // <- Diferença do hook de início
     .order('data_hora', { ascending: true })
     .limit(1);
     
   if (aulas?.length > 0) {
-    const aula = aulas[0];
-    setActiveLesson(aula);
-    
-    // Se aluno pronto e status aguardando, precisa escanear
-    if (aula.status === 'aguardando_confirmacao' && aula.aluno_pronto_para_aula) {
-      setNeedsQRScan(true);
-    }
+    setActiveLesson(aulas[0]);
   }
 };
 ```
 
-### Nova Action: `regenerar_qr_inicio`
+### Nova Action: `regenerar_qr_aluno`
 
 ```typescript
-case "regenerar_qr_inicio":
-  if (!isAluno) throw "Apenas aluno pode regenerar QR de início";
-  if (aula.status !== "aguardando_confirmacao") throw "Status inválido";
-  if (!aula.aluno_pronto_para_aula) throw "Aluno não confirmou presença";
+case "regenerar_qr_aluno":
+  if (!isAluno) throw "Apenas aluno pode regenerar QR de fim";
+  if (aula.status !== "aguardando_qr") throw "Status inválido";
   
-  // Gerar novo QR
-  const novoQRInicio = JSON.stringify({
-    type: "inicio",
+  // Gerar novo QR de finalização
+  const novoQRFim = JSON.stringify({
     aulaId: aula_id,
     timestamp: new Date().toISOString(),
-    hash: await generateHash(...)
+    hash: await generateHash(...),
+    version: 1
   });
   
   updateData = {
-    qr_code_inicio_data: novoQRInicio,
-    qr_code_inicio_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+    qr_code_data: novoQRFim,
+    qr_code_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
   };
 ```
 
-### Prioridade de Z-Index
+### Distinção no Scanner do Instrutor
 
-- `GlobalLessonConfirmationModal` (aluno): z-[9999]
-- `GlobalInstructorQRScanner` (instrutor): z-[9999]
-- Ambos usam `position: fixed` e `inset-0`
-
----
-
-## Resumo das Mudanças
-
-| Componente | Mudança | Impacto |
-|------------|---------|---------|
-| `useGlobalInstructorLessonMonitor.ts` | **CRIAR** | Instrutor é redirecionado automaticamente |
-| `GlobalInstructorQRScanner.tsx` | **CRIAR** | Scanner abre sozinho quando aluno confirma |
-| `App.tsx` | **MODIFICAR** | Montar componente global do instrutor |
-| `LessonStartConfirmationModal.tsx` | **MODIFICAR** | Adicionar botões de ação para aluno |
-| `useLessonWorkflow.ts` | **MODIFICAR** | Nova action `regenerar_qr_inicio` |
-| `lesson-workflow/index.ts` | **MODIFICAR** | Handler para regenerar QR de início |
+```typescript
+// No useGlobalInstructorLessonMonitor
+const scanType = useMemo(() => {
+  if (activeLesson?.status === 'aguardando_confirmacao' && activeLesson.aluno_pronto_para_aula) {
+    return 'inicio';  // Escanear qr_code_inicio_data
+  }
+  if (activeLesson?.status === 'aguardando_qr') {
+    return 'fim';  // Escanear qr_code_data
+  }
+  return null;
+}, [activeLesson]);
+```
 
