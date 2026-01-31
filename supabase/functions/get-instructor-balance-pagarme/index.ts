@@ -64,7 +64,6 @@ serve(async (req) => {
 
     if (!instrutorData.pagarme_recipient_id) {
       // Return 200 with needsSetup flag instead of 400 error
-      // This allows the frontend to handle it gracefully
       return new Response(
         JSON.stringify({ 
           success: false,
@@ -73,7 +72,7 @@ serve(async (req) => {
         }),
         { 
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200, // Use 200 so frontend doesn't treat as error
+          status: 200,
         }
       );
     }
@@ -102,6 +101,22 @@ serve(async (req) => {
 
     logStep("Balance fetched successfully", balanceData);
 
+    // Also fetch recipient status
+    const recipientResponse = await fetch(
+      `https://api.pagar.me/core/v5/recipients/${recipientId}`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const recipientData = await recipientResponse.json();
+    const recipientStatus = recipientData?.status || "unknown";
+    logStep("Recipient status", { recipientStatus });
+
     // Parse balance data from Pagar.me response
     // Pagar.me returns amounts in cents
     const balance: BalanceResponse = {
@@ -111,11 +126,52 @@ serve(async (req) => {
       currency: balanceData.available?.currency || "BRL",
     };
 
+    // HYBRID BALANCE LOGIC:
+    // If recipient is not active or balance is zero, fetch local payments as pending
+    if (recipientStatus !== "active" || (balance.available === 0 && balance.waitingFunds === 0)) {
+      logStep("Fetching local payments as fallback", { recipientStatus });
+
+      // Query local payments for this instructor
+      const { data: pagamentosData, error: pagamentosError } = await supabase
+        .from("pagamentos")
+        .select("valor_instrutor, status")
+        .eq("instrutor_id", instrutorData.id)
+        .eq("status", "aprovado");
+
+      if (!pagamentosError && pagamentosData) {
+        const ganhosPendentes = pagamentosData.reduce(
+          (sum, p) => sum + (p.valor_instrutor || 0), 0
+        );
+        
+        logStep("Local pending earnings calculated", { 
+          totalPayments: pagamentosData.length,
+          ganhosPendentes 
+        });
+
+        // Add local gains to waitingFunds (since they're pending release)
+        if (ganhosPendentes > 0) {
+          balance.waitingFunds = ganhosPendentes;
+        }
+      }
+    }
+
+    // Determine message based on status
+    let message: string | null = null;
+    if (recipientStatus === "affiliation") {
+      message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
+    } else if (recipientStatus === "refused") {
+      message = "Sua conta bancária foi recusada. Por favor, reconfigure seus dados bancários.";
+    } else if (recipientStatus === "suspended") {
+      message = "Sua conta está suspensa. Entre em contato com o suporte.";
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         balance,
         recipientId,
+        recipientStatus,
+        message,
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
