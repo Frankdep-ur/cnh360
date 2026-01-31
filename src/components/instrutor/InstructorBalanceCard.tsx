@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,6 +23,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<BalanceData | null>(null);
+  const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -58,6 +60,14 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
       if (data?.balance) {
         setBalance(data.balance);
         setLastUpdated(new Date());
+      }
+
+      if (data?.recipientStatus) {
+        setRecipientStatus(data.recipientStatus);
+      }
+
+      if (data?.message) {
+        setStatusMessage(data.message);
       }
     } catch (err: any) {
       console.error("[InstructorBalanceCard] Error:", err);
@@ -125,6 +135,28 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
         </Button>
       </div>
 
+      {/* Status Alert for Affiliation/Refused/Suspended */}
+      {recipientStatus && recipientStatus !== "active" && statusMessage && (
+        <Alert className={cn(
+          "mb-4",
+          recipientStatus === "affiliation" && "border-amber-200 bg-amber-50 dark:bg-amber-900/20",
+          recipientStatus === "refused" && "border-destructive/50 bg-destructive/10",
+          recipientStatus === "suspended" && "border-destructive/50 bg-destructive/10"
+        )}>
+          {recipientStatus === "affiliation" ? (
+            <Hourglass className="w-4 h-4 text-amber-600" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-destructive" />
+          )}
+          <AlertDescription className={cn(
+            recipientStatus === "affiliation" && "text-amber-700 dark:text-amber-300",
+            (recipientStatus === "refused" || recipientStatus === "suspended") && "text-destructive"
+          )}>
+            {statusMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Content */}
       {!balance && !loading && !error && (
         <Button 
@@ -172,11 +204,14 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
             <div className="bg-muted/50 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <Clock className="w-3 h-3" />
-                A receber
+                {recipientStatus === "affiliation" ? "Pendente (ativação)" : "A receber"}
               </div>
               <div className="font-semibold text-foreground">
                 {formatCurrency(balance.waitingFunds, balance.currency)}
               </div>
+              {recipientStatus === "affiliation" && balance.waitingFunds > 0 && (
+                <p className="text-xs text-amber-600 mt-1">Liberação em 48h</p>
+              )}
             </div>
             
             <div className="bg-muted/50 rounded-xl p-3">

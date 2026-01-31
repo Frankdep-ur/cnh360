@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Wallet, 
   TrendingUp, 
@@ -24,7 +25,9 @@ import {
   QrCode,
   Banknote,
   Car,
-  Loader2
+  Loader2,
+  Hourglass,
+  AlertCircle
 } from "lucide-react";
 
 export default function InstrutorGanhos() {
@@ -37,8 +40,10 @@ export default function InstrutorGanhos() {
   const [balance, setBalance] = useState<{ available: number; waitingFunds: number } | null>(null);
   const [hasRecipient, setHasRecipient] = useState(false);
   const [loadingBalance, setLoadingBalance] = useState(true);
+  const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Fetch real balance from Pagar.me
+  // Fetch real balance from Pagar.me (hybrid: API + local DB fallback)
   const fetchBalance = async () => {
     setLoadingBalance(true);
     try {
@@ -59,6 +64,14 @@ export default function InstrutorGanhos() {
         });
         setHasRecipient(true);
       }
+
+      // Handle recipient status for activation warnings
+      if (data?.recipientStatus) {
+        setRecipientStatus(data.recipientStatus);
+      }
+      if (data?.message) {
+        setStatusMessage(data.message);
+      }
     } catch (err) {
       console.error("Error:", err);
     } finally {
@@ -71,8 +84,8 @@ export default function InstrutorGanhos() {
   }, []);
 
   const saldo = {
-    disponivel: balance?.available ?? 1037,
-    pendente: balance?.waitingFunds ?? 480,
+    disponivel: balance?.available ?? 0,
+    pendente: balance?.waitingFunds ?? 0,
     totalMes: 4850,
     taxaPaga: 1358,
     taxaAtual: isPremium ? 18 : 28,
@@ -157,6 +170,28 @@ export default function InstrutorGanhos() {
             Filtrar
           </Button>
         </div>
+
+        {/* Status Alert for Account Activation */}
+        {recipientStatus && recipientStatus !== "active" && statusMessage && (
+          <Alert className={
+            recipientStatus === "affiliation" 
+              ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" 
+              : "border-destructive/50 bg-destructive/10"
+          }>
+            {recipientStatus === "affiliation" ? (
+              <Hourglass className="w-4 h-4 text-amber-600" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-destructive" />
+            )}
+            <AlertDescription className={
+              recipientStatus === "affiliation" 
+                ? "text-amber-700 dark:text-amber-300" 
+                : "text-destructive"
+            }>
+              {statusMessage}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Card className="p-4 shadow-card gradient-primary text-primary-foreground col-span-2">
