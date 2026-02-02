@@ -106,12 +106,12 @@ export default function AlunoDashboard() {
             
             const { data: progresso } = await supabase
               .from('progresso_renach')
-              .select('curso_teorico_conclusao, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
+              .select('exame_medico_concluido, curso_teorico_conclusao, aulas_praticas_conclusao, exame_pratico_resultado, prova_teorica_detran_aprovada')
               .eq('aluno_id', aluno.id)
               .maybeSingle();
             
             setProgressoRenach({
-              exame_medico_concluido: true,
+              exame_medico_concluido: progresso?.exame_medico_concluido ?? false,
               prova_teorica_detran_aprovada: progresso?.prova_teorica_detran_aprovada ?? false,
               ...progresso
             });
@@ -178,9 +178,9 @@ export default function AlunoDashboard() {
   
   const minRequiredHours = 2; // Mínimo obrigatório pela Res. 1.020/2025
   
-  // Status derivados do progresso real (ignora datas de teste no banco)
-  // Exame Médico: mantém como false por padrão (usuário não pode marcar manualmente)
-  const exameMedicoCompleto = false;
+  // Status derivados do progresso real
+  // Exame Médico: lê do banco de dados
+  const exameMedicoCompleto = progressoRenach?.exame_medico_concluido ?? false;
   
   // Curso Teórico: SÓ completo se progressoGeral for EXATAMENTE 100%
   const cursoTeoricoCompleto = progressoGeral === 100;
@@ -209,7 +209,7 @@ export default function AlunoDashboard() {
     switch(stepId) {
       case 1: // Exame Médico
         return exameMedicoCompleto 
-          ? { text: "Concluído", color: "bg-blue-100 text-blue-700" }
+          ? { text: "Concluído", color: "bg-green-500 text-white" }
           : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
       case 2: // Preparação Teórica
         if (cursoTeoricoCompleto) return { text: "Concluído", color: "bg-blue-100 text-blue-700" };
@@ -239,7 +239,8 @@ export default function AlunoDashboard() {
       icon: Stethoscope, 
       iconColor: "bg-pink-100 text-pink-600",
       detail: "Avaliação médica e psicológica obrigatória",
-      isClickable: false,
+      link: "/aluno/exame-medico",
+      isClickable: true,
       showProgress: false,
       progress: 0
     },
