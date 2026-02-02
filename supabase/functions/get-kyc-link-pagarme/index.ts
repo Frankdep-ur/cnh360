@@ -125,6 +125,25 @@ serve(async (req) => {
     if (!kycResponse.ok) {
       logStep("Error generating KYC link", kycData);
       
+      // Check if it's an IP authorization error (Pagar.me requires whitelisted IPs)
+      if (kycData?.message?.includes("IP de origem não autorizado") || 
+          kycData?.message?.includes("IP") ||
+          kycData?.message?.includes("autorizado")) {
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            needsManualVerification: true,
+            recipientStatus: recipientStatus,
+            message: "A verificação de identidade requer acesso direto. Entre em contato com nosso suporte via WhatsApp para receber o link de verificação.",
+            supportPhone: "5511999999999", // Número do suporte
+          }),
+          { 
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+      
       // Check if KYC is not required (some edge cases)
       if (kycData?.message?.includes("not required") || kycData?.message?.includes("already")) {
         return new Response(
