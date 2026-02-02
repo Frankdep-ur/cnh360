@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -22,6 +22,7 @@ interface InstructorBalanceCardProps {
 export function InstructorBalanceCard({ hasRecipient, onSetupClick }: InstructorBalanceCardProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [loadingKyc, setLoadingKyc] = useState(false);
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -79,6 +80,60 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyIdentity = async () => {
+    setLoadingKyc(true);
+    setError(null);
+
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        "get-kyc-link-pagarme"
+      );
+
+      if (invokeError) {
+        throw new Error("Erro ao gerar link de verificação");
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (data?.alreadyActive) {
+        toast({
+          title: "Conta já ativa!",
+          description: "Você pode fazer saques normalmente.",
+        });
+        // Refresh balance to update status
+        fetchBalance();
+        return;
+      }
+
+      if (data?.url) {
+        // Ensure URL has protocol
+        const fullUrl = data.url.startsWith("http") 
+          ? data.url 
+          : `https://${data.url}`;
+        
+        toast({
+          title: "Link gerado!",
+          description: "Você será redirecionado para completar a verificação.",
+        });
+        
+        window.open(fullUrl, "_blank");
+      } else {
+        throw new Error("Link de verificação não disponível");
+      }
+    } catch (err: any) {
+      console.error("[InstructorBalanceCard] KYC Error:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: err.message || "Não foi possível gerar o link de verificação",
+      });
+    } finally {
+      setLoadingKyc(false);
     }
   };
 
@@ -155,6 +210,43 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
             {statusMessage}
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* KYC Verification Banner for Affiliation Status */}
+      {recipientStatus === "affiliation" && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center flex-shrink-0">
+              <Camera className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
+                Complete a Verificação de Identidade
+              </h4>
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
+                Para liberar seus saques, você precisa confirmar sua identidade através de uma selfie rápida.
+              </p>
+              <Button
+                onClick={handleVerifyIdentity}
+                disabled={loadingKyc}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {loadingKyc ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Gerando link...
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 mr-2" />
+                    Verificar Identidade Agora
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Content */}
