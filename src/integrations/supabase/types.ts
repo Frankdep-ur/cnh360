@@ -1036,6 +1036,7 @@ export type Database = {
           curso_teorico_conclusao: string | null
           curso_teorico_inicio: string | null
           etapa_atual: string
+          exame_medico_concluido: boolean | null
           exame_pratico_data: string | null
           exame_pratico_resultado: string | null
           exame_teorico_data: string | null
@@ -1055,6 +1056,7 @@ export type Database = {
           curso_teorico_conclusao?: string | null
           curso_teorico_inicio?: string | null
           etapa_atual?: string
+          exame_medico_concluido?: boolean | null
           exame_pratico_data?: string | null
           exame_pratico_resultado?: string | null
           exame_teorico_data?: string | null
@@ -1074,6 +1076,7 @@ export type Database = {
           curso_teorico_conclusao?: string | null
           curso_teorico_inicio?: string | null
           etapa_atual?: string
+          exame_medico_concluido?: boolean | null
           exame_pratico_data?: string | null
           exame_pratico_resultado?: string | null
           exame_teorico_data?: string | null
