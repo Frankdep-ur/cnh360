@@ -65,3 +65,6 @@ verify_jwt = true
 
 [functions.lesson-workflow]
 verify_jwt = true
+
+[functions.get-kyc-link-pagarme]
+verify_jwt = true
