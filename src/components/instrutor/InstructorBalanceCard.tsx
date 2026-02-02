@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2 } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { openExternalLink } from "@/lib/openExternalLink";
 
 interface BalanceData {
   available: number;
@@ -89,64 +90,71 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     setError(null);
 
     try {
+      // Call new start-kyc Edge Function
       const { data, error: invokeError } = await supabase.functions.invoke(
-        "get-kyc-link-pagarme"
+        "start-kyc"
       );
 
       if (invokeError) {
-        throw new Error("Erro ao verificar status");
+        throw new Error("Erro ao iniciar verificação");
       }
 
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      if (data?.alreadyActive) {
+      // Handle already active
+      if (data?.status === "already_active") {
         toast({
-          title: "Conta já ativa! 🎉",
+          title: "Conta já verificada! ✅",
           description: "Você pode fazer saques normalmente.",
         });
-        // Refresh balance to update status
         fetchBalance();
         return;
       }
 
-      // Automatic verification - Pagar.me sends email/SMS directly
-      if (data?.automaticVerification) {
+      // Handle recipient not found
+      if (data?.error === "recipient_not_found") {
         toast({
-          title: "Verifique seu Email/SMS 📧",
-          description: "A Pagar.me enviou o link de verificação para seu email ou celular cadastrado.",
-          duration: 8000,
+          variant: "destructive",
+          title: "Dados bancários não configurados",
+          description: "Configure seus dados bancários primeiro.",
         });
         return;
       }
 
-      if (data?.url) {
-        // Ensure URL has protocol
-        const fullUrl = data.url.startsWith("http") 
-          ? data.url 
-          : `https://${data.url}`;
-        
+      // Handle KYC link generation failure
+      if (data?.error === "kyc_link_failed") {
         toast({
-          title: "Link gerado!",
-          description: "Você será redirecionado para completar a verificação.",
+          variant: "destructive",
+          title: "Erro ao gerar link",
+          description: data.message || "Tente novamente mais tarde.",
         });
-        
-        window.open(fullUrl, "_blank");
-      } else {
-        // Fallback message - verification is automatic
-        toast({
-          title: "Verificação em Andamento",
-          description: "Verifique seu email e SMS para o link de verificação da Pagar.me.",
-          duration: 8000,
-        });
+        return;
       }
+
+      // Success - open KYC URL directly in app
+      if (data?.kyc_url) {
+        toast({
+          title: "Verificação iniciada! 📸",
+          description: "Complete a verificação facial na tela que vai abrir.",
+          duration: 5000,
+        });
+        
+        // Open KYC URL using the external link helper (works in PWA/WebView)
+        openExternalLink(data.kyc_url);
+        return;
+      }
+
+      // Fallback error
+      toast({
+        variant: "destructive",
+        title: "Erro inesperado",
+        description: "Não foi possível iniciar a verificação.",
+      });
+
     } catch (err: any) {
       console.error("[InstructorBalanceCard] KYC Error:", err);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: err.message || "Não foi possível verificar o status",
+        description: err.message || "Não foi possível iniciar a verificação",
       });
     } finally {
       setLoadingKyc(false);
@@ -240,8 +248,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         </Button>
       )}
 
-      {/* KYC Verification Banner for Affiliation Status */}
-      {recipientStatus === "affiliation" && (
+      {/* KYC Verification Banner - Show for affiliation OR not_started */}
+      {(recipientStatus === "affiliation" || (!recipientStatus && hasRecipient)) && (
         <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center flex-shrink-0">
@@ -249,27 +257,27 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
             </div>
             <div className="flex-1">
               <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
-                Verificação de Identidade Pendente
+                Verificação de Identidade
               </h4>
               <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
-                A Pagar.me enviou um link de verificação para seu email/celular cadastrado. 
-                Verifique sua caixa de entrada (incluindo spam) para completar a verificação.
+                {recipientStatus === "affiliation" 
+                  ? "Verificação em análise. Caso não tenha completado, clique abaixo para iniciar."
+                  : "Complete a verificação facial para liberar seus saques."}
               </p>
               <Button
                 onClick={handleVerifyIdentity}
                 disabled={loadingKyc}
-                variant="outline"
-                className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {loadingKyc ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Verificando...
+                    Gerando link...
                   </>
                 ) : (
                   <>
-                    <Camera className="w-4 h-4 mr-2" />
-                    Verificar Status / Reenviar Link
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Verificar identidade agora
                   </>
                 )}
               </Button>
