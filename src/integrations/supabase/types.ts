@@ -557,6 +557,8 @@ export type Database = {
           credencial_detran: string
           id: string
           is_mei_autonomo: boolean | null
+          kyc_status: string | null
+          kyc_updated_at: string | null
           mei_cnpj: string | null
           nota_media: number | null
           pagarme_recipient_id: string | null
@@ -578,6 +580,8 @@ export type Database = {
           credencial_detran: string
           id?: string
           is_mei_autonomo?: boolean | null
+          kyc_status?: string | null
+          kyc_updated_at?: string | null
           mei_cnpj?: string | null
           nota_media?: number | null
           pagarme_recipient_id?: string | null
@@ -599,6 +603,8 @@ export type Database = {
           credencial_detran?: string
           id?: string
           is_mei_autonomo?: boolean | null
+          kyc_status?: string | null
+          kyc_updated_at?: string | null
           mei_cnpj?: string | null
           nota_media?: number | null
           pagarme_recipient_id?: string | null
