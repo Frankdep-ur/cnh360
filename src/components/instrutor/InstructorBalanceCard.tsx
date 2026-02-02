@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2 } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,9 +17,10 @@ interface BalanceData {
 interface InstructorBalanceCardProps {
   hasRecipient: boolean;
   onSetupClick?: () => void;
+  onReRegisterClick?: () => void;
 }
 
-export function InstructorBalanceCard({ hasRecipient, onSetupClick }: InstructorBalanceCardProps) {
+export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegisterClick }: InstructorBalanceCardProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [loadingKyc, setLoadingKyc] = useState(false);
@@ -225,6 +226,18 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
             {statusMessage}
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Re-register button when refused */}
+      {recipientStatus === "refused" && onReRegisterClick && (
+        <Button
+          variant="outline"
+          className="w-full mb-4 border-destructive text-destructive hover:bg-destructive/10"
+          onClick={onReRegisterClick}
+        >
+          <Building2 className="w-4 h-4 mr-2" />
+          Recadastrar dados bancários
+        </Button>
       )}
 
       {/* KYC Verification Banner for Affiliation Status */}

@@ -24,6 +24,7 @@ interface ProfileData {
 }
 
 interface InstrutorData {
+  id: string;
   credencial_detran: string;
   cnh_numero: string;
   cnh_categoria: string;
@@ -94,6 +95,7 @@ export default function InstrutorPerfil() {
 
       if (!instrutorError && instrutorResult) {
         setInstrutorData({
+          id: instrutorResult.id,
           credencial_detran: instrutorResult.credencial_detran,
           cnh_numero: instrutorResult.cnh_numero,
           cnh_categoria: instrutorResult.cnh_categoria,
@@ -463,6 +465,26 @@ export default function InstrutorPerfil() {
             <InstructorBalanceCard 
               hasRecipient={!!instrutorData?.pagarme_recipient_id}
               onSetupClick={() => setShowBankSetup(true)}
+              onReRegisterClick={async () => {
+                // Clear old recipient to allow re-registration
+                if (instrutorData?.id) {
+                  const { error } = await supabase
+                    .from("instrutores")
+                    .update({ pagarme_recipient_id: null, kyc_status: "not_started" })
+                    .eq("id", instrutorData.id);
+                  
+                  if (error) {
+                    toast({
+                      variant: "destructive",
+                      title: "Erro",
+                      description: "Não foi possível resetar dados bancários"
+                    });
+                  } else {
+                    setShowBankSetup(true);
+                    fetchProfile();
+                  }
+                }
+              }}
             />
           </div>
 

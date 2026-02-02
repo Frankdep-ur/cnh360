@@ -51,10 +51,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get instructor's recipient_id
+    // Get instructor's recipient_id and kyc_status
     const { data: instrutorData, error: instrutorError } = await supabase
       .from("instrutores")
-      .select("id, pagarme_recipient_id")
+      .select("id, pagarme_recipient_id, kyc_status")
       .eq("user_id", user.id)
       .single();
 
@@ -116,6 +116,23 @@ serve(async (req) => {
     const recipientData = await recipientResponse.json();
     const recipientStatus = recipientData?.status || "unknown";
     logStep("Recipient status", { recipientStatus });
+
+    // AUTO-SYNC: Map Pagar.me status to local kyc_status and update if different
+    const statusMapping: Record<string, string> = {
+      active: "approved",
+      affiliation: "in_review",
+      refused: "refused",
+      suspended: "refused",
+    };
+    const mappedStatus = statusMapping[recipientStatus] || instrutorData.kyc_status;
+    
+    if (mappedStatus && mappedStatus !== instrutorData.kyc_status) {
+      logStep("Syncing kyc_status", { from: instrutorData.kyc_status, to: mappedStatus });
+      await supabase
+        .from("instrutores")
+        .update({ kyc_status: mappedStatus, kyc_updated_at: new Date().toISOString() })
+        .eq("id", instrutorData.id);
+    }
 
     // Parse balance data from Pagar.me response
     // Pagar.me returns amounts in cents
