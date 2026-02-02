@@ -110,6 +110,20 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
         return;
       }
 
+      // Handle manual verification case (IP restriction from Pagar.me)
+      if (data?.needsManualVerification) {
+        toast({
+          title: "Verificação via Suporte",
+          description: "Você será redirecionado ao WhatsApp para receber o link.",
+        });
+        
+        const whatsappMessage = encodeURIComponent(
+          "Olá! Preciso do link de verificação de identidade para liberar meus saques no CNH360."
+        );
+        window.open(`https://wa.me/5511999999999?text=${whatsappMessage}`, "_blank");
+        return;
+      }
+
       if (data?.url) {
         // Ensure URL has protocol
         const fullUrl = data.url.startsWith("http") 

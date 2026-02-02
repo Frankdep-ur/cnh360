@@ -62,6 +62,16 @@ export default function InstrutorGanhos() {
         return;
       }
 
+      // Handle manual verification case (IP restriction from Pagar.me)
+      if (data?.needsManualVerification) {
+        // Open WhatsApp with pre-filled message
+        const whatsappMessage = encodeURIComponent(
+          "Olá! Preciso do link de verificação de identidade para liberar meus saques no CNH360."
+        );
+        window.open(`https://wa.me/5511999999999?text=${whatsappMessage}`, "_blank");
+        return;
+      }
+
       if (data?.url) {
         const fullUrl = data.url.startsWith("http") ? data.url : `https://${data.url}`;
         window.open(fullUrl, "_blank");
