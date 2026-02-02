@@ -158,7 +158,7 @@ serve(async (req) => {
     // Determine message based on status
     let message: string | null = null;
     if (recipientStatus === "affiliation") {
-      message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
+      message = "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie).";
     } else if (recipientStatus === "refused") {
       message = "Sua conta bancária foi recusada. Por favor, reconfigure seus dados bancários.";
     } else if (recipientStatus === "suspended") {

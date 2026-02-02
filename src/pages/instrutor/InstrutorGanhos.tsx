@@ -27,7 +27,8 @@ import {
   Car,
   Loader2,
   Hourglass,
-  AlertCircle
+  AlertCircle,
+  Camera
 } from "lucide-react";
 
 export default function InstrutorGanhos() {
@@ -42,6 +43,35 @@ export default function InstrutorGanhos() {
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [loadingKyc, setLoadingKyc] = useState(false);
+
+  // Handle KYC verification for affiliation status
+  const handleVerifyIdentity = async () => {
+    setLoadingKyc(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get-kyc-link-pagarme");
+      
+      if (error) {
+        console.error("Error getting KYC link:", error);
+        return;
+      }
+
+      if (data?.alreadyActive) {
+        // Refresh balance to update status
+        fetchBalance();
+        return;
+      }
+
+      if (data?.url) {
+        const fullUrl = data.url.startsWith("http") ? data.url : `https://${data.url}`;
+        window.open(fullUrl, "_blank");
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setLoadingKyc(false);
+    }
+  };
 
   // Fetch real balance from Pagar.me (hybrid: API + local DB fallback)
   const fetchBalance = async () => {
@@ -173,24 +203,41 @@ export default function InstrutorGanhos() {
 
         {/* Status Alert for Account Activation */}
         {recipientStatus && recipientStatus !== "active" && statusMessage && (
-          <Alert className={
-            recipientStatus === "affiliation" 
-              ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" 
-              : "border-destructive/50 bg-destructive/10"
-          }>
-            {recipientStatus === "affiliation" ? (
-              <Hourglass className="w-4 h-4 text-amber-600" />
-            ) : (
+          recipientStatus === "affiliation" ? (
+            <Alert className="border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20">
+              <Camera className="w-4 h-4 text-emerald-600" />
+              <AlertDescription className="text-emerald-700 dark:text-emerald-300">
+                <div className="flex flex-col gap-3">
+                  <span>{statusMessage}</span>
+                  <Button
+                    onClick={handleVerifyIdentity}
+                    disabled={loadingKyc}
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white w-fit"
+                  >
+                    {loadingKyc ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Gerando link...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4 mr-2" />
+                        Verificar Identidade Agora
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert className="border-destructive/50 bg-destructive/10">
               <AlertCircle className="w-4 h-4 text-destructive" />
-            )}
-            <AlertDescription className={
-              recipientStatus === "affiliation" 
-                ? "text-amber-700 dark:text-amber-300" 
-                : "text-destructive"
-            }>
-              {statusMessage}
-            </AlertDescription>
-          </Alert>
+              <AlertDescription className="text-destructive">
+                {statusMessage}
+              </AlertDescription>
+            </Alert>
+          )
         )}
 
         <div className="grid grid-cols-2 gap-3">
