@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.get-kyc-link-pagarme]
 verify_jwt = true
+
+[functions.pagarme-kyc-webhook]
+verify_jwt = false
