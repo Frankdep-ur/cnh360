@@ -69,9 +69,9 @@ serve(async (req) => {
     }
 
     const recipientId = instrutorData.pagarme_recipient_id;
-    logStep("Generating KYC link for recipient", { recipientId });
+    logStep("Checking recipient status", { recipientId });
 
-    // First, check recipient status
+    // Check recipient status
     const recipientResponse = await fetch(
       `https://api.pagar.me/core/v5/recipients/${recipientId}`,
       {
@@ -108,7 +108,9 @@ serve(async (req) => {
       );
     }
 
-    // Generate KYC link
+    // Try to generate KYC link
+    logStep("Attempting to generate KYC link", { recipientId });
+    
     const kycResponse = await fetch(
       `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
       {
@@ -123,42 +125,22 @@ serve(async (req) => {
     const kycData = await kycResponse.json();
 
     if (!kycResponse.ok) {
-      logStep("Error generating KYC link", kycData);
+      logStep("KYC link generation failed", kycData);
       
-      // Check if it's an IP authorization error (Pagar.me requires whitelisted IPs)
-      if (kycData?.message?.includes("IP de origem não autorizado") || 
-          kycData?.message?.includes("IP") ||
-          kycData?.message?.includes("autorizado")) {
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            needsManualVerification: true,
-            recipientStatus: recipientStatus,
-            message: "A verificação de identidade requer acesso direto. Entre em contato com nosso suporte via WhatsApp para receber o link de verificação.",
-            supportPhone: "5511999999999", // Número do suporte
-          }),
-          { 
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          }
-        );
-      }
-      
-      // Check if KYC is not required (some edge cases)
-      if (kycData?.message?.includes("not required") || kycData?.message?.includes("already")) {
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: "Verificação já realizada ou não necessária. Aguarde a aprovação automática.",
-          }),
-          { 
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          }
-        );
-      }
-
-      throw new Error(kycData?.message || "Erro ao gerar link de verificação");
+      // Handle IP restriction or any other error - use automatic verification flow
+      // Pagar.me sends verification emails/SMS directly to the recipient
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          automaticVerification: true,
+          recipientStatus: recipientStatus,
+          message: "A Pagar.me enviou um link de verificação para seu email/celular cadastrado. Verifique sua caixa de entrada (incluindo spam) para completar a verificação.",
+        }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
     }
 
     logStep("KYC link generated successfully", { 

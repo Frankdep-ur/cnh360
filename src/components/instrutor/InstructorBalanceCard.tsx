@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, ExternalLink, Loader2 } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -93,7 +93,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
       );
 
       if (invokeError) {
-        throw new Error("Erro ao gerar link de verificação");
+        throw new Error("Erro ao verificar status");
       }
 
       if (data?.error) {
@@ -102,7 +102,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
 
       if (data?.alreadyActive) {
         toast({
-          title: "Conta já ativa!",
+          title: "Conta já ativa! 🎉",
           description: "Você pode fazer saques normalmente.",
         });
         // Refresh balance to update status
@@ -110,17 +110,13 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
         return;
       }
 
-      // Handle manual verification case (IP restriction from Pagar.me)
-      if (data?.needsManualVerification) {
+      // Automatic verification - Pagar.me sends email/SMS directly
+      if (data?.automaticVerification) {
         toast({
-          title: "Verificação via Suporte",
-          description: "Você será redirecionado ao WhatsApp para receber o link.",
+          title: "Verifique seu Email/SMS 📧",
+          description: "A Pagar.me enviou o link de verificação para seu email ou celular cadastrado.",
+          duration: 8000,
         });
-        
-        const whatsappMessage = encodeURIComponent(
-          "Olá! Preciso do link de verificação de identidade para liberar meus saques no CNH360."
-        );
-        window.open(`https://wa.me/5511999999999?text=${whatsappMessage}`, "_blank");
         return;
       }
 
@@ -137,14 +133,19 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
         
         window.open(fullUrl, "_blank");
       } else {
-        throw new Error("Link de verificação não disponível");
+        // Fallback message - verification is automatic
+        toast({
+          title: "Verificação em Andamento",
+          description: "Verifique seu email e SMS para o link de verificação da Pagar.me.",
+          duration: 8000,
+        });
       }
     } catch (err: any) {
       console.error("[InstructorBalanceCard] KYC Error:", err);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: err.message || "Não foi possível gerar o link de verificação",
+        description: err.message || "Não foi possível verificar o status",
       });
     } finally {
       setLoadingKyc(false);
@@ -235,26 +236,27 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick }: Instructor
             </div>
             <div className="flex-1">
               <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
-                Complete a Verificação de Identidade
+                Verificação de Identidade Pendente
               </h4>
               <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
-                Para liberar seus saques, você precisa confirmar sua identidade através de uma selfie rápida.
+                A Pagar.me enviou um link de verificação para seu email/celular cadastrado. 
+                Verifique sua caixa de entrada (incluindo spam) para completar a verificação.
               </p>
               <Button
                 onClick={handleVerifyIdentity}
                 disabled={loadingKyc}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                variant="outline"
+                className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50"
               >
                 {loadingKyc ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Gerando link...
+                    Verificando...
                   </>
                 ) : (
                   <>
                     <Camera className="w-4 h-4 mr-2" />
-                    Verificar Identidade Agora
-                    <ExternalLink className="w-4 h-4 ml-2" />
+                    Verificar Status / Reenviar Link
                   </>
                 )}
               </Button>

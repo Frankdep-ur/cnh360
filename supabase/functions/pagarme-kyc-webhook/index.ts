@@ -13,6 +13,7 @@ const logStep = (step: string, details?: any) => {
 // Map Pagar.me KYC event types to our internal status
 const mapKycEventToStatus = (eventType: string): string | null => {
   const mapping: Record<string, string | null> = {
+    "recipient.created": "initiated",
     "recipient.kyc_link.created": "initiated",
     "recipient.kyc.created": "initiated",
     "recipient.kyc.in_review": "in_review",
