@@ -1,169 +1,154 @@
 
 
-# Plano: Corrigir Mensagem de Status para Verificação de Identidade
+# Plano: KYC In-App Completo (Sem WhatsApp)
 
-## Problema Identificado
+## Situação Atual
 
-A mensagem **"Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas."** está incorreta e causa confusão. Ela vem da Edge Function `get-instructor-balance-pagarme`.
+**O que já está funcionando:**
+- Webhook configurado na Pagar.me (`recipient.created`, `recipient.updated`, etc.)
+- Edge Function `pagarme-kyc-webhook` recebendo eventos e atualizando `kyc_status`
+- Banco de dados com coluna `kyc_status` na tabela `instrutores`
+- UI mostrando status de verificação
 
-O correto é informar que o instrutor precisa **completar a verificação de identidade (selfie)** para liberar os saques.
+**O problema:**
+- A geração do link KYC (`/kyc_link`) da Pagar.me exige IP fixo
+- Edge Functions usam IPs dinâmicos = erro "IP de origem não autorizado"
+- Código atual redireciona para WhatsApp como fallback
+
+---
+
+## Solução Proposta
+
+Como a Pagar.me envia eventos `recipient.updated` quando o status muda, vamos usar uma abordagem diferente: **verificação automática via status do recebedor**.
+
+### Fluxo Técnico:
+
+```text
+1. Instrutor cadastra dados bancários
+         ↓
+2. Pagar.me cria recipient (status: "affiliation")
+         ↓
+3. Pagar.me AUTOMATICAMENTE solicita documentos/selfie
+         ↓
+4. Pagar.me envia webhook recipient.updated
+         ↓
+5. Nosso webhook atualiza kyc_status
+         ↓
+6. UI reflete automaticamente (approved = saque liberado)
+```
+
+### O que a Pagar.me faz automaticamente:
+- Quando um recebedor é criado, a própria Pagar.me envia email/SMS ao instrutor com instruções de verificação
+- O instrutor recebe o link diretamente da Pagar.me
+- Não precisamos gerar o link manualmente!
+
+---
+
+## Implementação
+
+### 1. Atualizar Edge Function `get-kyc-link-pagarme`
+
+Remover todo fallback de WhatsApp e informar que a verificação é automática:
+
+```typescript
+// Quando der erro de IP, retornar mensagem informativa
+if (errorDeIP) {
+  return {
+    success: false,
+    automaticVerification: true,
+    message: "A Pagar.me enviou um link de verificação para seu email/celular. 
+              Verifique sua caixa de entrada.",
+    recipientStatus: recipientStatus
+  };
+}
+```
+
+### 2. Atualizar UI - InstructorBalanceCard.tsx
+
+Remover código de WhatsApp e mostrar instruções claras:
+
+```typescript
+// Remover:
+if (data?.needsManualVerification) {
+  window.open(`https://wa.me/...`); // REMOVER
+}
+
+// Adicionar:
+if (data?.automaticVerification) {
+  toast({
+    title: "Verificação Automática",
+    description: "A Pagar.me enviou o link para seu email. Verifique sua caixa de entrada.",
+  });
+}
+```
+
+### 3. Atualizar UI - InstrutorGanhos.tsx
+
+Mesmo ajuste - remover WhatsApp e usar mensagem informativa.
+
+### 4. Expandir Webhook para Mais Eventos
+
+Garantir que `recipient.updated` capture todas as mudanças de status:
+
+```typescript
+// Já implementado, mas vamos adicionar logging melhorado
+if (eventType === "recipient.updated") {
+  // status: active, affiliation, refused, suspended
+  // Mapear para: approved, in_review, refused
+}
+```
+
+### 5. Adicionar Polling Opcional
+
+Para casos onde o webhook não chegou ainda, permitir refresh manual:
+
+```typescript
+// Botão "Atualizar Status" que consulta a Pagar.me
+// e atualiza o kyc_status no banco
+```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/get-instructor-balance-pagarme/index.ts` | **MODIFICAR** | Atualizar mensagem para status `affiliation` |
-| `src/pages/instrutor/InstrutorGanhos.tsx` | **MODIFICAR** | Adicionar botão de verificação KYC no Alert |
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/get-kyc-link-pagarme/index.ts` | Remover WhatsApp, retornar `automaticVerification: true` |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Remover WhatsApp, mostrar toast informativo |
+| `src/pages/instrutor/InstrutorGanhos.tsx` | Remover WhatsApp, atualizar mensagens |
+| `supabase/functions/pagarme-kyc-webhook/index.ts` | Melhorar logging para debug |
 
 ---
 
-## Mudanças Detalhadas
+## Fluxo Final para o Instrutor
 
-### 1. Edge Function: get-instructor-balance-pagarme
-
-**Linha 160-161 - Mensagem atual:**
-```typescript
-if (recipientStatus === "affiliation") {
-  message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
-}
-```
-
-**Nova mensagem:**
-```typescript
-if (recipientStatus === "affiliation") {
-  message = "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie).";
-}
-```
-
----
-
-### 2. Página InstrutorGanhos.tsx
-
-Atualmente o Alert (linhas 174-194) mostra apenas a mensagem de texto. Vamos adicionar um botão para o instrutor ir direto para a verificação:
-
-**Interface atualizada:**
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  📸  Para liberar seus saques, é necessário concluir a      │
-│      verificação de identidade (selfie).                    │
-│                                                              │
-│      [ Verificar Identidade Agora ]                         │
-└──────────────────────────────────────────────────────────────┘
-```
-
-**Código a adicionar:**
-- Importar `Camera`, `ExternalLink`, `Loader2` do lucide-react
-- Adicionar estado `loadingKyc` 
-- Copiar função `handleVerifyIdentity` do InstructorBalanceCard
-- Adicionar botão verde dentro do Alert quando status = `affiliation`
-
----
-
-## Fluxo Visual Atualizado
-
-```text
-Instrutor abre "Meus Ganhos"
-        │
-        ▼
-┌─────────────────────────────────┐
-│ Se recipientStatus = affiliation│
-└─────────────────────────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│  🟢 Alert Verde com:                         │
-│  "Para liberar seus saques, é necessário     │
-│   concluir a verificação de identidade."     │
-│                                              │
-│  [📸 Verificar Identidade Agora]             │
-└──────────────────────────────────────────────┘
-        │
-        ▼
-Instrutor clica → Abre link Pagar.me → Faz selfie
-        │
-        ▼
-Status muda para "active" → Saques liberados!
-```
+1. Instrutor configura dados bancários
+2. Sistema mostra: "Conta em análise - Verifique seu email para completar a verificação"
+3. Instrutor recebe email/SMS da Pagar.me com link
+4. Instrutor completa verificação
+5. Pagar.me envia webhook para nosso endpoint
+6. UI atualiza automaticamente para "Conta Ativa"
+7. Saque liberado!
 
 ---
 
 ## Seção Técnica
 
-### Mudança na Edge Function (linha 160-161)
+### Eventos de Webhook Configurados
+- `recipient.created` - Novo recebedor criado
+- `recipient.updated` - Status alterado (inclui mudanças KYC)
+- `recipient.deleted` - Recebedor excluído
+- `bank_account.created/updated/deleted` - Mudanças bancárias
+- `anticipation.*` - Eventos de antecipação
 
-```typescript
-// ANTES
-if (recipientStatus === "affiliation") {
-  message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
-}
+### Mapeamento de Status
+| Pagar.me Status | Nosso kyc_status | Ação |
+|-----------------|------------------|------|
+| `active` | `approved` | Libera saques |
+| `affiliation` | `in_review` | Aguardando verificação |
+| `refused` | `refused` | Bloqueia saques |
+| `suspended` | `refused` | Bloqueia saques |
 
-// DEPOIS
-if (recipientStatus === "affiliation") {
-  message = "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie).";
-}
-```
-
-### Mudança no InstrutorGanhos.tsx
-
-```typescript
-// Adicionar imports
-import { Camera, ExternalLink, Loader2 } from "lucide-react";
-
-// Adicionar estado
-const [loadingKyc, setLoadingKyc] = useState(false);
-
-// Adicionar função
-const handleVerifyIdentity = async () => {
-  setLoadingKyc(true);
-  try {
-    const { data } = await supabase.functions.invoke("get-kyc-link-pagarme");
-    if (data?.url) {
-      const fullUrl = data.url.startsWith("http") ? data.url : `https://${data.url}`;
-      window.open(fullUrl, "_blank");
-    }
-  } finally {
-    setLoadingKyc(false);
-  }
-};
-
-// Modificar o Alert para incluir botão
-{recipientStatus === "affiliation" && (
-  <Alert className="border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20">
-    <Camera className="w-4 h-4 text-emerald-600" />
-    <AlertDescription className="text-emerald-700 dark:text-emerald-300">
-      <div className="flex flex-col gap-3">
-        <span>{statusMessage}</span>
-        <Button
-          onClick={handleVerifyIdentity}
-          disabled={loadingKyc}
-          size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-fit"
-        >
-          {loadingKyc ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando link...</>
-          ) : (
-            <><Camera className="w-4 h-4 mr-2" /> Verificar Identidade Agora</>
-          )}
-        </Button>
-      </div>
-    </AlertDescription>
-  </Alert>
-)}
-```
-
----
-
-## Resultado Final
-
-| Antes | Depois |
-|-------|--------|
-| ⏳ "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas." | 📸 "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie)." + **[Botão Verde]** |
-
-Isso resolve:
-- ✅ Confusão sobre o que o instrutor precisa fazer
-- ✅ Conflito de informação 
-- ✅ Suporte desnecessário (instrutor sabe exatamente o que fazer)
+### Nota Importante
+A Pagar.me pode demorar alguns minutos para enviar o webhook após a mudança de status. O botão "Atualizar Status" permite consulta manual quando necessário.
 
