@@ -1,176 +1,169 @@
 
 
-# Plano: Integração Automática de Prova de Vida (KYC) Pagar.me
+# Plano: Corrigir Mensagem de Status para Verificação de Identidade
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-O instrutor **Frank Alexandre** tem um recebedor criado na Pagar.me (`re_cmkx1ob1cy0mz0l9tjhxp6lcf`), mas está em status `affiliation` (aguardando aprovação).
+A mensagem **"Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas."** está incorreta e causa confusão. Ela vem da Edge Function `get-instructor-balance-pagarme`.
 
-### Por que ele não consegue sacar?
+O correto é informar que o instrutor precisa **completar a verificação de identidade (selfie)** para liberar os saques.
 
-Segundo a documentação da Pagar.me V5, o processo de credenciamento de recebedores inclui uma **Prova de Vida (KYC)** obrigatória:
+---
 
-1. Recebedor transaciona normalmente mesmo sem aprovação final
-2. Porém, **só pode sacar saldo após status `active`**
-3. Para ativar, precisa passar por **biometria facial** via webapp
+## Arquivos a Modificar
 
-### Fluxo atual exigido pela Pagar.me
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `supabase/functions/get-instructor-balance-pagarme/index.ts` | **MODIFICAR** | Atualizar mensagem para status `affiliation` |
+| `src/pages/instrutor/InstrutorGanhos.tsx` | **MODIFICAR** | Adicionar botão de verificação KYC no Alert |
 
-```text
-Recebedor Criado → status: registration
-        │
-        ▼
-Análise Automática → status: affiliation + kyc_details: partially_denied
-        │
-        ▼
-[PASSO FALTANDO] Marketplace gera link de KYC via API
-        │
-        ▼
-Instrutor acessa link e faz prova de vida (selfie + docs)
-        │
-        ▼
-Aprovado → status: active → PODE SACAR
+---
+
+## Mudanças Detalhadas
+
+### 1. Edge Function: get-instructor-balance-pagarme
+
+**Linha 160-161 - Mensagem atual:**
+```typescript
+if (recipientStatus === "affiliation") {
+  message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
+}
+```
+
+**Nova mensagem:**
+```typescript
+if (recipientStatus === "affiliation") {
+  message = "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie).";
+}
 ```
 
 ---
 
-## Solução Proposta: Automatizar a Geração do Link KYC
+### 2. Página InstrutorGanhos.tsx
 
-### O que será criado
+Atualmente o Alert (linhas 174-194) mostra apenas a mensagem de texto. Vamos adicionar um botão para o instrutor ir direto para a verificação:
 
-Implementar uma Edge Function que:
-1. Consulta o status do recebedor na Pagar.me
-2. Se status for `affiliation`, gera link de KYC via `POST /recipients/{id}/kyc_link`
-3. Retorna o link para o instrutor acessar e fazer a prova de vida
-
-### Onde será exibido no app
-
-Na seção de **Saldo/Ganhos** do dashboard do instrutor, quando o status do recebedor não for `active`:
-
-- Mostrar um banner informativo: "Complete sua verificação de identidade para liberar saques"
-- Botão: "Verificar Identidade Agora" → abre o link de KYC
-
----
-
-## Arquivos a Serem Criados/Modificados
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/get-kyc-link-pagarme/index.ts` | **CRIAR** | Nova Edge Function para gerar link de KYC |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | **MODIFICAR** | Adicionar botão de verificação KYC quando necessário |
-| `supabase/config.toml` | **MODIFICAR** | Registrar nova função com `verify_jwt = true` |
-
----
-
-## Interface do Usuário
-
-### Quando recebedor está em `affiliation`:
+**Interface atualizada:**
 
 ```text
-┌────────────────────────────────────────────────────────────────┐
-│  💼 Saldo                                        [🔄 Atualizar] │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ⏳ Sua conta está em processo de ativação                     │
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  🔒 Complete a Verificação de Identidade                 │ │
-│  │                                                          │ │
-│  │  Para liberar seus saques, você precisa confirmar sua    │ │
-│  │  identidade através de uma selfie rápida.                │ │
-│  │                                                          │ │
-│  │  [ 📸 Verificar Identidade Agora ]                       │ │
-│  │          (botão verde)                                   │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-│  ┌─────────────────────┐  ┌─────────────────────┐             │
-│  │ A receber (pendente)│  │ Já transferido      │             │
-│  │     R$ 55,00        │  │     R$ 0,00         │             │
-│  └─────────────────────┘  └─────────────────────┘             │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  📸  Para liberar seus saques, é necessário concluir a      │
+│      verificação de identidade (selfie).                    │
+│                                                              │
+│      [ Verificar Identidade Agora ]                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Código a adicionar:**
+- Importar `Camera`, `ExternalLink`, `Loader2` do lucide-react
+- Adicionar estado `loadingKyc` 
+- Copiar função `handleVerifyIdentity` do InstructorBalanceCard
+- Adicionar botão verde dentro do Alert quando status = `affiliation`
+
+---
+
+## Fluxo Visual Atualizado
+
+```text
+Instrutor abre "Meus Ganhos"
+        │
+        ▼
+┌─────────────────────────────────┐
+│ Se recipientStatus = affiliation│
+└─────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────┐
+│  🟢 Alert Verde com:                         │
+│  "Para liberar seus saques, é necessário     │
+│   concluir a verificação de identidade."     │
+│                                              │
+│  [📸 Verificar Identidade Agora]             │
+└──────────────────────────────────────────────┘
+        │
+        ▼
+Instrutor clica → Abre link Pagar.me → Faz selfie
+        │
+        ▼
+Status muda para "active" → Saques liberados!
 ```
 
 ---
 
 ## Seção Técnica
 
-### Edge Function: get-kyc-link-pagarme
+### Mudança na Edge Function (linha 160-161)
 
 ```typescript
-// Endpoint: POST /recipients/{id}/kyc_link
-const kycResponse = await fetch(
-  `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
-  {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
-      "Content-Type": "application/json",
-    },
-  }
-);
+// ANTES
+if (recipientStatus === "affiliation") {
+  message = "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas.";
+}
 
-// Response:
-// {
-//   "base64": "BJ1B51JK2B51KJ2B5=",  // QR Code em base64
-//   "url": "www.pagar.me/kyc/14214214215",  // Link direto
-//   "expiration_date": "2024-02-10T20:35:46.046Z"  // Expira em 20 min
-// }
+// DEPOIS
+if (recipientStatus === "affiliation") {
+  message = "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie).";
+}
 ```
 
-### Lógica no InstructorBalanceCard
+### Mudança no InstrutorGanhos.tsx
 
 ```typescript
-// Quando recipientStatus === "affiliation" e kyc_details.status === "partially_denied"
+// Adicionar imports
+import { Camera, ExternalLink, Loader2 } from "lucide-react";
+
+// Adicionar estado
+const [loadingKyc, setLoadingKyc] = useState(false);
+
+// Adicionar função
 const handleVerifyIdentity = async () => {
   setLoadingKyc(true);
-  const { data } = await supabase.functions.invoke("get-kyc-link-pagarme");
-  
-  if (data?.url) {
-    // Abre o link de KYC em nova aba
-    window.open(`https://${data.url}`, "_blank");
+  try {
+    const { data } = await supabase.functions.invoke("get-kyc-link-pagarme");
+    if (data?.url) {
+      const fullUrl = data.url.startsWith("http") ? data.url : `https://${data.url}`;
+      window.open(fullUrl, "_blank");
+    }
+  } finally {
+    setLoadingKyc(false);
   }
-  setLoadingKyc(false);
 };
+
+// Modificar o Alert para incluir botão
+{recipientStatus === "affiliation" && (
+  <Alert className="border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20">
+    <Camera className="w-4 h-4 text-emerald-600" />
+    <AlertDescription className="text-emerald-700 dark:text-emerald-300">
+      <div className="flex flex-col gap-3">
+        <span>{statusMessage}</span>
+        <Button
+          onClick={handleVerifyIdentity}
+          disabled={loadingKyc}
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white w-fit"
+        >
+          {loadingKyc ? (
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando link...</>
+          ) : (
+            <><Camera className="w-4 h-4 mr-2" /> Verificar Identidade Agora</>
+          )}
+        </Button>
+      </div>
+    </AlertDescription>
+  </Alert>
+)}
 ```
-
-### Fluxo Completo
-
-```text
-1. Instrutor abre dashboard
-2. Sistema consulta saldo + status do recebedor
-3. Se status = "affiliation":
-   → Mostra banner de KYC pendente
-   → Botão "Verificar Identidade"
-4. Instrutor clica no botão
-5. Sistema chama get-kyc-link-pagarme
-6. API Pagar.me retorna URL do webapp
-7. Instrutor é redirecionado para webapp
-8. Instrutor faz selfie + validação de documento
-9. Pagar.me analisa (automático, poucos minutos)
-10. Webhook atualiza status para "active"
-11. Instrutor pode sacar!
-```
-
-### Observações Importantes
-
-1. **Link expira em 20 minutos** - se expirar, gerar novo
-2. **Não precisa de ação do suporte** - todo processo é automatizado
-3. **Recebedor já transaciona** - apenas saque é bloqueado
-4. **Prova de vida é simples** - selfie + confirmação de dados
 
 ---
 
-## Resumo Executivo para o Usuário
+## Resultado Final
 
-O que precisa ser feito para o **Frank Alexandre sacar**:
+| Antes | Depois |
+|-------|--------|
+| ⏳ "Sua conta está em processo de ativação. Os ganhos serão liberados em até 48 horas." | 📸 "Para liberar seus saques, é necessário concluir a verificação de identidade (selfie)." + **[Botão Verde]** |
 
-1. ✅ Ele já tem conta bancária cadastrada
-2. ⏳ Conta está em "afiliação" (aguardando prova de vida)
-3. 🔧 Implementar botão no app que gera link de KYC
-4. 📸 Frank acessa o link e faz selfie
-5. ✅ Pagar.me aprova em poucos minutos
-6. 💰 Frank pode sacar!
-
-**Tempo de implementação**: ~30 minutos de código + aprovação automática da Pagar.me
+Isso resolve:
+- ✅ Confusão sobre o que o instrutor precisa fazer
+- ✅ Conflito de informação 
+- ✅ Suporte desnecessário (instrutor sabe exatamente o que fazer)
 
