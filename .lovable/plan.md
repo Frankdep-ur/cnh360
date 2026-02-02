@@ -1,143 +1,126 @@
 
+# Plano: Página de Exame Médico/Psicológico no Dashboard do Aluno
 
-# Plano: Correção da Consulta de Saldo do Instrutor
+## Resumo da Tarefa
 
-## Diagnóstico
-
-| Status Atual | Dados |
-|-------------|-------|
-| Pagamento no banco | ✅ R$ 4,52 para Frank Alexandre |
-| Saldo Pagar.me | ❌ R$ 0,00 (retornando zero) |
-| Status do Recipient | `"affiliation"` (em processo de ativação) |
-
-### Por Que o Saldo Mostra Zero
-
-A Pagar.me **não libera fundos** enquanto o recipient estiver em status `affiliation`. Isso significa que mesmo com pagamentos processados via split, o saldo na API mostra R$ 0,00 até que a conta seja totalmente ativada.
-
-A Edge Function `get-instructor-balance-pagarme` consulta **apenas** a API da Pagar.me, ignorando os pagamentos já registrados no banco de dados.
+Atualizar **exclusivamente** o card "Exame Médico/Psicológico" no dashboard do aluno para:
+1. Torná-lo clicável, abrindo uma página com guia explicativo
+2. Incluir botão de agendamento via WhatsApp
+3. Incluir checkbox para marcar como concluído
+4. Salvar o progresso no banco de dados
+5. Atualizar o status do card dinamicamente
 
 ---
 
-## Solução: Saldo Híbrido (Pagar.me + Banco Local)
-
-A função vai consultar **duas fontes**:
-
-1. **Pagar.me** - Saldo oficial quando a conta estiver ativa
-2. **Banco de dados local** - Soma dos `valor_instrutor` da tabela `pagamentos` quando a conta estiver em processo de ativação
+## Interface a Ser Criada
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│  get-instructor-balance-pagarme                             │
-├─────────────────────────────────────────────────────────────┤
-│  1. Consulta saldo na Pagar.me                              │
-│  2. Verifica status do recipient                            │
-│     ├── status = "active"                                   │
-│     │   └── Retorna saldo da Pagar.me ✅                    │
-│     └── status = "affiliation" / "refused"                  │
-│         └── Consulta soma de pagamentos no banco local      │
-│             └── Retorna como "pendente de liberação" 🔄     │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  ◀  Exame Médico e Psicológico                                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  🩺  Guia Rápido para Exame Médico e Psicológico              │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  O que é isso?                                           │ │
+│  │                                                          │ │
+│  │  Essa etapa é obrigatória pra sua CNH e super rápida!    │ │
+│  │  O exame médico verifica sua saúde geral (como visão e   │ │
+│  │  pressão), e o psicológico avalia atenção e reações.     │ │
+│  │                                                          │ │
+│  │  São feitos em clínicas credenciadas pelo DETRAN-SP,     │ │
+│  │  geralmente no mesmo dia, e duram uns 30-60 minutos      │ │
+│  │  cada.                                                   │ │
+│  │                                                          │ │
+│  │  Pronto pra agendar? Nossa equipe te ajuda com tudo:     │ │
+│  │  passos, docs, custos e marcação. É fácil e rápido!      │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  📱  Agendar pelo WhatsApp Agora                         │ │
+│  │        (botão #00BFFF grande)                            │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  ☐  Já fiz os exames e foram aprovados                   │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Arquivos a Modificar
-
-### 1. `supabase/functions/get-instructor-balance-pagarme/index.ts`
-
-Adicionar consulta ao banco de dados quando a conta estiver em processo de ativação:
-
-```typescript
-// Após obter dados do recipient...
-const recipientStatus = balanceData.recipient?.status || "unknown";
-
-// Se a conta ainda não está ativa, buscar ganhos do banco local
-if (recipientStatus !== "active" || balance.available === 0) {
-  const { data: pagamentosData } = await supabase
-    .from("pagamentos")
-    .select("valor_instrutor, status")
-    .eq("instrutor_id", instrutorData.id)
-    .eq("status", "aprovado");
-
-  const ganhosPendentes = pagamentosData?.reduce(
-    (sum, p) => sum + (p.valor_instrutor || 0), 0
-  ) || 0;
-
-  // Adicionar aos waiting_funds (a receber)
-  balance.waitingFunds = ganhosPendentes;
-}
-```
-
-### 2. Adicionar Campo `recipientStatus` na Resposta
-
-Para mostrar o aviso correto na interface:
-
-```typescript
-return new Response(JSON.stringify({
-  success: true,
-  balance,
-  recipientId,
-  recipientStatus,  // NOVO: "active", "affiliation", etc.
-  message: recipientStatus === "affiliation" 
-    ? "Sua conta está em processo de ativação. Os ganhos serão liberados em breve."
-    : null
-}));
-```
-
-### 3. `src/components/instrutor/InstructorBalanceCard.tsx`
-
-Exibir aviso quando a conta estiver em processo de ativação:
-
-```tsx
-{recipientStatus === "affiliation" && (
-  <Alert className="border-amber-200 bg-amber-50">
-    <Clock className="w-4 h-4 text-amber-600" />
-    <AlertDescription className="text-amber-700">
-      Sua conta bancária está em processo de ativação na operadora de pagamentos. 
-      Os valores serão liberados para saque em até 48 horas.
-    </AlertDescription>
-  </Alert>
-)}
-```
-
-### 4. `src/pages/instrutor/InstrutorGanhos.tsx`
-
-Adicionar estado para o `recipientStatus` e exibir valores corretos:
-
-```tsx
-const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
-
-// Na função fetchBalance:
-if (data?.recipientStatus) {
-  setRecipientStatus(data.recipientStatus);
-}
-```
-
----
-
-## Interface Atualizada
+## Fluxo de Status do Card
 
 ```text
-┌────────────────────────────────────────────┐
-│  💰 Meus Ganhos                            │
-├────────────────────────────────────────────┤
-│  ⚠️ Sua conta está em ativação             │
-│  Os valores serão liberados em até 48h.    │
-├────────────────────────────────────────────┤
-│                                            │
-│  Saldo Disponível                          │
-│  R$ 0,00                                   │
-│  Liberado para saque                       │
-│                                            │
-│  ┌──────────────┐ ┌──────────────┐        │
-│  │   Pendente   │ │   Este mês   │        │
-│  │   R$ 4,52    │ │   R$ 4,52    │        │
-│  │   Liberação  │ │   Líquido    │        │
-│  │   em 48h     │ │              │        │
-│  └──────────────┘ └──────────────┘        │
-│                                            │
-└────────────────────────────────────────────┘
+Estado Inicial
+     │
+     ▼
+┌─────────────┐  Clica no card  ┌───────────────────┐
+│  Pendente   │ ──────────────▶ │  Abre ExamePage   │
+│  (amarelo)  │                 └───────────────────┘
+└─────────────┘                          │
+                                         ▼
+                           ┌─────────────────────────┐
+                           │  Marca checkbox         │
+                           │  "Já fiz os exames"     │
+                           └─────────────────────────┘
+                                         │
+                                         ▼
+                           ┌─────────────────────────┐
+                           │  Salva no banco:        │
+                           │  exame_medico_concluido │
+                           │  = true                 │
+                           └─────────────────────────┘
+                                         │
+                                         ▼
+                           ┌─────────────────────────┐
+                           │  Card atualiza para     │
+                           │  "Concluído" (verde)    │
+                           └─────────────────────────┘
 ```
+
+---
+
+## Arquivos a Serem Modificados
+
+### 1. `src/pages/aluno/AlunoDashboard.tsx`
+
+**Mudanças:**
+- Alterar o step do Exame Médico para ser clicável
+- Adicionar `link: "/aluno/exame-medico"` ao step
+- Carregar o campo `exame_medico_concluido` da tabela `progresso_renach`
+- Atualizar a lógica de `getBadgeForStep` para refletir o status real
+
+### 2. Nova Página: `src/pages/aluno/ExameMedico.tsx`
+
+**Conteúdo:**
+- Header com botão de voltar
+- Título "Guia Rápido para Exame Médico e Psicológico"
+- Card com texto explicativo
+- Botão grande "Agendar pelo WhatsApp Agora" → abre `https://wa.me/5518981288372`
+- Checkbox "Já fiz os exames e foram aprovados"
+- Ao marcar, salva no banco e redireciona ao dashboard
+
+### 3. `src/App.tsx`
+
+**Mudanças:**
+- Adicionar rota `/aluno/exame-medico` → `ExameMedico`
+
+---
+
+## Banco de Dados
+
+### Migração Necessária
+
+Adicionar coluna `exame_medico_concluido` na tabela `progresso_renach`:
+
+```sql
+ALTER TABLE progresso_renach 
+ADD COLUMN IF NOT EXISTS exame_medico_concluido BOOLEAN DEFAULT false;
+```
+
+Esta coluna armazenará se o aluno já marcou que fez os exames.
 
 ---
 
@@ -145,42 +128,86 @@ if (data?.recipientStatus) {
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `get-instructor-balance-pagarme/index.ts` | **MODIFICAR** | Consultar banco local + retornar status do recipient |
-| `InstructorBalanceCard.tsx` | **MODIFICAR** | Exibir aviso de conta em ativação |
-| `InstrutorGanhos.tsx` | **MODIFICAR** | Tratar recipientStatus e mostrar valores corretos |
+| `AlunoDashboard.tsx` | **MODIFICAR** | Tornar card clicável + carregar status do banco |
+| `ExameMedico.tsx` | **CRIAR** | Nova página com guia + botão WhatsApp + checkbox |
+| `App.tsx` | **MODIFICAR** | Adicionar rota `/aluno/exame-medico` |
+| `progresso_renach` | **MIGRAÇÃO** | Adicionar coluna `exame_medico_concluido` |
 
 ---
 
 ## Seção Técnica
 
-### Query para Calcular Ganhos Locais
-
-```sql
-SELECT 
-  SUM(valor_instrutor) as total_pendente,
-  COUNT(*) as total_aulas
-FROM pagamentos
-WHERE instrutor_id = '2cf27a10-3034-431a-bb92-89b08f90adf5'
-  AND status = 'aprovado';
-```
-
-Resultado esperado para Frank Alexandre: **R$ 4,52** (1 aula concluída)
-
-### Status do Recipient na Pagar.me
-
-| Status | Significado | Ação no App |
-|--------|-------------|-------------|
-| `active` | Conta ativa | Mostra saldo real da Pagar.me |
-| `affiliation` | Em processo de ativação | Mostra ganhos locais como "pendente" |
-| `refused` | Conta recusada | Solicita recadastro bancário |
-| `suspended` | Conta suspensa | Mostra aviso de contato suporte |
-
-### Lógica de Prioridade
+### Estrutura do Componente ExameMedico.tsx
 
 ```typescript
-// Ordem de prioridade para mostrar saldo:
-// 1. Se Pagar.me available > 0 → mostrar available
-// 2. Se status = affiliation → mostrar soma do banco como waitingFunds
-// 3. Se status = refused → mostrar erro e pedir recadastro
+// Estados principais
+const [loading, setLoading] = useState(false);
+const [exameConcluido, setExameConcluido] = useState(false);
+
+// Função para salvar no banco
+const handleCheckboxChange = async (checked: boolean) => {
+  if (!checked) return;
+  
+  // 1. Buscar aluno_id do usuário atual
+  const { data: aluno } = await supabase
+    .from('alunos')
+    .select('id')
+    .eq('user_id', user.id)
+    .single();
+  
+  // 2. Atualizar progresso_renach
+  await supabase
+    .from('progresso_renach')
+    .update({ exame_medico_concluido: true })
+    .eq('aluno_id', aluno.id);
+  
+  // 3. Mostrar toast de sucesso
+  toast.success('Exames marcados como concluídos!');
+  
+  // 4. Redirecionar ao dashboard
+  navigate('/aluno');
+};
+
+// Função para abrir WhatsApp
+const openWhatsApp = () => {
+  window.open('https://wa.me/5518981288372', '_blank');
+};
 ```
 
+### Query para Carregar Status no Dashboard
+
+```typescript
+// No AlunoDashboard.tsx, dentro do useEffect
+const { data: progresso } = await supabase
+  .from('progresso_renach')
+  .select('exame_medico_concluido, curso_teorico_conclusao, ...')
+  .eq('aluno_id', aluno.id)
+  .maybeSingle();
+
+setProgressoRenach({
+  exame_medico_concluido: progresso?.exame_medico_concluido ?? false,
+  ...progresso
+});
+```
+
+### Estilos do Botão WhatsApp
+
+```typescript
+<Button
+  onClick={openWhatsApp}
+  className="w-full h-14 text-lg font-bold text-white gap-3"
+  style={{ backgroundColor: '#00BFFF' }}
+>
+  <MessageCircle className="w-6 h-6" />
+  Agendar pelo WhatsApp Agora
+</Button>
+```
+
+### Lógica de Badge Atualizada
+
+```typescript
+case 1: // Exame Médico
+  return exameMedicoCompleto 
+    ? { text: "Concluído", color: "bg-green-500 text-white" }
+    : { text: "Pendente", color: "bg-amber-100 text-amber-700" };
+```
