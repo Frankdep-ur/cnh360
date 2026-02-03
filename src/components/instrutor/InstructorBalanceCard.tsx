@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -90,7 +90,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     setError(null);
 
     try {
-      // Call new start-kyc Edge Function
+      // Call start-kyc Edge Function
       const { data, error: invokeError } = await supabase.functions.invoke(
         "start-kyc"
       );
@@ -119,6 +119,17 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         return;
       }
 
+      // Handle IP restriction - show email fallback message
+      if (data?.error === "ip_restricted") {
+        toast({
+          title: "Verificação enviada por e-mail 📧",
+          description: data.message,
+          duration: 8000,
+        });
+        setStatusMessage(data.message);
+        return;
+      }
+
       // Handle KYC link generation failure
       if (data?.error === "kyc_link_failed") {
         toast({
@@ -131,9 +142,10 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
       // Success - open KYC URL directly in app
       if (data?.kyc_url) {
+        const sourceLabel = data.source === "cached" ? "(link salvo)" : "";
         toast({
           title: "Verificação iniciada! 📸",
-          description: "Complete a verificação facial na tela que vai abrir.",
+          description: `Complete a verificação facial na tela que vai abrir. ${sourceLabel}`,
           duration: 5000,
         });
         

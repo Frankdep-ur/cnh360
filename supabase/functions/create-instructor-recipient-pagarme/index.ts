@@ -360,9 +360,60 @@ serve(async (req) => {
     // Update instructor with recipient_id
     const supabaseService = createClient(supabaseUrl, supabaseServiceKey);
     
+    // Try to generate KYC link immediately after creating recipient
+    // This may work if done from the same session/IP, avoiding the allowlist issue
+    let kycUrl: string | null = null;
+    let kycBase64: string | null = null;
+    let kycExpiresAt: string | null = null;
+    
+    try {
+      logStep("Attempting to generate KYC link immediately after recipient creation");
+      
+      const kycResponse = await fetch(
+        `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      
+      const kycData = await kycResponse.json();
+      logStep("KYC link response", { status: kycResponse.status, hasUrl: !!kycData?.url });
+      
+      if (kycResponse.ok && kycData?.url) {
+        kycUrl = kycData.url;
+        kycBase64 = kycData.base64 || null;
+        // Link expires in 20 minutes
+        kycExpiresAt = kycData.expiration_date || new Date(Date.now() + 20 * 60 * 1000).toISOString();
+        logStep("KYC link generated successfully", { url: kycUrl, expiresAt: kycExpiresAt });
+      } else {
+        logStep("KYC link generation failed (will use fallback)", { 
+          error: kycData?.message || kycData?.errors?.[0]?.message 
+        });
+      }
+    } catch (kycError: any) {
+      logStep("KYC link generation error (will use fallback)", { error: kycError.message });
+    }
+    
+    // Update instructor with recipient_id and KYC link (if available)
+    const updateData: any = { 
+      pagarme_recipient_id: recipientId,
+      kyc_status: "not_started",
+    };
+    
+    if (kycUrl) {
+      updateData.kyc_url = kycUrl;
+      updateData.kyc_base64 = kycBase64;
+      updateData.kyc_link_expires_at = kycExpiresAt;
+    }
+    
     const { error: updateError } = await supabaseService
       .from("instrutores")
-      .update({ pagarme_recipient_id: recipientId })
+      .update(updateData)
       .eq("user_id", user.id);
 
     if (updateError) {
@@ -370,13 +421,17 @@ serve(async (req) => {
       throw new Error("Recebedor criado mas falhou ao salvar no banco de dados");
     }
 
-    logStep("Recipient ID saved to database successfully");
+    logStep("Recipient ID saved to database successfully", { hasKycLink: !!kycUrl });
 
     return new Response(
       JSON.stringify({
         success: true,
         recipientId,
-        message: "Dados bancários configurados com sucesso!"
+        kycUrl,
+        kycExpiresAt,
+        message: kycUrl 
+          ? "Dados bancários configurados! Complete a verificação de identidade."
+          : "Dados bancários configurados com sucesso!"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
