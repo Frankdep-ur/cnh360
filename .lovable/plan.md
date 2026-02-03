@@ -1,96 +1,160 @@
 
-# Diagnóstico: Status "Recusado" do Lucas Felipe
 
-## Problema Identificado
+# Diagnóstico: Erro de IP não autorizado na Pagar.me
 
-Há uma **inconsistência de estado** entre o banco de dados local e a Pagar.me:
+## O Problema
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  Banco de Dados Local                                        │
-│  kyc_status = 'approved' ✅                                  │
-│  (atualizado pelo teste de webhook simulado)                 │
-├──────────────────────────────────────────────────────────────┤
-│  API Real da Pagar.me                                        │
-│  status = 'refused' ❌                                       │
-│  (recebedor foi recusado em 27/01/2026)                      │
-└──────────────────────────────────────────────────────────────┘
-```
+A Pagar.me implementou uma **restrição de IP allowlist** na rota `/kyc_link`. Chamadas originadas de IPs dinâmicos (como Supabase Edge Functions, Vercel, AWS Lambda, etc.) são bloqueadas com a mensagem:
 
-## Por que isso acontece?
+> **"IP de origem não autorizado a realizar essa operação"**
 
-1. O recebedor `re_cmkx1axuk8zii0l9tr13bvg5c` foi **recusado pela Pagar.me** no dia 27/01/2026
-2. Quando fizemos o **teste de simulação** do webhook, atualizamos o banco local para `approved`
-3. Mas a **API real** da Pagar.me ainda retorna `refused` - porque o recebedor continua recusado lá
-4. A Edge Function corretamente consulta a **fonte verdadeira** (API Pagar.me) e mostra "recusado"
+Isso acontece porque:
+- A Supabase Edge Function roda em IPs dinâmicos da Deno Deploy
+- A Pagar.me exige que você cadastre IPs estáticos na allowlist
+- Não temos controle sobre os IPs do Supabase
 
-## Ação Necessária
+## Alternativas Disponíveis
 
-O Lucas Felipe precisa **recadastrar seus dados bancários**:
-1. Isso criará um **novo recebedor** na Pagar.me
-2. O novo recebedor passará pelo processo de verificação
-3. Quando aprovado via webhook, o status será sincronizado
-
-## Correções no Sistema
-
-Para evitar confusão futura, precisamos:
-
-### 1. Sincronizar o banco de dados local com a Pagar.me
-Quando a Edge Function detectar que o status da Pagar.me é diferente do banco local, atualizar automaticamente:
-
-```typescript
-// Na get-instructor-balance-pagarme
-if (recipientStatus !== kycStatusLocal) {
-  // Mapear e atualizar banco local
-  const mappedStatus = mapPagarmeStatus(recipientStatus);
-  await supabase
-    .from("instrutores")
-    .update({ kyc_status: mappedStatus })
-    .eq("id", instrutorData.id);
-}
-```
-
-### 2. Corrigir o status do Lucas Felipe agora
-Atualizar manualmente o banco de dados para refletir a realidade:
-
-```sql
-UPDATE instrutores 
-SET kyc_status = 'refused' 
-WHERE id = 'a9b56ebf-4830-4104-924e-e987dbe7abce';
-```
-
-### 3. UI para recadastro
-Quando status é `refused`, mostrar botão claro para "Recadastrar dados bancários" que:
-- Limpa o `pagarme_recipient_id` antigo
-- Abre o formulário `BankAccountSetup` para criar novo recebedor
+Existem 3 abordagens para resolver isso, mantendo a UX padrão Uber/iFood (tudo dentro do app):
 
 ---
 
-## Seção Técnica
+### Opção 1: Capturar o QR Code na Criação do Recebedor (RECOMENDADA)
 
-### Mapeamento de Status
+De acordo com a documentação da Pagar.me:
 
-| Pagar.me API | Banco Local | Ação |
-|--------------|-------------|------|
-| `active` | `approved` | Saques liberados |
-| `affiliation` | `in_review` | Aguardando verificação |
-| `refused` | `refused` | Precisa recadastrar |
-| `suspended` | `refused` | Contatar suporte |
+> "No fluxo de criação de um novo recebedor, será disponibilizado um QR Code de acesso ao webapp, que deverá ser renderizado pelo Marketplace."
+
+A Pagar.me retorna o `kyc_details` diretamente no response da criação do recebedor, sem necessidade de chamar `/kyc_link` separadamente.
+
+**Alterações:**
+1. Modificar `create-instructor-recipient-pagarme` para capturar e salvar o `base64` do QR Code e a `url` do KYC no banco de dados
+2. Criar colunas `kyc_url` e `kyc_base64` na tabela `instrutores`
+3. Na UI, mostrar o botão "Verificar Identidade" que abre a URL salva
+
+**Prós:**
+- Nenhuma chamada adicional à API
+- Funciona imediatamente sem IP allowlist
+- O link é gerado automaticamente na criação do recebedor
+
+**Contras:**
+- O link expira em 20 minutos
+- Se o instrutor não completar na hora, precisamos regenerar (só aí temos problema de IP)
+
+---
+
+### Opção 2: Proxy via Backend Externo com IP Estático
+
+Configurar um pequeno serviço externo (ex: Railway, Render, VPS) com IP estático cadastrado na allowlist da Pagar.me, que atua como proxy para a chamada `/kyc_link`.
+
+**Arquitetura:**
+```text
+[CNH360 App] → [Edge Function] → [Proxy Railway/VPS] → [Pagar.me API]
+                                      ↓
+                              (IP estático cadastrado)
+```
+
+**Prós:**
+- Funciona 100% on-demand
+- Controle total sobre quando gerar links
+- UX perfeita igual Uber
+
+**Contras:**
+- Custo adicional (mínimo ~R$5/mês)
+- Dependência de serviço externo
+- Mais complexidade
+
+---
+
+### Opção 3: Fluxo Automático da Pagar.me (menos controle)
+
+Deixar a Pagar.me enviar o link por e-mail automaticamente quando o recebedor atingir status `affiliation`, e apenas instruir o usuário a verificar o e-mail.
+
+**Prós:**
+- Zero alteração técnica
+
+**Contras:**
+- Perde a UX embutida
+- Usuário sai do app para verificar e-mail
+- Dependência de deliverability de e-mail
+
+---
+
+## Plano de Implementação: Opção 1 (Recomendada)
+
+### Passo 1: Adicionar Colunas no Banco
+
+```sql
+ALTER TABLE instrutores 
+ADD COLUMN kyc_url TEXT,
+ADD COLUMN kyc_base64 TEXT,
+ADD COLUMN kyc_link_expires_at TIMESTAMP WITH TIME ZONE;
+```
+
+### Passo 2: Atualizar a Edge Function de Criação de Recebedor
+
+Modificar `create-instructor-recipient-pagarme/index.ts` para:
+- Capturar o objeto `kyc_details` do response da Pagar.me
+- Salvar `kyc_url`, `kyc_base64` e `expiration_date` no banco
+
+### Passo 3: Atualizar a Edge Function start-kyc
+
+Modificar `start-kyc/index.ts` para:
+- Primeiro, verificar se existe `kyc_url` salvo no banco que ainda não expirou
+- Se existir e for válido, retornar essa URL sem chamar a API
+- Se expirou ou não existe, tentar gerar nova (se funcionar, ótimo; se der erro de IP, retornar mensagem amigável)
+
+### Passo 4: UI com Fallback Elegante
+
+Se não conseguir gerar link on-demand:
+- Mostrar mensagem: "Por segurança, a verificação foi enviada para seu e-mail cadastrado"
+- Incluir botão secundário: "Não recebi o e-mail"
+
+---
+
+## Seção Técnica: Detalhes da Implementação
+
+### Estrutura do Response de Criação de Recebedor
+
+Quando a Pagar.me retorna o recebedor criado com status `affiliation`, o objeto contém:
+
+```json
+{
+  "id": "re_xxx",
+  "status": "affiliation",
+  "kyc_details": {
+    "status": "partially_denied",
+    "status_reason": "additional_documents_required"
+  }
+}
+```
+
+Porém, a URL do KYC precisa ser gerada via POST `/kyc_link`. A documentação sugere que o QR Code pode vir no webhook de `recipient.updated` quando atinge `affiliation`.
 
 ### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/get-instructor-balance-pagarme/index.ts` | Adicionar sincronização automática de status |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Adicionar botão "Recadastrar" quando refused |
-| `src/components/instrutor/BankAccountSetup.tsx` | Permitir recadastro limpando recipient_id antigo |
+| `supabase/functions/create-instructor-recipient-pagarme/index.ts` | Tentar chamar `/kyc_link` após criar recebedor e salvar no banco |
+| `supabase/functions/start-kyc/index.ts` | Verificar URL salva antes de chamar API; fallback elegante |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Mostrar mensagem amigável de fallback |
+| Migração SQL | Adicionar colunas `kyc_url`, `kyc_base64`, `kyc_link_expires_at` |
 
-### SQL para Corrigir Agora
+### Fluxo Final (UX)
 
-```sql
--- Sincronizar com status real da Pagar.me
-UPDATE instrutores 
-SET kyc_status = 'refused', kyc_updated_at = now() 
-WHERE id = 'a9b56ebf-4830-4104-924e-e987dbe7abce';
+```text
+1. Instrutor cadastra dados bancários
+   ↓
+2. Sistema cria recebedor na Pagar.me
+   ↓
+3. Sistema tenta gerar link de KYC imediatamente (mesma sessão, mesmo IP)
+   ↓
+4a. Se sucesso → salva URL no banco → instrutor clica "Verificar agora" → abre KYC
+   ↓
+4b. Se erro de IP → exibe mensagem: "Verificação enviada ao seu e-mail"
+   ↓
+5. Instrutor completa KYC (via link salvo OU via e-mail)
+   ↓
+6. Webhook atualiza status automaticamente
 ```
 
