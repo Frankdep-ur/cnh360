@@ -119,23 +119,22 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         return;
       }
 
-      // Handle IP restriction - show email fallback message
-      if (data?.error === "ip_restricted") {
-        toast({
-          title: "Verificação enviada por e-mail 📧",
-          description: data.message,
-          duration: 8000,
-        });
-        setStatusMessage(data.message);
-        return;
-      }
-
       // Handle KYC link generation failure
       if (data?.error === "kyc_link_failed") {
         toast({
           variant: "destructive",
           title: "Erro ao gerar link",
-          description: data.message || "Tente novamente mais tarde.",
+          description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte CNH360.",
+        });
+        return;
+      }
+
+      // Handle any other error
+      if (data?.error) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: data.message || "Erro ao gerar link de verificação. Tente novamente ou contate suporte CNH360.",
         });
         return;
       }
