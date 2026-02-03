@@ -53,10 +53,10 @@ serve(async (req) => {
       // No body provided, will use authenticated user
     }
 
-    // Get instructor's recipient_id
+    // Get instructor's recipient_id and cached KYC URL
     let query = supabase
       .from("instrutores")
-      .select("id, pagarme_recipient_id, kyc_status");
+      .select("id, pagarme_recipient_id, kyc_status, kyc_url, kyc_base64, kyc_link_expires_at");
     
     if (instructorId) {
       query = query.eq("id", instructorId);
@@ -70,7 +70,12 @@ serve(async (req) => {
       throw new Error("Instrutor não encontrado");
     }
 
-    logStep("Instructor found", { id: instrutorData.id, hasRecipient: !!instrutorData.pagarme_recipient_id });
+    logStep("Instructor found", { 
+      id: instrutorData.id, 
+      hasRecipient: !!instrutorData.pagarme_recipient_id,
+      hasCachedKycUrl: !!instrutorData.kyc_url,
+      kycExpiresAt: instrutorData.kyc_link_expires_at
+    });
 
     if (!instrutorData.pagarme_recipient_id) {
       return new Response(
@@ -135,8 +140,47 @@ serve(async (req) => {
       );
     }
 
-    // Generate KYC link on-demand (NO email, NO SMS)
-    logStep("Generating KYC link on-demand", { recipientId });
+    // Check if we have a valid cached KYC URL
+    if (instrutorData.kyc_url && instrutorData.kyc_link_expires_at) {
+      const expiresAt = new Date(instrutorData.kyc_link_expires_at);
+      const now = new Date();
+      
+      // Add 2 minute buffer to avoid edge cases
+      if (expiresAt > new Date(now.getTime() + 2 * 60 * 1000)) {
+        logStep("Using cached KYC URL", { 
+          url: instrutorData.kyc_url, 
+          expiresAt: instrutorData.kyc_link_expires_at 
+        });
+        
+        // Update status to initiated
+        if (instrutorData.kyc_status === "not_started" || instrutorData.kyc_status === "refused") {
+          await supabase
+            .from("instrutores")
+            .update({ kyc_status: "initiated", kyc_updated_at: new Date().toISOString() })
+            .eq("id", instrutorData.id);
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            kyc_url: instrutorData.kyc_url,
+            base64_qr_code: instrutorData.kyc_base64,
+            expiration_date: instrutorData.kyc_link_expires_at,
+            message: "Complete a verificação em até 20 minutos.",
+            source: "cached",
+          }),
+          { 
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      } else {
+        logStep("Cached KYC URL expired", { expiresAt: instrutorData.kyc_link_expires_at });
+      }
+    }
+
+    // Try to generate KYC link on-demand (may fail due to IP restriction)
+    logStep("Attempting to generate KYC link on-demand", { recipientId });
     
     const kycResponse = await fetch(
       `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
@@ -146,7 +190,6 @@ serve(async (req) => {
           "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
           "Content-Type": "application/json",
         },
-        // Empty body - no email, no SMS
         body: JSON.stringify({}),
       }
     );
@@ -157,14 +200,33 @@ serve(async (req) => {
     if (!kycResponse.ok) {
       logStep("KYC link generation failed", kycData);
       
-      // Check for specific error codes
-      const errorMessage = kycData?.message || kycData?.errors?.[0]?.message || "Erro ao gerar link de verificação";
+      const errorMessage = kycData?.message || kycData?.errors?.[0]?.message || "";
+      
+      // Check for IP restriction error
+      if (errorMessage.toLowerCase().includes("ip") || 
+          errorMessage.toLowerCase().includes("origem") ||
+          errorMessage.toLowerCase().includes("autorizado")) {
+        logStep("IP restriction detected, returning email fallback");
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: "ip_restricted",
+            fallback: "email",
+            message: "Por segurança, o link de verificação foi enviado para o e-mail cadastrado na sua conta. Verifique também a pasta de spam.",
+          }),
+          { 
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
       
       return new Response(
         JSON.stringify({ 
           success: false,
           error: "kyc_link_failed",
-          message: errorMessage,
+          message: errorMessage || "Erro ao gerar link de verificação",
           details: kycData,
         }),
         { 
@@ -174,17 +236,25 @@ serve(async (req) => {
       );
     }
 
-    // Update kyc_status to in_review since user is starting verification
-    if (instrutorData.kyc_status === "not_started" || instrutorData.kyc_status === "refused") {
-      await supabase
-        .from("instrutores")
-        .update({ kyc_status: "initiated", kyc_updated_at: new Date().toISOString() })
-        .eq("id", instrutorData.id);
-    }
+    // Success! Save the new KYC URL to cache
+    const kycExpiresAt = kycData.expiration_date || new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    
+    await supabase
+      .from("instrutores")
+      .update({ 
+        kyc_url: kycData.url,
+        kyc_base64: kycData.base64 || null,
+        kyc_link_expires_at: kycExpiresAt,
+        kyc_status: instrutorData.kyc_status === "not_started" || instrutorData.kyc_status === "refused" 
+          ? "initiated" 
+          : instrutorData.kyc_status,
+        kyc_updated_at: new Date().toISOString(),
+      })
+      .eq("id", instrutorData.id);
 
-    logStep("KYC link generated successfully", { 
+    logStep("KYC link generated and cached successfully", { 
       url: kycData.url,
-      expirationDate: kycData.expiration_date 
+      expirationDate: kycExpiresAt 
     });
 
     return new Response(
@@ -192,8 +262,9 @@ serve(async (req) => {
         success: true,
         kyc_url: kycData.url,
         base64_qr_code: kycData.base64,
-        expiration_date: kycData.expiration_date,
+        expiration_date: kycExpiresAt,
         message: "Link de verificação gerado! Complete a verificação em até 20 minutos.",
+        source: "fresh",
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
