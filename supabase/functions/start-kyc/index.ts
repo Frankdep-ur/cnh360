@@ -7,7 +7,17 @@ const corsHeaders = {
 };
 
 const logStep = (step: string, details?: any) => {
-  console.log(`[start-kyc] ${step}`, details ? JSON.stringify(details) : "");
+  const timestamp = new Date().toISOString();
+  console.log(`[start-kyc][${timestamp}] ${step}`, details ? JSON.stringify(details) : "");
+};
+
+const logError = (step: string, error: any) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[start-kyc][${timestamp}] ERROR - ${step}`, {
+    message: error?.message || error,
+    status: error?.status,
+    body: error?.body || error?.errors,
+  });
 };
 
 serve(async (req) => {
@@ -179,54 +189,46 @@ serve(async (req) => {
       }
     }
 
-    // Try to generate KYC link on-demand (may fail due to IP restriction)
-    logStep("Attempting to generate KYC link on-demand", { recipientId });
+    // Generate KYC link on-demand
+    logStep("Iniciando geração de link KYC", { 
+      recipientId,
+      apiKeyMasked: pagarmeApiKey.substring(0, 10) + "...",
+    });
     
-    const kycResponse = await fetch(
-      `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      }
-    );
+    const kycEndpoint = `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`;
+    logStep("Chamando endpoint", { url: kycEndpoint });
+    
+    const kycResponse = await fetch(kycEndpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+        "Content-Type": "application/json",
+      },
+      // Body vazio - NÃO enviar parâmetros de email/SMS
+    });
 
     const kycData = await kycResponse.json();
-    logStep("KYC API response", { status: kycResponse.status, hasUrl: !!kycData?.url });
+    logStep("KYC API response", { 
+      status: kycResponse.status, 
+      hasUrl: !!kycData?.url,
+      expirationDate: kycData?.expiration_date,
+    });
 
     if (!kycResponse.ok) {
-      logStep("KYC link generation failed", kycData);
+      logError("KYC link generation failed", {
+        status: kycResponse.status,
+        message: kycData?.message,
+        errors: kycData?.errors,
+        body: kycData,
+      });
       
-      const errorMessage = kycData?.message || kycData?.errors?.[0]?.message || "";
-      
-      // Check for IP restriction error
-      if (errorMessage.toLowerCase().includes("ip") || 
-          errorMessage.toLowerCase().includes("origem") ||
-          errorMessage.toLowerCase().includes("autorizado")) {
-        logStep("IP restriction detected, returning email fallback");
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: "ip_restricted",
-            fallback: "email",
-            message: "Por segurança, o link de verificação foi enviado para o e-mail cadastrado na sua conta. Verifique também a pasta de spam.",
-          }),
-          { 
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          }
-        );
-      }
+      const errorMessage = kycData?.message || kycData?.errors?.[0]?.message || "Erro desconhecido";
       
       return new Response(
         JSON.stringify({ 
           success: false,
           error: "kyc_link_failed",
-          message: errorMessage || "Erro ao gerar link de verificação",
+          message: errorMessage,
           details: kycData,
         }),
         { 
@@ -235,8 +237,15 @@ serve(async (req) => {
         }
       );
     }
+    
+    // Success!
+    logStep("KYC link gerado com sucesso", { 
+      url: kycData.url,
+      expirationDate: kycData.expiration_date,
+      hasQrCode: !!kycData.base64,
+    });
 
-    // Success! Save the new KYC URL to cache
+    // Save the new KYC URL to cache
     const kycExpiresAt = kycData.expiration_date || new Date(Date.now() + 20 * 60 * 1000).toISOString();
     
     await supabase
@@ -252,10 +261,7 @@ serve(async (req) => {
       })
       .eq("id", instrutorData.id);
 
-    logStep("KYC link generated and cached successfully", { 
-      url: kycData.url,
-      expirationDate: kycExpiresAt 
-    });
+    logStep("KYC link salvo no banco com sucesso");
 
     return new Response(
       JSON.stringify({
@@ -273,7 +279,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    logStep("Error", { message: error.message });
+    logError("Erro interno", error);
     return new Response(
       JSON.stringify({ 
         success: false,
