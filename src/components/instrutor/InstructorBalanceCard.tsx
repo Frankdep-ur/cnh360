@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Mail } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { openExternalLink } from "@/lib/openExternalLink";
+import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
 
 interface BalanceData {
   available: number;
@@ -25,6 +27,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [loadingKyc, setLoadingKyc] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -90,7 +93,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     setError(null);
 
     try {
-      // Call start-kyc Edge Function
       const { data, error: invokeError } = await supabase.functions.invoke(
         "start-kyc"
       );
@@ -99,7 +101,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         throw new Error("Erro ao iniciar verificação");
       }
 
-      // Handle already active
       if (data?.status === "already_active") {
         toast({
           title: "Conta já verificada! ✅",
@@ -109,7 +110,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         return;
       }
 
-      // Handle recipient not found
       if (data?.error === "recipient_not_found") {
         toast({
           variant: "destructive",
@@ -119,41 +119,35 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         return;
       }
 
-      // Handle KYC link generation failure
       if (data?.error === "kyc_link_failed") {
         toast({
           variant: "destructive",
           title: "Erro ao gerar link",
-          description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte CNH360.",
+          description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372",
         });
         return;
       }
 
-      // Handle any other error
       if (data?.error) {
         toast({
           variant: "destructive",
           title: "Erro",
-          description: data.message || "Erro ao gerar link de verificação. Tente novamente ou contate suporte CNH360.",
+          description: data.message || "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372",
         });
         return;
       }
 
-      // Success - open KYC URL directly in app
       if (data?.kyc_url) {
-        const sourceLabel = data.source === "cached" ? "(link salvo)" : "";
         toast({
           title: "Verificação iniciada! 📸",
-          description: `Complete a verificação facial na tela que vai abrir. ${sourceLabel}`,
+          description: "Complete a verificação facial na tela que vai abrir. O link expira em 20 minutos.",
           duration: 5000,
         });
         
-        // Open KYC URL using the external link helper (works in PWA/WebView)
         openExternalLink(data.kyc_url);
         return;
       }
 
-      // Fallback error
       toast({
         variant: "destructive",
         title: "Erro inesperado",
@@ -170,6 +164,22 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     } finally {
       setLoadingKyc(false);
     }
+  };
+
+  const handleWithdrawClick = () => {
+    if (recipientStatus !== "active") {
+      toast({
+        variant: "destructive",
+        title: "Verificação necessária",
+        description: "Complete a verificação de identidade antes de fazer saques.",
+      });
+      return;
+    }
+    setShowWithdrawModal(true);
+  };
+
+  const handleWithdrawSuccess = () => {
+    fetchBalance();
   };
 
   // If no recipient configured, show setup prompt
@@ -203,6 +213,14 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     );
   }
 
+  // Determine if KYC banner should be shown
+  const showKycBanner = recipientStatus && 
+    recipientStatus !== "active" && 
+    recipientStatus !== "refused" && 
+    recipientStatus !== "suspended";
+
+  const showKycBannerInitial = !recipientStatus && hasRecipient && !loading && balance;
+
   return (
     <div className="bg-card rounded-2xl shadow-card p-4">
       {/* Header */}
@@ -224,6 +242,21 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
         </Button>
       </div>
+
+      {/* KYC Verified Badge - Show when active */}
+      {recipientStatus === "active" && (
+        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium text-emerald-700 dark:text-emerald-300">
+              Identidade verificada ✓
+            </span>
+            <Badge className="ml-auto bg-emerald-100 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300 border-0">
+              Ativo
+            </Badge>
+          </div>
+        </div>
+      )}
 
       {/* Status Alert for Affiliation/Refused/Suspended */}
       {recipientStatus && recipientStatus !== "active" && statusMessage && (
@@ -259,8 +292,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         </Button>
       )}
 
-      {/* KYC Verification Banner - Show for affiliation OR not_started */}
-      {(recipientStatus === "affiliation" || (!recipientStatus && hasRecipient)) && (
+      {/* KYC Verification Banner - Show for affiliation/registration */}
+      {showKycBanner && (
         <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center flex-shrink-0">
@@ -274,6 +307,42 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 {recipientStatus === "affiliation" 
                   ? "Verificação em análise. Caso não tenha completado, clique abaixo para iniciar."
                   : "Complete a verificação facial para liberar seus saques."}
+              </p>
+              <Button
+                onClick={handleVerifyIdentity}
+                disabled={loadingKyc}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {loadingKyc ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Gerando link...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Verificar identidade agora
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Banner for initial state (no status yet) */}
+      {showKycBannerInitial && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center flex-shrink-0">
+              <Camera className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
+                Verificação de Identidade
+              </h4>
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
+                Complete a verificação facial para liberar seus saques.
               </p>
               <Button
                 onClick={handleVerifyIdentity}
@@ -335,7 +404,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
               Disponível para saque
             </div>
             <div className="text-2xl font-bold text-secondary">
-              {formatCurrency(balance.available, balance.currency)}
+              {formatCurrency(balance.available / 100, balance.currency)}
             </div>
           </div>
 
@@ -347,7 +416,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 {recipientStatus === "affiliation" ? "Pendente (ativação)" : "A receber"}
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.waitingFunds, balance.currency)}
+                {formatCurrency(balance.waitingFunds / 100, balance.currency)}
               </div>
               {recipientStatus === "affiliation" && balance.waitingFunds > 0 && (
                 <p className="text-xs text-amber-600 mt-1">Liberação em 48h</p>
@@ -360,10 +429,25 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 Já transferido
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.transferred, balance.currency)}
+                {formatCurrency(balance.transferred / 100, balance.currency)}
               </div>
             </div>
           </div>
+
+          {/* Withdraw Button */}
+          <Button
+            onClick={handleWithdrawClick}
+            disabled={balance.available <= 0}
+            className={cn(
+              "w-full",
+              recipientStatus === "active"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            <Banknote className="w-4 h-4 mr-2" />
+            {recipientStatus === "active" ? "Sacar Saldo" : "Sacar (verificação necessária)"}
+          </Button>
 
           {/* Last Updated */}
           {lastUpdated && (
@@ -373,6 +457,16 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
           )}
         </div>
       )}
+
+      {/* Withdraw Modal */}
+      <WithdrawModal
+        open={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        availableBalance={balance?.available ? balance.available / 100 : 0}
+        hasRecipient={hasRecipient}
+        onSetupBank={onSetupClick}
+        onSuccess={handleWithdrawSuccess}
+      />
     </div>
   );
 }

@@ -23,7 +23,6 @@ import {
   Calendar,
   Navigation,
   Shield,
-  Zap,
   X,
   Check,
   Bell,
@@ -61,8 +60,6 @@ export default function InstrutorDashboard() {
   const [isPremium, setIsPremium] = useState(false);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [testingKyc, setTestingKyc] = useState(false);
-  const [kycTestResult, setKycTestResult] = useState<{ success: boolean; data: any } | null>(null);
   
   // Persist online status in localStorage
   const [isOnline, setIsOnline] = useState(() => {
@@ -178,72 +175,6 @@ export default function InstrutorDashboard() {
       title: "Modo demonstração",
       description: "Esta é uma aula de exemplo para visualização.",
     });
-  };
-
-  // Teste temporário de geração de link KYC
-  const handleTestKyc = async () => {
-    if (!instrutorId) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Instrutor não identificado. Faça login novamente.",
-      });
-      return;
-    }
-
-    setTestingKyc(true);
-    setKycTestResult(null);
-
-    try {
-      console.log("[TestKYC] Iniciando teste para instructor_id:", instrutorId);
-      
-      const { data, error } = await supabase.functions.invoke("start-kyc", {
-        body: { instructor_id: instrutorId },
-      });
-
-      console.log("[TestKYC] Resultado:", { data, error });
-
-      if (error) {
-        setKycTestResult({ success: false, data: { error: error.message } });
-        toast({
-          variant: "destructive",
-          title: "Erro na chamada",
-          description: error.message,
-        });
-        return;
-      }
-
-      setKycTestResult({ success: data?.success || false, data });
-
-      if (data?.kyc_url) {
-        toast({
-          title: "✅ Link KYC gerado!",
-          description: `URL: ${data.kyc_url.substring(0, 50)}...`,
-          duration: 10000,
-        });
-      } else if (data?.error) {
-        toast({
-          variant: "destructive",
-          title: "Erro Pagar.me",
-          description: data.message || data.error,
-        });
-      } else {
-        toast({
-          title: "Resultado",
-          description: JSON.stringify(data).substring(0, 100),
-        });
-      }
-    } catch (err: any) {
-      console.error("[TestKYC] Erro:", err);
-      setKycTestResult({ success: false, data: { error: err.message } });
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: err.message,
-      });
-    } finally {
-      setTestingKyc(false);
-    }
   };
 
   return (
@@ -572,45 +503,6 @@ export default function InstrutorDashboard() {
           </p>
         </Card>
 
-        {/* Botão Temporário de Teste KYC */}
-        <Card className="p-4 shadow-card border-dashed border-amber-500">
-          <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-5 h-5 text-amber-500" />
-            <span className="font-semibold text-foreground">Teste de Verificação KYC</span>
-            <Badge variant="outline" className="text-amber-600 border-amber-500">DEV</Badge>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            Botão temporário para testar a geração de link KYC. Clique para testar se o link é gerado corretamente.
-          </p>
-          <Button 
-            onClick={handleTestKyc}
-            disabled={testingKyc || !instrutorId}
-            className="w-full bg-amber-500 hover:bg-amber-600 text-white"
-          >
-            {testingKyc ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Gerando link KYC...
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 mr-2" />
-                Testar Geração de Link KYC
-              </>
-            )}
-          </Button>
-          
-          {kycTestResult && (
-            <div className={cn(
-              "mt-3 p-3 rounded-lg text-xs font-mono overflow-auto max-h-40",
-              kycTestResult.success ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-destructive/10 border border-destructive/30"
-            )}>
-              <pre className="whitespace-pre-wrap break-all">
-                {JSON.stringify(kycTestResult.data, null, 2)}
-              </pre>
-            </div>
-          )}
-        </Card>
       </div>
 
       {/* Premium Activation Modal */}
