@@ -225,16 +225,15 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       errors.bankCode = "Selecione o banco";
     }
 
-    // Dígito de agência é OPCIONAL - não exigir mais
-    // A Pagar.me valida automaticamente se o banco precisa ou não
-    if (false && bankCode && BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
-      const bankName = SUPPORTED_BANKS.find(b => b.code === bankCode)?.name || bankCode;
-      errors.agencia = `O ${bankName} exige o dígito verificador da agência`;
+    // Validação de agência: máximo 5 dígitos
+    const cleanAgencia = agencia.replace(/\D/g, "");
+    if (!cleanAgencia || cleanAgencia.length < 1) {
+      errors.agencia = "Informe a agência";
+    } else if (cleanAgencia.length > 5) {
+      errors.agencia = "Agência deve ter no máximo 5 dígitos";
     }
 
-    if (!agencia || agencia.length < 1) {
-      errors.agencia = "Informe a agência";
-    }
+    // Dígito de agência é OPCIONAL - não validar como obrigatório
 
     if (!conta || conta.length < 1) {
       errors.conta = "Informe o número da conta";
@@ -332,10 +331,18 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       // Map technical errors to user-friendly messages with field highlighting
       const errorLower = error.message.toLowerCase();
       
+      // Check for connection/network errors first
+      const isConnectionError = errorLower.includes("edge function") || 
+        errorLower.includes("conexão") ||
+        errorLower.includes("network") ||
+        errorLower.includes("timeout") ||
+        errorLower.includes("failed to fetch") ||
+        errorLower.includes("tentativas");
+      
       if (errorLower.includes("authorization") || errorLower.includes("denied") || errorLower.includes("autenticação")) {
         friendlyMessage = "Erro de configuração do sistema. Por favor, entre em contato com o suporte.";
-      } else if (errorLower.includes("edge function") || errorLower.includes("conexão")) {
-        friendlyMessage = "Erro de conexão. Tente novamente em alguns segundos.";
+      } else if (isConnectionError) {
+        friendlyMessage = "Falha na conexão. Verifique sua internet e tente novamente.";
       } else if (errorLower.includes("agência") || errorLower.includes("branch")) {
         friendlyMessage = "Número da agência inválido. Verifique se digitou corretamente.";
         newFieldErrors.agencia = friendlyMessage;
@@ -360,9 +367,22 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       
       setFieldErrors(prev => ({ ...prev, ...newFieldErrors }));
       setErrorMessage(friendlyMessage);
-      toast.error("Erro ao configurar", {
-        description: friendlyMessage,
-      });
+      
+      // Show toast with retry action for connection errors
+      if (isConnectionError) {
+        toast.error("Erro de conexão", {
+          description: "Não foi possível conectar ao servidor. Tente novamente.",
+          action: {
+            label: "Tentar de novo",
+            onClick: () => handleSubmit(),
+          },
+          duration: 10000,
+        });
+      } else {
+        toast.error("Erro ao configurar", {
+          description: friendlyMessage,
+        });
+      }
     }
   };
 

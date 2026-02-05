@@ -35,6 +35,55 @@ const UNSUPPORTED_BANKS: Record<string, string> = {
   "655": "Neon",
 };
 
+// Retry function for Pagar.me API calls with timeout and automatic retry on 5xx
+async function callPagarmeWithRetry(
+  url: string, 
+  options: RequestInit, 
+  maxAttempts = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      
+      logStep(`Pagar.me API call attempt ${attempt}/${maxAttempts}`);
+      
+      const response = await fetch(url, { 
+        ...options, 
+        signal: controller.signal 
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Retry only on 5xx (server errors)
+      if (response.status >= 500 && attempt < maxAttempts) {
+        logStep(`Attempt ${attempt} failed with status ${response.status}, retrying in 3s...`);
+        await new Promise(r => setTimeout(r, 3000)); // 3s delay
+        continue;
+      }
+      
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      
+      if (error.name === "AbortError") {
+        logStep(`Attempt ${attempt} timed out after 15s`);
+      } else {
+        logStep(`Attempt ${attempt} network error: ${error.message}`);
+      }
+      
+      if (attempt < maxAttempts) {
+        logStep(`Retrying in 3s...`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+  
+  throw new Error(`Falha na conexão com Pagar.me após ${maxAttempts} tentativas. Verifique sua internet e tente novamente.`);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -82,6 +131,8 @@ serve(async (req) => {
       hasBankCode: !!body.bankCode,
       bankCode: body.bankCode,
       hasAgencia: !!body.agencia,
+      hasAgenciaDv: !!body.agenciaDv,
+      agenciaDv: body.agenciaDv,
       hasConta: !!body.conta
     });
 
@@ -120,11 +171,18 @@ serve(async (req) => {
       throw new Error(`O banco ${UNSUPPORTED_BANKS[cleanBankCode]} (${cleanBankCode}) não é suportado para saques automáticos. Por favor, escolha um banco tradicional como Itaú, Bradesco, Nubank, etc.`);
     }
 
+    // Validate agency (max 5 digits)
+    const cleanAgencia = agencia.replace(/\D/g, "");
+    if (cleanAgencia.length > 5) {
+      throw new Error("Agência deve ter no máximo 5 dígitos");
+    }
+
     logStep("Building recipient payload", { 
       type, 
       documentNumber: documentNumber.slice(0, 4) + "***",
       bankCode: cleanBankCode,
-      agencia,
+      agencia: cleanAgencia,
+      agenciaDv: agenciaDv || "(vazio)",
       accountType
     });
 
@@ -183,20 +241,32 @@ serve(async (req) => {
       };
     }
 
+    // Build bank account payload - CONDITIONALLY include branch_check_digit
+    const bankAccountPayload: any = {
+      holder_name: name.trim(),
+      holder_type: type,
+      holder_document: cleanDocument,
+      bank: cleanBankCode,
+      branch_number: cleanAgencia,
+      account_number: conta.replace(/\D/g, ""),
+      account_check_digit: contaDv || "",
+      type: accountType
+    };
+
+    // IMPORTANT: Only include branch_check_digit if it has a value
+    // Pagar.me V5 rejects empty string "" for this field
+    const cleanAgenciaDv = agenciaDv?.replace(/\D/g, "") || "";
+    if (cleanAgenciaDv && cleanAgenciaDv.length > 0) {
+      bankAccountPayload.branch_check_digit = cleanAgenciaDv;
+      logStep("Including branch_check_digit", { value: cleanAgenciaDv });
+    } else {
+      logStep("Omitting branch_check_digit (empty value)");
+    }
+
     const recipientPayload = {
       code: `instrutor-${user.id.slice(0, 8)}-${Date.now()}`,
       register_information: registerInfo,
-      default_bank_account: {
-        holder_name: name.trim(),
-        holder_type: type,
-        holder_document: cleanDocument,
-        bank: cleanBankCode,
-        branch_number: agencia.replace(/\D/g, ""),
-        branch_check_digit: agenciaDv?.replace(/\D/g, "") || "",
-        account_number: conta.replace(/\D/g, ""),
-        account_check_digit: contaDv || "",
-        type: accountType
-      },
+      default_bank_account: bankAccountPayload,
       transfer_settings: {
         transfer_enabled: true,
         transfer_interval: "daily",
@@ -213,24 +283,28 @@ serve(async (req) => {
     logStep("Recipient payload built", {
       code: recipientPayload.code,
       bankAccount: {
-        bank: recipientPayload.default_bank_account.bank,
-        branch: recipientPayload.default_bank_account.branch_number,
-        account: recipientPayload.default_bank_account.account_number,
-        type: recipientPayload.default_bank_account.type
+        bank: bankAccountPayload.bank,
+        branch: bankAccountPayload.branch_number,
+        branch_check_digit: bankAccountPayload.branch_check_digit || "(omitted)",
+        account: bankAccountPayload.account_number,
+        type: bankAccountPayload.type
       }
     });
 
-    logStep("Calling Pagar.me API");
+    logStep("Calling Pagar.me API with retry logic");
 
-    // Create recipient in Pagar.me V5
-    const pagarmeResponse = await fetch("https://api.pagar.me/core/v5/recipients", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
-      },
-      body: JSON.stringify(recipientPayload),
-    });
+    // Create recipient in Pagar.me V5 with retry
+    const pagarmeResponse = await callPagarmeWithRetry(
+      "https://api.pagar.me/core/v5/recipients",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
+        },
+        body: JSON.stringify(recipientPayload),
+      }
+    );
 
     const responseStatus = pagarmeResponse.status;
     const responseText = await pagarmeResponse.text();
@@ -258,10 +332,11 @@ serve(async (req) => {
       
       // Mapeamento detalhado de erros para mensagens amigáveis
       const errorMappings: Record<string, string> = {
-        // Erros de agência
-        "branch_number": "Número da agência inválido. Verifique se digitou corretamente.",
-        "branch_check_digit": "Dígito da agência incorreto ou faltando. Confira no seu cartão (ex: 63-9).",
-        "agencia_dv": "Dígito da agência obrigatório. Ex: Agência 63-9 → Dígito é '9'",
+        // Erros de agência - UPDATED for clarity
+        "branch_number": "Número da agência inválido. Verifique se digitou corretamente (ex: 63 ou 0063).",
+        "branch_check_digit": "Dígito da agência incorreto. Confira no seu cartão (ex: 63-9).",
+        "agencia_dv": "Formato da agência inválido. Confira se digitou corretamente (ex: 63 ou 0063).",
+        "invalid format": "Formato inválido. Verifique agência e conta digitados.",
         "branch": "Agência não encontrada para este banco.",
         
         // Erros de conta
@@ -370,7 +445,7 @@ serve(async (req) => {
     try {
       logStep("Attempting to generate KYC link immediately after recipient creation");
       
-      const kycResponse = await fetch(
+      const kycResponse = await callPagarmeWithRetry(
         `https://api.pagar.me/core/v5/recipients/${recipientId}/kyc_link`,
         {
           method: "POST",
