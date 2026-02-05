@@ -1,117 +1,180 @@
 
+# Correção: Erro de Conexão ao Salvar Dados Bancários
 
-# Correção: Dica de Agência + Botão de Verificação KYC
+## Diagnóstico do Problema
 
-## Problemas Identificados
+### Causa Raiz Identificada
 
-### Problema 1: Dica da agência confusa
+Analisando os logs da Edge Function `create-instructor-recipient-pagarme`:
 
-| Situação | O que aparece |
-|----------|---------------|
-| No cartão do banco | Agência: **63** |
-| Na dica do app | Agência 0**0063**-9 |
-
-O exemplo mostra zeros à esquerda que não aparecem no cartão do banco, confundindo o usuário.
-
-### Problema 2: Botão de verificação KYC não aparece
-
-O instrutor Lucas Felipe tem dados bancários configurados (`pagarme_recipient_id` existe) mas o botão de verificação de identidade **não aparece automaticamente** porque:
-
-1. O banner de KYC só é exibido quando existe `recipientStatus` ou quando o usuário já clicou em "Consultar saldo"
-2. O instrutor precisa primeiro clicar em "Consultar saldo" para o status ser carregado
-3. A condição `showKycBannerInitial` exige que `balance` exista, mas o saldo só carrega após clique manual
-
-O fluxo atual:
-```text
-┌─────────────────────────────────────┐
-│  Card de Saldo                      │
-│  [Consultar saldo] <- precisa clicar│
-│                                     │
-│  (nenhum banner de KYC visível)     │
-└─────────────────────────────────────┘
+```
+[22:05:53] Pagar.me API error - {"status":412,"message":"invalid_parameter | agencia_dv | Invalid format"}
+[22:05:53] Recipient payload built - {"bankAccount":{"bank":"237","branch":"63","account":"34844","type":"checking"}}
 ```
 
-Fluxo corrigido:
-```text
-┌─────────────────────────────────────┐
-│  Card de Saldo                      │
-│  ⚠️ Verificação pendente            │
-│  [🔍 Verificar identidade agora]    │  <- visível sempre
-│                                     │
-│  [Consultar saldo]                  │
-└─────────────────────────────────────┘
+**Problema**: O código envia `branch_check_digit: ""` (string vazia) para a API da Pagar.me, que **rejeita esse formato**. A API V5 da Pagar.me exige que o campo seja:
+- **Completamente omitido** (não presente no JSON), OU  
+- Um dígito válido (0-9)
+
+**Código atual (linha 195):**
+```typescript
+branch_check_digit: agenciaDv?.replace(/\D/g, "") || ""  // ❌ Envia "" quando vazio
 ```
+
+A mensagem "Erro de conexão" aparece porque o mapeamento de erros traduz qualquer erro com "agencia_dv" para uma mensagem confusa.
+
+---
+
+## Plano de Correção
+
+### 1. Edge Function: Omitir campo quando vazio
+
+**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+
+**Mudança:** Construir o payload condicionalmente, omitindo `branch_check_digit` quando estiver vazio:
+
+```typescript
+const bankAccountPayload: any = {
+  holder_name: name.trim(),
+  holder_type: type,
+  holder_document: cleanDocument,
+  bank: cleanBankCode,
+  branch_number: agencia.replace(/\D/g, ""),
+  account_number: conta.replace(/\D/g, ""),
+  account_check_digit: contaDv || "",
+  type: accountType
+};
+
+// Só incluir branch_check_digit se tiver valor
+const cleanAgenciaDv = agenciaDv?.replace(/\D/g, "");
+if (cleanAgenciaDv && cleanAgenciaDv.length > 0) {
+  bankAccountPayload.branch_check_digit = cleanAgenciaDv;
+}
+```
+
+### 2. Edge Function: Adicionar retry automático
+
+**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+
+**Mudança:** Implementar lógica de retry para erros de conexão/timeout:
+
+```typescript
+async function callPagarmeWithRetry(url: string, options: RequestInit, maxAttempts = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      // Retry apenas em 5xx (erros de servidor)
+      if (response.status >= 500 && attempt < maxAttempts) {
+        logStep(`Attempt ${attempt} failed with ${response.status}, retrying...`);
+        await new Promise(r => setTimeout(r, 3000)); // 3s delay
+        continue;
+      }
+      
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      if (error.name === "AbortError") {
+        logStep(`Attempt ${attempt} timed out, retrying...`);
+      } else {
+        logStep(`Attempt ${attempt} network error: ${error.message}`);
+      }
+      
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+  
+  throw new Error(`Falha na conexão com Pagar.me após ${maxAttempts} tentativas. Verifique sua internet.`);
+}
+```
+
+### 3. Edge Function: Melhorar mapeamento de erros
+
+**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+
+**Mudança:** Atualizar mensagens de erro para serem mais claras:
+
+| Erro da Pagar.me | Mensagem Atual | Nova Mensagem |
+|------------------|----------------|---------------|
+| `agencia_dv | Invalid format` | "Dígito da agência obrigatório..." | "Formato da agência inválido. Confira se digitou corretamente (ex: 63 ou 0063)." |
+| Timeout/Abort | — | "Falha na conexão. Tente novamente em alguns segundos." |
+| 5xx após retries | — | "Serviço temporariamente indisponível. Tente novamente em alguns minutos." |
+
+### 4. Frontend: Loading spinner e retry
+
+**Arquivo:** `src/components/instrutor/BankAccountSetup.tsx`
+
+**Mudanças:**
+
+1. **Botão com loading state** já implementado - verificar se funciona
+2. **Adicionar botão de retry no toast de erro:**
+
+```tsx
+toast.error("Erro de conexão", {
+  description: "Não foi possível conectar ao servidor. Tente novamente.",
+  action: {
+    label: "Tentar de novo",
+    onClick: () => handleSubmit(),
+  },
+  duration: 10000,
+});
+```
+
+3. **Validação extra de agência:**
+```tsx
+// Máximo 5 dígitos numéricos para agência
+if (agencia && agencia.replace(/\D/g, "").length > 5) {
+  errors.agencia = "Agência deve ter no máximo 5 dígitos";
+}
+```
+
+---
 
 ## Seção Técnica
 
-### Arquivo 1: `src/components/instrutor/BankAccountSetup.tsx`
+### Fluxo de Dados Corrigido
 
-**Mudança**: Corrigir a dica para usar formato realista (sem zeros à esquerda)
-
-Antes:
-```tsx
-📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
+```text
+Frontend (BankAccountSetup.tsx)
+    │
+    ├─ agenciaDv = "" (vazio)
+    │
+    ▼
+Edge Function (create-instructor-recipient-pagarme)
+    │
+    ├─ cleanAgenciaDv = ""
+    ├─ if (cleanAgenciaDv) → NÃO entra
+    ├─ branch_check_digit → OMITIDO do payload
+    │
+    ▼
+Pagar.me API V5
+    │
+    ├─ Não recebe branch_check_digit
+    ├─ Aceita payload ✓
+    │
+    ▼
+Sucesso!
 ```
 
-Depois:
-```tsx
-📋 Ex: Agência 63-<strong>9</strong> → Dígito é "9"
-```
+### Arquivos a Modificar
 
-**Local**: Linha 603-605
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/create-instructor-recipient-pagarme/index.ts` | Omitir `branch_check_digit` quando vazio, adicionar retry, melhorar logs |
+| `src/components/instrutor/BankAccountSetup.tsx` | Adicionar retry no toast de erro, validação de 5 dígitos |
 
-### Arquivo 2: `src/components/instrutor/InstructorBalanceCard.tsx`
+### Teste de Validação
 
-**Mudança 1**: Chamar `fetchBalance()` automaticamente ao montar o componente quando `hasRecipient` é true
-
-Adicionar `useEffect` para carregar saldo automaticamente:
-```tsx
-useEffect(() => {
-  if (hasRecipient) {
-    fetchBalance();
-  }
-}, [hasRecipient]);
-```
-
-**Mudança 2**: Mostrar banner de KYC ANTES de carregar saldo, quando instrutor tem recipient configurado mas não tem status ativo
-
-Adicionar nova condição para exibir o banner de verificação imediatamente:
-```tsx
-// Show KYC banner when instructor has bank data but hasn't verified yet
-const showKycBannerBeforeBalance = hasRecipient && !balance && !loading && !error;
-```
-
-E renderizar este banner logo após o header, antes do botão "Consultar saldo":
-```tsx
-{showKycBannerBeforeBalance && (
-  <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ...">
-    <div className="flex items-start gap-3">
-      <Camera className="w-5 h-5" />
-      <div>
-        <h4>Complete sua verificação</h4>
-        <p>Verifique sua identidade para liberar os saques.</p>
-        <Button onClick={handleVerifyIdentity}>
-          Verificar identidade agora
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-```
-
-### Arquivo 3: `supabase/functions/create-instructor-recipient-pagarme/index.ts`
-
-**Mudança**: Melhorar mensagem de erro para dígito de agência
-
-Atualizar o mapeamento de erros para ser mais claro:
-```typescript
-"agencia_dv": "Dígito da agência obrigatório. Ex: Agência 63-9 → Dígito é '9'",
-```
-
-## Resultado Esperado
-
-1. A dica da agência mostrará o formato correto sem zeros confusos
-2. O banner de verificação de identidade aparecerá imediatamente para instrutores com dados bancários configurados
-3. O saldo será carregado automaticamente ao abrir o perfil
-4. O instrutor Lucas Felipe conseguirá clicar e abrir o link de verificação
-
+Após implementar:
+1. Cadastrar agência "63" (Bradesco) sem dígito
+2. Verificar nos logs que `branch_check_digit` não aparece no payload
+3. Confirmar toast verde de sucesso
+4. Testar cenário de timeout (desconectar internet) e verificar retry automático
