@@ -1,168 +1,139 @@
 
-# Análise e Correção: Prazo de Liberação D+14 vs Saque no Mesmo Dia
 
-## Diagnóstico do Problema
+# Diagnóstico: Por que o Saldo do Frank é Zero na Pagar.me
 
-### O que está acontecendo?
+## O que Aconteceu
 
-1. **Pagamento do Frank Alexandre**: R$ 4,52 aprovado em 31/01/2026
-2. **Status atual da Pagar.me**: 
-   - Disponível: R$ 0,00
-   - A receber: R$ 4,52
-3. **Teste de saque**: Retornou "Saldo insuficiente para saque"
+| Evento | Data/Hora | Status |
+|--------|-----------|--------|
+| Pagamento PIX realizado | 31/01/2026 21:09 | ✅ Pago |
+| Status do recebedor Frank | 31/01/2026 21:09 | ❌ `affiliation` (em análise) |
+| KYC Frank aprovado (status → active) | **03/02/2026 18:16** | ✅ Aprovado |
 
-### Causa raiz: Antecipação NÃO está ativa na sua conta
+**Problema identificado**: O pagamento foi processado **3 dias antes** da conta do instrutor ser aprovada!
 
-A Pagar.me tem dois modos de liberação de pagamentos de cartão:
+## Por que isso aconteceu
 
-| Modo | Prazo | Requisito |
-|------|-------|-----------|
-| **Sem antecipação** (padrão) | D+29 a D+31 | Nenhum |
-| **Com antecipação automática** | D+0 a D+1 | Precisa de liberação manual pela Pagar.me |
+O código de split tem uma verificação de segurança (linhas 107-108 do `create-pix-payment-pagarme`):
 
-O código já envia a configuração correta:
 ```typescript
-automatic_anticipation_settings: {
-  enabled: true,
-  type: "full",
-  volume_percentage: 100
+// Only include in split if recipient is active
+instructorRecipientValid = recipientInfo.status === "active";
+```
+
+No momento do pagamento (31/01), o status era `affiliation`, então:
+- `instructorRecipientValid = false`
+- Split **NÃO foi aplicado**
+- 100% do valor (R$ 9,03) foi para a conta da CNH360
+- R$ 0,00 foi para a conta do Frank
+
+## Consequência
+
+- **Banco de dados local**: Mostra R$ 4,52 para o instrutor (cálculo teórico)
+- **Pagar.me real**: R$ 0,00 na conta do Frank (split não executado)
+
+O dinheiro está na **sua conta** (CNH360), não na conta do instrutor.
+
+---
+
+## Soluções
+
+### Opção 1: Transferência Manual (Recomendada)
+Você precisa fazer uma transferência manual de R$ 4,52 da conta CNH360 para o Frank:
+
+1. Acessar o dashboard da Pagar.me
+2. Ir em "Transferências"
+3. Criar transferência de R$ 4,52 para o recebedor `re_cmkx1ob1cy0mz0l9tjhxp6lcf` (Frank)
+
+### Opção 2: PIX Direto
+Alternativamente, fazer um PIX diretamente para a conta bancária do Frank e marcar o pagamento como "compensado manualmente" no sistema.
+
+---
+
+## Prevenção Futura
+
+### Correção no Código
+
+O sistema deveria **impedir** que um aluno solicite aula de um instrutor que ainda não tem conta `active`. Vou implementar uma validação:
+
+**Arquivo**: `src/pages/aluno/AgendarAula.tsx` (ou onde a aula é agendada)
+
+```typescript
+// Antes de permitir pagamento, verificar se instrutor tem conta ativa
+const { data: instrutor } = await supabase
+  .from("instrutores")
+  .select("pagarme_recipient_id, kyc_status")
+  .eq("id", instructorId)
+  .single();
+
+if (!instrutor?.pagarme_recipient_id || instrutor.kyc_status !== "approved") {
+  toast.error("Este instrutor ainda não finalizou o cadastro bancário");
+  return;
 }
 ```
 
-**Porém**, a documentação da Pagar.me diz:
-> "Para utilizar configurações de antecipação automática é necessário realizar a liberação junto a Pagar.me."
+### Alertas Adicionais
 
-Ou seja, você precisa **entrar em contato com a Pagar.me** para habilitar a antecipação automática na sua conta.
-
----
-
-## Solução: Contatar Pagar.me para Habilitar Antecipação
-
-### Passo 1: Enviar e-mail para relacionamento@pagar.me
-
-**Assunto**: Habilitação de Antecipação Automática - Marketplace CNH360
-
-**Corpo**:
-```
-Olá,
-
-Somos a plataforma CNH360 e precisamos habilitar a antecipação automática 
-para nossos recebedores (instrutores de autoescola).
-
-Dados da conta:
-- E-mail da conta: [seu-email@cnh360.com]
-- CNPJ: [seu-cnpj]
-
-Configuração desejada:
-- Tipo: Full (100% do volume)
-- Prazo: D+0 ou D+1 (mesma dia ou próximo dia útil)
-- Aplicável a: Todos os recebedores do marketplace
-
-Nosso modelo de negócio é similar a Uber/99, onde instrutores precisam 
-receber rapidamente após cada aula concluída.
-
-Aguardo retorno.
-```
-
-### Passo 2: Alternativa Temporária (enquanto aguarda liberação)
-
-Enquanto a antecipação não é liberada, podemos melhorar a comunicação ao instrutor:
-
-**Antes**:
-```
-A receber: R$ 4,52
-Liberação D+14
-```
-
-**Depois**:
-```
-A receber: R$ 4,52
-Liberação em até 30 dias (antecipação em ativação)
-[Link: Saiba mais sobre prazos]
-```
+1. **Card de Instrutor**: Mostrar badge "Verificação pendente" se `kyc_status !== "approved"`
+2. **Página de Perfil do Instrutor**: Bloquear agendamento se conta não ativa
 
 ---
 
-## Verificação do Botão de Saque
+## Sobre o Prazo PIX vs Cartão
 
-O botão "Sacar Saldo" está funcionando corretamente. O erro retornado:
-```json
-{"success":false,"error":"Saldo insuficiente para saque. Aguarde a liberação do saldo pendente."}
-```
+Você está **100% correto**: PIX é instantâneo e não tem D+14/D+30.
 
-**Este comportamento está correto** porque:
-1. O saldo `available` na Pagar.me é R$ 0,00
-2. O saldo `waitingFunds` é R$ 4,52 (pendente de liberação)
-3. Só é possível sacar valores de `available`, não de `waitingFunds`
+O que aconteceu aqui foi diferente - o split **não foi executado** porque a conta não estava ativa. O dinheiro chegou instantaneamente sim, mas foi 100% para a plataforma.
 
-Quando a antecipação for ativada, o valor cairá em `available` quase instantaneamente e o saque funcionará.
-
----
-
-## Melhorias na UI (opcional)
-
-### 1. Atualizar mensagem de prazo no card de saldo
-
-Alterar de "D+14" para algo mais preciso e informativo:
-
-```typescript
-// InstructorBalanceCard.tsx
-{recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
-  <div className="text-xs text-muted-foreground mt-1">
-    <p>Aguardando liberação do pagamento</p>
-    <button 
-      className="text-primary underline"
-      onClick={() => window.open('https://wa.me/5518981288372?text=Olá, gostaria de saber sobre o prazo de liberação do meu saldo', '_blank')}
-    >
-      Dúvidas? Fale conosco
-    </button>
-  </div>
-)}
-```
-
-### 2. Desabilitar botão de saque quando não há saldo disponível
-
-Atualmente o botão está habilitado mesmo sem saldo disponível. Podemos melhorar:
-
-```typescript
-<Button 
-  onClick={handleWithdrawClick}
-  disabled={!balance || balance.available <= 0}
-  className={cn(
-    balance?.available > 0 
-      ? "bg-[#4CAF50] hover:bg-[#43A047]" 
-      : "bg-muted text-muted-foreground"
-  )}
->
-  {balance?.available > 0 ? "Sacar Saldo" : "Sem saldo disponível"}
-</Button>
-```
+Se o split tivesse sido aplicado corretamente, o valor estaria disponível imediatamente na conta do instrutor.
 
 ---
 
 ## Resumo das Ações
 
-| Ação | Responsável | Urgência |
-|------|-------------|----------|
-| Contatar Pagar.me para habilitar antecipação | Você | Alta |
-| Atualizar mensagem de prazo no UI | Eu (código) | Média |
-| Desabilitar botão de saque quando saldo = 0 | Eu (código) | Baixa |
+| Ação | Responsável | Tipo |
+|------|-------------|------|
+| Transferir R$ 4,52 para Frank | Você (via dashboard Pagar.me) | Manual |
+| Validar conta ativa antes de permitir aula | Código | Prevenção |
+| Exibir badge de verificação pendente | Código | UX |
 
 ---
 
 ## Seção Técnica
 
-### Arquivos a Modificar (melhorias UI)
+### Causa Raiz
+A lógica de fallback (linhas 205-208 do `create-pix-payment-pagarme`) foi acionada:
+
+```typescript
+} else {
+  // No split - 100% goes to platform (instructor not configured or refused)
+  logStep("No split - instructor recipient not valid or missing");
+}
+```
+
+### Timeline Detalhada
+
+```text
+31/01 19:02 - Aula criada (PIX gerado)
+31/01 19:05 - PIX pago pelo aluno
+31/01 21:09 - Pagamento registrado no banco local
+           → Split check: recipientStatus = "affiliation" ≠ "active"
+           → Split NÃO aplicado
+           → 100% → CNH360
+
+03/02 18:16 - KYC aprovado (status → "active")
+           → Tarde demais, pagamento já processado
+
+05/02 03:40 - Consulta de saldo
+           → Pagar.me retorna: available=0, waiting_funds=0
+           → Sistema faz fallback para pagamentos locais: R$ 4,52
+```
+
+### Arquivos a Modificar (Prevenção)
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Melhorar mensagem de prazo e desabilitar botão quando saldo = 0 |
+| `src/pages/aluno/AgendarAula.tsx` | Validar `kyc_status === "approved"` antes de permitir aula |
+| `src/components/cards/InstructorCard.tsx` | Exibir badge "Verificação pendente" |
+| `src/pages/aluno/InstrutorPerfil.tsx` | Bloquear botão de agendar se conta não ativa |
 
-### Teste do Fluxo de Saque
-
-O teste foi executado com sucesso:
-- **Endpoint**: `POST /request-manual-transfer-pagarme`
-- **Resposta**: `400 - Saldo insuficiente para saque`
-- **Status**: ✅ Funcionando corretamente (não há saldo disponível)
-
-Quando a Pagar.me liberar a antecipação e o saldo `available` for maior que zero, o saque funcionará.
