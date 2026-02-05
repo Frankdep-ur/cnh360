@@ -1,135 +1,165 @@
 
+# Plano de Correção: Cálculos de Saldo e Ganhos do Instrutor
 
-# Plano de Finalização: KYC com WebView Full-Screen + Botão de Saque
+## Diagnóstico dos Problemas
 
-## Resumo das Alterações
+### Problema 1: Divisão duplicada por 100 no saldo
+- **Edge Function** já converte centavos para reais (linha 140-142):
+  ```typescript
+  available: (balanceData.available?.amount || 0) / 100
+  ```
+- **Frontend** divide novamente por 100 (linha 407):
+  ```typescript
+  {formatCurrency(balance.available / 100, ...)}
+  ```
+- **Resultado**: Se o saldo é R$ 4,52, mostra R$ 0,04
 
-Com base na confirmação de que o teste KYC funcionou e a restrição de IP foi removida, vou finalizar a feature com melhorias na UX e adicionar o botão de saque no card de saldo.
+### Problema 2: Total de ganhos mostrando valor bruto
+- A página "Aulas" soma `aula.valor` (valor cheio da aula: R$ 9,03)
+- Deveria mostrar apenas a parte do instrutor: 50% = R$ 4,52
+- **Resultado**: Estatística inflada mostrando o dobro do real
+
+### Problema 3: Saldo Pagar.me zerado mesmo com pagamento aprovado
+- O pagamento local mostra `valor_instrutor: 4.52` com status `aprovado`
+- A Pagar.me retorna `available_amount: 0`
+- **Causa provável**: O split só credita após D+14 ou D+30 dependendo do plano
 
 ---
 
-## 1. Remoção do Botão de Teste KYC
+## Correções a Implementar
 
-**Arquivo:** `src/pages/instrutor/InstrutorDashboard.tsx`
+### 1. Remover divisão duplicada no InstructorBalanceCard.tsx
 
-Remover completamente o card temporário de teste (linhas 575-613):
-- Remover o estado `testingKyc` e `kycTestResult`
-- Remover a função `handleTestKyc`
-- Remover o card com badge "DEV"
-
----
-
-## 2. Melhorias no Botão "Verificar identidade agora"
-
-**Arquivo:** `src/components/instrutor/InstructorBalanceCard.tsx`
-
-### 2.1 Abertura em WebView Full-Screen (Mobile)
-- Ao sucesso, abrir `kyc_url` em nova aba/WebView
-- Mostrar loading spinner no botão enquanto abre
-
-### 2.2 Controle de Timeout (20 minutos)
-- Armazenar `expiration_date` retornado pela API
-- Se o usuário clicar no botão após expirar, exibir toast: "Link expirado. Gerando novo link..."
-- Gerar novo link automaticamente
-
-### 2.3 Badge Verde para KYC Aprovado
-- Quando `recipientStatus === "active"`, esconder o banner de verificação
-- Exibir badge verde "Identidade verificada ✓" no lugar
-
-### 2.4 Mensagem de Erro Atualizada
+**Antes:**
 ```typescript
-toast({
-  variant: "destructive",
-  title: "Erro ao gerar link",
-  description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372"
-});
+{formatCurrency(balance.available / 100, balance.currency)}
+{formatCurrency(balance.waitingFunds / 100, balance.currency)}
+{formatCurrency(balance.transferred / 100, balance.currency)}
+availableBalance={balance?.available ? balance.available / 100 : 0}
 ```
 
----
-
-## 3. Adicionar Botão de Saque no Card de Saldo
-
-**Arquivo:** `src/components/instrutor/InstructorBalanceCard.tsx`
-
-Atualmente o botão "Sacar" só existe na página de Ganhos. Vou adicionar ao card de saldo:
-
-```text
-┌─────────────────────────────────────┐
-│  💰 Saldo                      🔄   │
-│                                     │
-│  Disponível para saque              │
-│  R$ 1.037,00                        │
-│                                     │
-│  ┌────────────┐ ┌────────────┐      │
-│  │ A receber  │ │ Transferido│      │
-│  │ R$ 403,00  │ │ R$ 2.000   │      │
-│  └────────────┘ └────────────┘      │
-│                                     │
-│  [       💸 Sacar Saldo       ]     │  ← NOVO BOTÃO
-│                                     │
-│  Atualizado às 14:30                │
-└─────────────────────────────────────┘
-```
-
-Dependências:
-- Importar e integrar `WithdrawModal`
-- Passar `availableBalance` para o modal
-- Bloquear saque se KYC não aprovado (exibir tooltip)
-
----
-
-## 4. Melhorias na Edge Function start-kyc
-
-**Arquivo:** `supabase/functions/start-kyc/index.ts`
-
-Adicionar log final de sucesso:
+**Depois:**
 ```typescript
-console.log(`KYC link gerado com sucesso para recipient_id: ${recipientId}`);
+{formatCurrency(balance.available, balance.currency)}
+{formatCurrency(balance.waitingFunds, balance.currency)}
+{formatCurrency(balance.transferred, balance.currency)}
+availableBalance={balance?.available ?? 0}
 ```
 
-Já existe log similar, apenas confirmar que está padronizado.
+---
+
+### 2. Corrigir cálculo de "Total ganho" na página InstrutorAulas.tsx
+
+**Opção A - Calcular 50% do valor da aula:**
+```typescript
+const totalGanhos = aulas
+  .filter(a => a.status === 'concluida')
+  .reduce((acc, a) => acc + (a.valor * 0.5), 0);
+```
+
+**Opção B (mais precisa) - Buscar da tabela pagamentos:**
+- Adicionar query para buscar `SUM(valor_instrutor)` da tabela pagamentos
+- Isso garante valores exatos mesmo com descontos variáveis
+
+Vou implementar a **Opção B** para maior precisão, já que a tabela `pagamentos` já tem o campo `valor_instrutor` calculado corretamente.
+
+---
+
+### 3. Melhorar display de saldo pendente
+
+Adicionar explicação quando saldo Pagar.me é zero mas há pagamentos locais:
+```typescript
+{recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
+  <p className="text-xs text-muted-foreground mt-1">
+    Liberação após processamento (D+14/D+30)
+  </p>
+)}
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Remover `/100` duplicado em 4 lugares |
+| `src/pages/instrutor/InstrutorAulas.tsx` | Buscar `valor_instrutor` da tabela pagamentos ao invés de calcular |
 
 ---
 
 ## Seção Técnica
 
-### Arquivos a Modificar
+### Alterações no InstructorBalanceCard.tsx
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/instrutor/InstrutorDashboard.tsx` | Remover card de teste KYC e estados relacionados |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Adicionar badge "verificado", botão de saque, controle de expiração, mensagem de erro com WhatsApp |
-| `supabase/functions/start-kyc/index.ts` | Confirmar log final padronizado |
+Linhas afetadas:
+- **Linha 407**: `balance.available / 100` → `balance.available`
+- **Linha 419**: `balance.waitingFunds / 100` → `balance.waitingFunds`  
+- **Linha 432**: `balance.transferred / 100` → `balance.transferred`
+- **Linha 465**: `balance.available / 100` → `balance.available`
 
-### Estados do KYC
+### Alterações no InstrutorAulas.tsx
 
-| Status Gateway | Status Local | UI |
-|----------------|--------------|-----|
-| `registration` | `not_started` | Banner "Verificar identidade" |
-| `affiliation` | `in_review` | Banner "Verificação em análise" |
-| `active` | `approved` | Badge verde "Identidade verificada ✓" |
-| `refused` | `refused` | Banner vermelho + botão "Recadastrar" |
+Adicionar fetch de pagamentos e novo estado:
+```typescript
+const [totalGanhosReal, setTotalGanhosReal] = useState(0);
 
-### Fluxo do Botão de Saque
+// Dentro do useEffect, após buscar aulas:
+const { data: pagamentosData } = await supabase
+  .from('pagamentos')
+  .select('valor_instrutor')
+  .eq('instrutor_id', instrutor.id)
+  .eq('status', 'aprovado');
+
+const total = pagamentosData?.reduce(
+  (sum, p) => sum + (p.valor_instrutor || 0), 0
+) ?? 0;
+setTotalGanhosReal(total);
+```
+
+Display:
+```typescript
+<p className="text-2xl font-bold text-foreground">
+  R${totalGanhosReal.toFixed(2).replace('.', ',')}
+</p>
+```
+
+### Resultado Esperado
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Saldo disponível (display) | R$ 0,04 | R$ 4,52 |
+| Saldo pendente (display) | R$ 0,04 | R$ 4,52 |
+| Total ganho (aulas) | R$ 9,03 | R$ 4,52 |
+
+---
+
+## Verificação Visual do Fluxo
 
 ```text
-1. Usuário clica "Sacar"
-   ↓
-2. Verificar se recipientStatus === "active"
-   ↓
-   2a. Se NÃO → toast: "Complete a verificação de identidade primeiro"
-   ↓
-   2b. Se SIM → Abrir WithdrawModal com saldo disponível
-   ↓
-3. Confirmar saque → Chamar request-manual-transfer-pagarme
-   ↓
-4. Sucesso → "Saque processado! Dinheiro na conta em até 1 dia útil."
+┌──────────────────────────────────────────────────────────┐
+│                    PÁGINA DE AULAS                       │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐               │
+│  │ 📚 1            │  │ 📈 R$ 4,52      │  ← CORRIGIDO  │
+│  │ Aulas concluídas│  │ Total ganho     │    (era 9,03) │
+│  └─────────────────┘  └─────────────────┘               │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│                   CARD DE SALDO                          │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Disponível para saque                                   │
+│  R$ 0,00                       ← Pagar.me real (D+14)    │
+│                                                          │
+│  ┌─────────────┐  ┌─────────────┐                       │
+│  │ A receber   │  │ Transferido │                       │
+│  │ R$ 4,52     │  │ R$ 0,00     │  ← CORRIGIDO          │
+│  └─────────────┘  └─────────────┘    (antes: 0,04)      │
+│                                                          │
+│  Liberação após processamento (D+14)                     │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
-
-### Importações a Adicionar (InstructorBalanceCard)
-
-```typescript
-import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
-import { ArrowUpRight, CheckCircle2 } from "lucide-react";
-```
-
