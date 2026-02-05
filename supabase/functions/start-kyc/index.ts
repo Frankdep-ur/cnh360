@@ -245,6 +245,9 @@ serve(async (req) => {
       hasQrCode: !!kycData.base64,
     });
 
+    // Log final de sucesso
+    console.log(`KYC link gerado com sucesso para recipient_id: ${recipientId}`);
+
     // Save the new KYC URL to cache
     const kycExpiresAt = kycData.expiration_date || new Date(Date.now() + 20 * 60 * 1000).toISOString();
     
