@@ -1,111 +1,126 @@
 
-
-# Adicionar "Entrar com Google" em Todas as Telas de Autenticacao
+# Corrigir Validação de Dígito da Agência Bancária
 
 ## Problema Identificado
 
-| Tela | Rota | Botao Google |
-|------|------|--------------|
-| Pagina principal de auth | `/auth` | Aparece |
-| Apos clicar "Sou Aluno" | `/auth?type=aluno` | NAO aparece |
-| Apos clicar "Sou Instrutor" | `/auth?type=instrutor` | NAO aparece |
-| Apos clicar "Sou Autoescola" | `/auth?type=autoescola` | NAO aparece |
+O instrutor **Lucas Felipe** está recebendo erro ao cadastrar conta bancária do Bradesco porque o **dígito verificador da agência não foi preenchido**.
 
-Quando o usuario vem da pagina inicial (Index.tsx) e clica em "Sou Aluno", ele vai para `/auth?type=aluno`, que pula a tela com o botao do Google e mostra diretamente o formulario.
+| Dados Informados | Valor |
+|------------------|-------|
+| Banco | 237 - Bradesco |
+| Agência | 63 (sem dígito) |
+| Conta | 34844-9 |
+| CPF | 473.547.278-90 |
 
-## Solucao
+O erro da API Pagar.me: `invalid_parameter | agencia_dv | Invalid format`
 
-Adicionar o botao "Entrar com Google" tambem na tela do formulario (step === "form"), mantendo a mesma aparencia destacada.
+## Causa Raiz
 
-## Mudancas no Layout
+O campo "Dígito" da agência **existe no formulário mas não é obrigatório** - não tem validação nem indicador visual (*). O instrutor deixou vazio, e bancos como **Bradesco, Santander, Banco do Brasil** exigem esse dígito.
+
+## Solução
+
+Tornar o campo de dígito da agência **obrigatório para bancos que exigem**, com validação visual e mensagem de erro clara.
 
 ```text
-ANTES (step = form):
+ANTES:
 ┌─────────────────────────────────────┐
-│  [Badge: Aluno]                     │
-│  Entre na sua conta                 │
-│                                     │
-│  [Email input]                      │
-│  [Senha input]                      │
-│  [Botao Entrar]                     │
-│  Esqueceu sua senha?                │
+│  Agência *        │  Dígito         │  <- Sem asterisco
+│  [63         ]    │  [   ]          │  <- Usuário deixa vazio
 └─────────────────────────────────────┘
 
-DEPOIS (step = form):
+DEPOIS:
 ┌─────────────────────────────────────┐
-│  [Badge: Aluno]                     │
-│  Entre na sua conta                 │
-│                                     │
-│  [G] Continuar com Google           │  <-- NOVO
-│  Rapido e seguro                    │  <-- NOVO
-│  ────── ou ──────                   │  <-- NOVO
-│                                     │
-│  [Email input]                      │
-│  [Senha input]                      │
-│  [Botao Entrar]                     │
-│  Esqueceu sua senha?                │
+│  Agência *        │  Dígito *       │  <- Com asterisco
+│  [63         ]    │  [   ] ⚠️      │  <- Validação visual
 └─────────────────────────────────────┘
+⚠️ Informe o dígito da agência (obrigatório para Bradesco)
 ```
 
-## Secao Tecnica
+## Seção Técnica
 
-### Arquivo: `src/pages/Auth.tsx`
+### Arquivo: `src/components/instrutor/BankAccountSetup.tsx`
 
-1. **Extrair o componente do botao Google para um componente reutilizavel**
-   - Criar uma funcao `GoogleSignInButton` dentro do arquivo para evitar duplicacao de codigo
+#### 1. Criar lista de bancos que exigem dígito de agência
 
-2. **Adicionar o botao na tela do formulario (linhas 623-712)**
-   - Inserir antes do formulario de email/senha
-   - Manter os mesmos estilos: fundo branco, sombra, borda colorida, icone com cores oficiais
+```typescript
+// Bancos que EXIGEM dígito verificador de agência
+const BANKS_REQUIRING_AGENCY_DV = [
+  "001", // Banco do Brasil
+  "033", // Santander
+  "237", // Bradesco
+  "341", // Itaú
+  "422", // Safra
+];
+```
 
-3. **Adicionar o separador visual**
-   - Linha horizontal com texto "ou entre com email"
+#### 2. Adicionar validação condicional no `validateForm()`
 
-### Codigo proposto para o componente reutilizavel:
+Verificar se o banco selecionado exige dígito e, se sim, validar que foi preenchido:
+
+```typescript
+// Verificar se banco exige dígito de agência
+if (BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
+  const bankName = SUPPORTED_BANKS.find(b => b.code === bankCode)?.name || bankCode;
+  errors.agencia = `O ${bankName} exige o dígito verificador da agência`;
+}
+```
+
+#### 3. Atualizar o label do campo dígito da agência
+
+Adicionar "*" condicional quando o banco exige:
 
 ```tsx
-const GoogleSignInButton = () => (
-  <div className="mb-6">
-    <Button
-      type="button"
-      size="xl"
-      className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-primary shadow-md hover:shadow-lg transition-all duration-200"
-      disabled={googleLoading || loading}
-      onClick={handleGoogleSignIn}
-    >
-      {googleLoading ? "Conectando..." : (
-        <>
-          <GoogleIcon />
-          Continuar com Google
-        </>
-      )}
-    </Button>
-    <p className="text-xs text-muted-foreground text-center mt-2">
-      Rapido e seguro
-    </p>
-    <div className="relative my-4">
-      <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-border"></div>
-      </div>
-      <div className="relative flex justify-center text-xs uppercase">
-        <span className="bg-background px-4 text-muted-foreground">
-          ou entre com email
-        </span>
-      </div>
-    </div>
-  </div>
-);
+<Label>
+  Dígito {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && "*"}
+</Label>
 ```
 
-### Onde inserir:
+#### 4. Adicionar estilo de erro ao campo
 
-1. **Na tela select-type (ja existe)**: Linhas 361-408 - manter como esta
-2. **Na tela form (ADICIONAR)**: Inserir apos o titulo "Entre na sua conta" (linha 621) e antes do formulario (linha 624)
+Aplicar classe de erro quando houver problema de validação:
+
+```tsx
+<Input
+  value={agenciaDv}
+  onChange={(e) => {
+    setAgenciaDv(e.target.value.replace(/\D/g, ""));
+    clearFieldError("agencia"); // Limpar erro ao digitar
+  }}
+  placeholder="0"
+  maxLength={1}
+  className={fieldErrors.agencia && !agenciaDv ? "border-destructive" : ""}
+/>
+```
+
+#### 5. Adicionar mensagem de ajuda dinâmica
+
+Mostrar dica contextual sobre o formato esperado:
+
+```tsx
+{BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv && (
+  <p className="text-xs text-muted-foreground mt-1">
+    📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
+  </p>
+)}
+```
+
+### Arquivo: `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+
+#### 6. Melhorar mensagem de erro específica para `agencia_dv`
+
+Adicionar mapeamento mais amigável:
+
+```typescript
+const errorMappings = {
+  // ... existentes ...
+  "agencia_dv": "Dígito da agência obrigatório para este banco. Confira no seu cartão (ex: 0063-9).",
+};
+```
 
 ## Resultado Esperado
 
-- Botao "Continuar com Google" visivel em TODAS as telas de autenticacao
-- Mesmo estilo visual em todas as telas (destacado, com sombra, cores oficiais do Google)
-- Codigo organizado sem duplicacao (usando componente reutilizavel)
-- Experiencia de usuario consistente independente do fluxo de entrada
-
+- Campo "Dígito" da agência marcado como obrigatório (*) para bancos que exigem
+- Validação visual com borda vermelha quando vazio
+- Mensagem de erro clara explicando o formato esperado
+- O instrutor Lucas Felipe conseguirá cadastrar informando o dígito completo da agência
