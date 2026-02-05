@@ -1,23 +1,27 @@
 /**
- * Força a abertura de links externos no navegador nativo do dispositivo
- * (Safari, Chrome, etc.) em vez de dentro de um WebView embutido.
+ * Abre links externos no navegador nativo do dispositivo (Safari, Chrome)
+ * em vez de WebView. Essencial para fluxos de câmera como KYC/verificação facial.
  * 
- * Isso resolve problemas de compatibilidade com sites como DETRAN-SP
- * que bloqueiam acesso via WebView.
- * 
- * Técnica: "Clean Redirect" - Abre about:blank primeiro para quebrar
- * completamente a cadeia de referrer e contexto de origem PWA/WebView.
+ * Suporta: Capacitor (_system), PWA standalone, navegador normal
  */
 export function openExternalLink(url: string): void {
+  // Tenta usar Capacitor Browser plugin se disponível (melhor para apps nativos)
+  const browserPlugin = (window as any).Capacitor?.Plugins?.Browser;
+  if (browserPlugin?.open) {
+    browserPlugin.open({ url, windowName: '_system' });
+    return;
+  }
+
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
     || (window.navigator as any).standalone === true;
   
   const userAgent = navigator.userAgent.toLowerCase();
   const isAndroid = userAgent.includes('android');
   const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isMobile = isAndroid || isIOS;
   
-  // Android em standalone: Intent URL para forçar Chrome/navegador padrão
-  if (isAndroid && isStandalone) {
+  // Android: Intent URL para forçar Chrome/navegador padrão
+  if (isAndroid && (isStandalone || isMobile)) {
     try {
       const intentUrl = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
       window.location.href = intentUrl;
@@ -27,20 +31,17 @@ export function openExternalLink(url: string): void {
     }
   }
   
-  // iOS ou Standalone: Técnica de "clean redirect"
-  // Abre about:blank primeiro para quebrar completamente o referrer e contexto
-  if (isIOS || isStandalone) {
+  // iOS ou Standalone/Mobile: Técnica de "clean redirect"
+  if (isIOS || isStandalone || isMobile) {
     const newWindow = window.open('about:blank', '_blank');
     if (newWindow) {
-      // Limpa qualquer referência ao opener (PWA)
       newWindow.opener = null;
-      // Redireciona para a URL final a partir de uma página "limpa"
       newWindow.location.href = url;
       return;
     }
   }
   
-  // Fallback universal: criar link com referrer policy que remove origem
+  // Fallback: link com referrer policy limpo
   const link = document.createElement('a');
   link.href = url;
   link.target = '_blank';

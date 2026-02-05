@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Banknote } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Banknote, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -139,10 +139,13 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
       if (data?.kyc_url) {
         toast({
-          title: "Verificação iniciada! 📸",
-          description: "Complete a verificação facial na tela que vai abrir. O link expira em 20 minutos.",
-          duration: 5000,
+          title: "Abrindo no navegador 📱",
+          description: "Complete a selfie e documento lá. Quando terminar, volte pro app — atualizamos automaticamente!",
+          duration: 8000,
         });
+        
+        // Pequeno delay para usuário ler a instrução antes de abrir
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         openExternalLink(data.kyc_url);
         return;
@@ -316,11 +319,11 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 {loadingKyc ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Gerando link...
+                    Gerando link seguro...
                   </>
                 ) : (
                   <>
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                    <Smartphone className="w-4 h-4 mr-2" />
                     Verificar identidade agora
                   </>
                 )}
@@ -352,11 +355,11 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 {loadingKyc ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Gerando link...
+                    Gerando link seguro...
                   </>
                 ) : (
                   <>
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                    <Smartphone className="w-4 h-4 mr-2" />
                     Verificar identidade agora
                   </>
                 )}
