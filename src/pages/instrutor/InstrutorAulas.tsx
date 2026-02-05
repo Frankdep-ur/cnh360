@@ -44,6 +44,7 @@ export default function InstrutorAulas() {
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<StatusFilter>('todas');
+  const [totalGanhosReal, setTotalGanhosReal] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -103,6 +104,19 @@ export default function InstrutorAulas() {
       );
 
       setAulas(aulasWithAluno);
+
+      // Fetch real earnings from pagamentos table
+      const { data: pagamentosData } = await supabase
+        .from('pagamentos')
+        .select('valor_instrutor')
+        .eq('instrutor_id', instrutor.id)
+        .eq('status', 'aprovado');
+
+      const total = pagamentosData?.reduce(
+        (sum, p) => sum + (p.valor_instrutor || 0), 0
+      ) ?? 0;
+      setTotalGanhosReal(total);
+
       setLoading(false);
     };
 
@@ -112,6 +126,8 @@ export default function InstrutorAulas() {
   const aulasFiltradas = filtro === 'todas' 
     ? aulas 
     : aulas.filter(a => a.status === filtro);
+
+  const totalAulas = aulas.filter(a => a.status === 'concluida').length;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -150,12 +166,6 @@ export default function InstrutorAulas() {
     }
   };
 
-  const totalGanhos = aulas
-    .filter(a => a.status === 'concluida')
-    .reduce((acc, a) => acc + a.valor, 0);
-
-  const totalAulas = aulas.filter(a => a.status === 'concluida').length;
-
   return (
     <div className="app-container pb-24">
       <ComplianceBanner />
@@ -185,7 +195,9 @@ export default function InstrutorAulas() {
                 <TrendingUp className="w-5 h-5 text-secondary" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">R${totalGanhos}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  R${totalGanhosReal.toFixed(2).replace('.', ',')}
+                </p>
                 <p className="text-xs text-muted-foreground">Total ganho</p>
               </div>
             </div>

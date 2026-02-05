@@ -404,7 +404,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
               Disponível para saque
             </div>
             <div className="text-2xl font-bold text-secondary">
-              {formatCurrency(balance.available / 100, balance.currency)}
+              {formatCurrency(balance.available, balance.currency)}
             </div>
           </div>
 
@@ -416,10 +416,13 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 {recipientStatus === "affiliation" ? "Pendente (ativação)" : "A receber"}
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.waitingFunds / 100, balance.currency)}
+                {formatCurrency(balance.waitingFunds, balance.currency)}
               </div>
               {recipientStatus === "affiliation" && balance.waitingFunds > 0 && (
                 <p className="text-xs text-amber-600 mt-1">Liberação em 48h</p>
+              )}
+              {recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Liberação D+14</p>
               )}
             </div>
             
@@ -429,7 +432,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 Já transferido
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.transferred / 100, balance.currency)}
+                {formatCurrency(balance.transferred, balance.currency)}
               </div>
             </div>
           </div>
@@ -462,7 +465,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       <WithdrawModal
         open={showWithdrawModal}
         onClose={() => setShowWithdrawModal(false)}
-        availableBalance={balance?.available ? balance.available / 100 : 0}
+        availableBalance={balance?.available ?? 0}
         hasRecipient={hasRecipient}
         onSetupBank={onSetupClick}
         onSuccess={handleWithdrawSuccess}
