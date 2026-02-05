@@ -231,8 +231,9 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
   const showKycBannerInitial = !recipientStatus && hasRecipient && !loading && balance;
 
-  // Show KYC banner immediately when instructor has bank data but verification not loaded yet
-  const showKycBannerBeforeBalance = hasRecipient && !balance && !loading && !error && !recipientStatus;
+  // Show KYC banner when instructor has bank data but hasn't verified yet
+  // This banner shows even during loading to ensure the button is always visible
+  const showKycBannerBeforeBalance = hasRecipient && !recipientStatus && !balance;
 
   return (
     <div className="bg-card rounded-2xl shadow-card p-4">
