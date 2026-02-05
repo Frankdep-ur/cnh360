@@ -1,160 +1,135 @@
 
 
-# Diagnóstico: Erro de IP não autorizado na Pagar.me
+# Plano de Finalização: KYC com WebView Full-Screen + Botão de Saque
 
-## O Problema
+## Resumo das Alterações
 
-A Pagar.me implementou uma **restrição de IP allowlist** na rota `/kyc_link`. Chamadas originadas de IPs dinâmicos (como Supabase Edge Functions, Vercel, AWS Lambda, etc.) são bloqueadas com a mensagem:
-
-> **"IP de origem não autorizado a realizar essa operação"**
-
-Isso acontece porque:
-- A Supabase Edge Function roda em IPs dinâmicos da Deno Deploy
-- A Pagar.me exige que você cadastre IPs estáticos na allowlist
-- Não temos controle sobre os IPs do Supabase
-
-## Alternativas Disponíveis
-
-Existem 3 abordagens para resolver isso, mantendo a UX padrão Uber/iFood (tudo dentro do app):
+Com base na confirmação de que o teste KYC funcionou e a restrição de IP foi removida, vou finalizar a feature com melhorias na UX e adicionar o botão de saque no card de saldo.
 
 ---
 
-### Opção 1: Capturar o QR Code na Criação do Recebedor (RECOMENDADA)
+## 1. Remoção do Botão de Teste KYC
 
-De acordo com a documentação da Pagar.me:
+**Arquivo:** `src/pages/instrutor/InstrutorDashboard.tsx`
 
-> "No fluxo de criação de um novo recebedor, será disponibilizado um QR Code de acesso ao webapp, que deverá ser renderizado pelo Marketplace."
-
-A Pagar.me retorna o `kyc_details` diretamente no response da criação do recebedor, sem necessidade de chamar `/kyc_link` separadamente.
-
-**Alterações:**
-1. Modificar `create-instructor-recipient-pagarme` para capturar e salvar o `base64` do QR Code e a `url` do KYC no banco de dados
-2. Criar colunas `kyc_url` e `kyc_base64` na tabela `instrutores`
-3. Na UI, mostrar o botão "Verificar Identidade" que abre a URL salva
-
-**Prós:**
-- Nenhuma chamada adicional à API
-- Funciona imediatamente sem IP allowlist
-- O link é gerado automaticamente na criação do recebedor
-
-**Contras:**
-- O link expira em 20 minutos
-- Se o instrutor não completar na hora, precisamos regenerar (só aí temos problema de IP)
+Remover completamente o card temporário de teste (linhas 575-613):
+- Remover o estado `testingKyc` e `kycTestResult`
+- Remover a função `handleTestKyc`
+- Remover o card com badge "DEV"
 
 ---
 
-### Opção 2: Proxy via Backend Externo com IP Estático
+## 2. Melhorias no Botão "Verificar identidade agora"
 
-Configurar um pequeno serviço externo (ex: Railway, Render, VPS) com IP estático cadastrado na allowlist da Pagar.me, que atua como proxy para a chamada `/kyc_link`.
+**Arquivo:** `src/components/instrutor/InstructorBalanceCard.tsx`
 
-**Arquitetura:**
+### 2.1 Abertura em WebView Full-Screen (Mobile)
+- Ao sucesso, abrir `kyc_url` em nova aba/WebView
+- Mostrar loading spinner no botão enquanto abre
+
+### 2.2 Controle de Timeout (20 minutos)
+- Armazenar `expiration_date` retornado pela API
+- Se o usuário clicar no botão após expirar, exibir toast: "Link expirado. Gerando novo link..."
+- Gerar novo link automaticamente
+
+### 2.3 Badge Verde para KYC Aprovado
+- Quando `recipientStatus === "active"`, esconder o banner de verificação
+- Exibir badge verde "Identidade verificada ✓" no lugar
+
+### 2.4 Mensagem de Erro Atualizada
+```typescript
+toast({
+  variant: "destructive",
+  title: "Erro ao gerar link",
+  description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372"
+});
+```
+
+---
+
+## 3. Adicionar Botão de Saque no Card de Saldo
+
+**Arquivo:** `src/components/instrutor/InstructorBalanceCard.tsx`
+
+Atualmente o botão "Sacar" só existe na página de Ganhos. Vou adicionar ao card de saldo:
+
 ```text
-[CNH360 App] → [Edge Function] → [Proxy Railway/VPS] → [Pagar.me API]
-                                      ↓
-                              (IP estático cadastrado)
+┌─────────────────────────────────────┐
+│  💰 Saldo                      🔄   │
+│                                     │
+│  Disponível para saque              │
+│  R$ 1.037,00                        │
+│                                     │
+│  ┌────────────┐ ┌────────────┐      │
+│  │ A receber  │ │ Transferido│      │
+│  │ R$ 403,00  │ │ R$ 2.000   │      │
+│  └────────────┘ └────────────┘      │
+│                                     │
+│  [       💸 Sacar Saldo       ]     │  ← NOVO BOTÃO
+│                                     │
+│  Atualizado às 14:30                │
+└─────────────────────────────────────┘
 ```
 
-**Prós:**
-- Funciona 100% on-demand
-- Controle total sobre quando gerar links
-- UX perfeita igual Uber
-
-**Contras:**
-- Custo adicional (mínimo ~R$5/mês)
-- Dependência de serviço externo
-- Mais complexidade
+Dependências:
+- Importar e integrar `WithdrawModal`
+- Passar `availableBalance` para o modal
+- Bloquear saque se KYC não aprovado (exibir tooltip)
 
 ---
 
-### Opção 3: Fluxo Automático da Pagar.me (menos controle)
+## 4. Melhorias na Edge Function start-kyc
 
-Deixar a Pagar.me enviar o link por e-mail automaticamente quando o recebedor atingir status `affiliation`, e apenas instruir o usuário a verificar o e-mail.
+**Arquivo:** `supabase/functions/start-kyc/index.ts`
 
-**Prós:**
-- Zero alteração técnica
+Adicionar log final de sucesso:
+```typescript
+console.log(`KYC link gerado com sucesso para recipient_id: ${recipientId}`);
+```
 
-**Contras:**
-- Perde a UX embutida
-- Usuário sai do app para verificar e-mail
-- Dependência de deliverability de e-mail
+Já existe log similar, apenas confirmar que está padronizado.
 
 ---
 
-## Plano de Implementação: Opção 1 (Recomendada)
-
-### Passo 1: Adicionar Colunas no Banco
-
-```sql
-ALTER TABLE instrutores 
-ADD COLUMN kyc_url TEXT,
-ADD COLUMN kyc_base64 TEXT,
-ADD COLUMN kyc_link_expires_at TIMESTAMP WITH TIME ZONE;
-```
-
-### Passo 2: Atualizar a Edge Function de Criação de Recebedor
-
-Modificar `create-instructor-recipient-pagarme/index.ts` para:
-- Capturar o objeto `kyc_details` do response da Pagar.me
-- Salvar `kyc_url`, `kyc_base64` e `expiration_date` no banco
-
-### Passo 3: Atualizar a Edge Function start-kyc
-
-Modificar `start-kyc/index.ts` para:
-- Primeiro, verificar se existe `kyc_url` salvo no banco que ainda não expirou
-- Se existir e for válido, retornar essa URL sem chamar a API
-- Se expirou ou não existe, tentar gerar nova (se funcionar, ótimo; se der erro de IP, retornar mensagem amigável)
-
-### Passo 4: UI com Fallback Elegante
-
-Se não conseguir gerar link on-demand:
-- Mostrar mensagem: "Por segurança, a verificação foi enviada para seu e-mail cadastrado"
-- Incluir botão secundário: "Não recebi o e-mail"
-
----
-
-## Seção Técnica: Detalhes da Implementação
-
-### Estrutura do Response de Criação de Recebedor
-
-Quando a Pagar.me retorna o recebedor criado com status `affiliation`, o objeto contém:
-
-```json
-{
-  "id": "re_xxx",
-  "status": "affiliation",
-  "kyc_details": {
-    "status": "partially_denied",
-    "status_reason": "additional_documents_required"
-  }
-}
-```
-
-Porém, a URL do KYC precisa ser gerada via POST `/kyc_link`. A documentação sugere que o QR Code pode vir no webhook de `recipient.updated` quando atinge `affiliation`.
+## Seção Técnica
 
 ### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/create-instructor-recipient-pagarme/index.ts` | Tentar chamar `/kyc_link` após criar recebedor e salvar no banco |
-| `supabase/functions/start-kyc/index.ts` | Verificar URL salva antes de chamar API; fallback elegante |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Mostrar mensagem amigável de fallback |
-| Migração SQL | Adicionar colunas `kyc_url`, `kyc_base64`, `kyc_link_expires_at` |
+| `src/pages/instrutor/InstrutorDashboard.tsx` | Remover card de teste KYC e estados relacionados |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Adicionar badge "verificado", botão de saque, controle de expiração, mensagem de erro com WhatsApp |
+| `supabase/functions/start-kyc/index.ts` | Confirmar log final padronizado |
 
-### Fluxo Final (UX)
+### Estados do KYC
+
+| Status Gateway | Status Local | UI |
+|----------------|--------------|-----|
+| `registration` | `not_started` | Banner "Verificar identidade" |
+| `affiliation` | `in_review` | Banner "Verificação em análise" |
+| `active` | `approved` | Badge verde "Identidade verificada ✓" |
+| `refused` | `refused` | Banner vermelho + botão "Recadastrar" |
+
+### Fluxo do Botão de Saque
 
 ```text
-1. Instrutor cadastra dados bancários
+1. Usuário clica "Sacar"
    ↓
-2. Sistema cria recebedor na Pagar.me
+2. Verificar se recipientStatus === "active"
    ↓
-3. Sistema tenta gerar link de KYC imediatamente (mesma sessão, mesmo IP)
+   2a. Se NÃO → toast: "Complete a verificação de identidade primeiro"
    ↓
-4a. Se sucesso → salva URL no banco → instrutor clica "Verificar agora" → abre KYC
+   2b. Se SIM → Abrir WithdrawModal com saldo disponível
    ↓
-4b. Se erro de IP → exibe mensagem: "Verificação enviada ao seu e-mail"
+3. Confirmar saque → Chamar request-manual-transfer-pagarme
    ↓
-5. Instrutor completa KYC (via link salvo OU via e-mail)
-   ↓
-6. Webhook atualiza status automaticamente
+4. Sucesso → "Saque processado! Dinheiro na conta em até 1 dia útil."
+```
+
+### Importações a Adicionar (InstructorBalanceCard)
+
+```typescript
+import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
+import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 ```
 
