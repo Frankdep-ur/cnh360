@@ -601,7 +601,7 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
             </div>
             {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv && !fieldErrors.agencia && (
               <p className="text-xs text-muted-foreground -mt-2 flex items-center gap-1">
-                📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
+                📋 Ex: Agência 63-<strong>9</strong> → Dígito é "9"
               </p>
             )}
             {fieldErrors.agencia && (
