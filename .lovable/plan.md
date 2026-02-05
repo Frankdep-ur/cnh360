@@ -1,126 +1,117 @@
 
-# Corrigir Validação de Dígito da Agência Bancária
 
-## Problema Identificado
+# Correção: Dica de Agência + Botão de Verificação KYC
 
-O instrutor **Lucas Felipe** está recebendo erro ao cadastrar conta bancária do Bradesco porque o **dígito verificador da agência não foi preenchido**.
+## Problemas Identificados
 
-| Dados Informados | Valor |
-|------------------|-------|
-| Banco | 237 - Bradesco |
-| Agência | 63 (sem dígito) |
-| Conta | 34844-9 |
-| CPF | 473.547.278-90 |
+### Problema 1: Dica da agência confusa
 
-O erro da API Pagar.me: `invalid_parameter | agencia_dv | Invalid format`
+| Situação | O que aparece |
+|----------|---------------|
+| No cartão do banco | Agência: **63** |
+| Na dica do app | Agência 0**0063**-9 |
 
-## Causa Raiz
+O exemplo mostra zeros à esquerda que não aparecem no cartão do banco, confundindo o usuário.
 
-O campo "Dígito" da agência **existe no formulário mas não é obrigatório** - não tem validação nem indicador visual (*). O instrutor deixou vazio, e bancos como **Bradesco, Santander, Banco do Brasil** exigem esse dígito.
+### Problema 2: Botão de verificação KYC não aparece
 
-## Solução
+O instrutor Lucas Felipe tem dados bancários configurados (`pagarme_recipient_id` existe) mas o botão de verificação de identidade **não aparece automaticamente** porque:
 
-Tornar o campo de dígito da agência **obrigatório para bancos que exigem**, com validação visual e mensagem de erro clara.
+1. O banner de KYC só é exibido quando existe `recipientStatus` ou quando o usuário já clicou em "Consultar saldo"
+2. O instrutor precisa primeiro clicar em "Consultar saldo" para o status ser carregado
+3. A condição `showKycBannerInitial` exige que `balance` exista, mas o saldo só carrega após clique manual
 
+O fluxo atual:
 ```text
-ANTES:
 ┌─────────────────────────────────────┐
-│  Agência *        │  Dígito         │  <- Sem asterisco
-│  [63         ]    │  [   ]          │  <- Usuário deixa vazio
+│  Card de Saldo                      │
+│  [Consultar saldo] <- precisa clicar│
+│                                     │
+│  (nenhum banner de KYC visível)     │
 └─────────────────────────────────────┘
+```
 
-DEPOIS:
+Fluxo corrigido:
+```text
 ┌─────────────────────────────────────┐
-│  Agência *        │  Dígito *       │  <- Com asterisco
-│  [63         ]    │  [   ] ⚠️      │  <- Validação visual
+│  Card de Saldo                      │
+│  ⚠️ Verificação pendente            │
+│  [🔍 Verificar identidade agora]    │  <- visível sempre
+│                                     │
+│  [Consultar saldo]                  │
 └─────────────────────────────────────┘
-⚠️ Informe o dígito da agência (obrigatório para Bradesco)
 ```
 
 ## Seção Técnica
 
-### Arquivo: `src/components/instrutor/BankAccountSetup.tsx`
+### Arquivo 1: `src/components/instrutor/BankAccountSetup.tsx`
 
-#### 1. Criar lista de bancos que exigem dígito de agência
+**Mudança**: Corrigir a dica para usar formato realista (sem zeros à esquerda)
 
-```typescript
-// Bancos que EXIGEM dígito verificador de agência
-const BANKS_REQUIRING_AGENCY_DV = [
-  "001", // Banco do Brasil
-  "033", // Santander
-  "237", // Bradesco
-  "341", // Itaú
-  "422", // Safra
-];
-```
-
-#### 2. Adicionar validação condicional no `validateForm()`
-
-Verificar se o banco selecionado exige dígito e, se sim, validar que foi preenchido:
-
-```typescript
-// Verificar se banco exige dígito de agência
-if (BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
-  const bankName = SUPPORTED_BANKS.find(b => b.code === bankCode)?.name || bankCode;
-  errors.agencia = `O ${bankName} exige o dígito verificador da agência`;
-}
-```
-
-#### 3. Atualizar o label do campo dígito da agência
-
-Adicionar "*" condicional quando o banco exige:
-
+Antes:
 ```tsx
-<Label>
-  Dígito {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && "*"}
-</Label>
+📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
 ```
 
-#### 4. Adicionar estilo de erro ao campo
-
-Aplicar classe de erro quando houver problema de validação:
-
+Depois:
 ```tsx
-<Input
-  value={agenciaDv}
-  onChange={(e) => {
-    setAgenciaDv(e.target.value.replace(/\D/g, ""));
-    clearFieldError("agencia"); // Limpar erro ao digitar
-  }}
-  placeholder="0"
-  maxLength={1}
-  className={fieldErrors.agencia && !agenciaDv ? "border-destructive" : ""}
-/>
+📋 Ex: Agência 63-<strong>9</strong> → Dígito é "9"
 ```
 
-#### 5. Adicionar mensagem de ajuda dinâmica
+**Local**: Linha 603-605
 
-Mostrar dica contextual sobre o formato esperado:
+### Arquivo 2: `src/components/instrutor/InstructorBalanceCard.tsx`
 
+**Mudança 1**: Chamar `fetchBalance()` automaticamente ao montar o componente quando `hasRecipient` é true
+
+Adicionar `useEffect` para carregar saldo automaticamente:
 ```tsx
-{BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv && (
-  <p className="text-xs text-muted-foreground mt-1">
-    📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
-  </p>
+useEffect(() => {
+  if (hasRecipient) {
+    fetchBalance();
+  }
+}, [hasRecipient]);
+```
+
+**Mudança 2**: Mostrar banner de KYC ANTES de carregar saldo, quando instrutor tem recipient configurado mas não tem status ativo
+
+Adicionar nova condição para exibir o banner de verificação imediatamente:
+```tsx
+// Show KYC banner when instructor has bank data but hasn't verified yet
+const showKycBannerBeforeBalance = hasRecipient && !balance && !loading && !error;
+```
+
+E renderizar este banner logo após o header, antes do botão "Consultar saldo":
+```tsx
+{showKycBannerBeforeBalance && (
+  <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ...">
+    <div className="flex items-start gap-3">
+      <Camera className="w-5 h-5" />
+      <div>
+        <h4>Complete sua verificação</h4>
+        <p>Verifique sua identidade para liberar os saques.</p>
+        <Button onClick={handleVerifyIdentity}>
+          Verificar identidade agora
+        </Button>
+      </div>
+    </div>
+  </div>
 )}
 ```
 
-### Arquivo: `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+### Arquivo 3: `supabase/functions/create-instructor-recipient-pagarme/index.ts`
 
-#### 6. Melhorar mensagem de erro específica para `agencia_dv`
+**Mudança**: Melhorar mensagem de erro para dígito de agência
 
-Adicionar mapeamento mais amigável:
-
+Atualizar o mapeamento de erros para ser mais claro:
 ```typescript
-const errorMappings = {
-  // ... existentes ...
-  "agencia_dv": "Dígito da agência obrigatório para este banco. Confira no seu cartão (ex: 0063-9).",
-};
+"agencia_dv": "Dígito da agência obrigatório. Ex: Agência 63-9 → Dígito é '9'",
 ```
 
 ## Resultado Esperado
 
-- Campo "Dígito" da agência marcado como obrigatório (*) para bancos que exigem
-- Validação visual com borda vermelha quando vazio
-- Mensagem de erro clara explicando o formato esperado
-- O instrutor Lucas Felipe conseguirá cadastrar informando o dígito completo da agência
+1. A dica da agência mostrará o formato correto sem zeros confusos
+2. O banner de verificação de identidade aparecerá imediatamente para instrutores com dados bancários configurados
+3. O saldo será carregado automaticamente ao abrir o perfil
+4. O instrutor Lucas Felipe conseguirá clicar e abrir o link de verificação
+
