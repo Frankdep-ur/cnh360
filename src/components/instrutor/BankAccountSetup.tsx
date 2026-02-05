@@ -34,6 +34,15 @@ const SUPPORTED_BANKS = [
   { code: "212", name: "Banco Original" },
 ];
 
+// Bancos que EXIGEM dígito verificador de agência
+const BANKS_REQUIRING_AGENCY_DV = [
+  "001", // Banco do Brasil
+  "033", // Santander
+  "237", // Bradesco
+  "341", // Itaú
+  "422", // Safra
+];
+
 type Status = "idle" | "loading" | "success" | "error";
 
 // Interface para erros específicos de campo
@@ -209,6 +218,12 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
     // Validate bank data
     if (!bankCode) {
       errors.bankCode = "Selecione o banco";
+    }
+
+    // Verificar se banco exige dígito de agência
+    if (bankCode && BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
+      const bankName = SUPPORTED_BANKS.find(b => b.code === bankCode)?.name || bankCode;
+      errors.agencia = `O ${bankName} exige o dígito verificador da agência`;
     }
 
     if (!agencia || agencia.length < 1) {
@@ -569,15 +584,26 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 />
               </div>
               <div className="space-y-2">
-                <Label>Dígito</Label>
+                <Label>
+                  Dígito {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && <span className="text-destructive">*</span>}
+                </Label>
                 <Input
                   value={agenciaDv}
-                  onChange={(e) => setAgenciaDv(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => {
+                    setAgenciaDv(e.target.value.replace(/\D/g, ""));
+                    clearFieldError("agencia");
+                  }}
                   placeholder="0"
                   maxLength={1}
+                  className={fieldErrors.agencia && !agenciaDv ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
             </div>
+            {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv && !fieldErrors.agencia && (
+              <p className="text-xs text-muted-foreground -mt-2 flex items-center gap-1">
+                📋 Ex: Agência 0063-<strong>9</strong> → Dígito é "9"
+              </p>
+            )}
             {fieldErrors.agencia && (
               <p className="text-xs text-destructive flex items-center gap-1 -mt-2">
                 <AlertTriangle className="w-3 h-3" />

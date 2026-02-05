@@ -260,7 +260,8 @@ serve(async (req) => {
       const errorMappings: Record<string, string> = {
         // Erros de agência
         "branch_number": "Número da agência inválido. Verifique se digitou corretamente.",
-        "branch_check_digit": "Dígito da agência incorreto.",
+        "branch_check_digit": "Dígito da agência incorreto ou faltando. Confira no seu cartão (ex: 0063-9).",
+        "agencia_dv": "Dígito da agência obrigatório para este banco. Confira no seu cartão (ex: 0063-9).",
         "branch": "Agência não encontrada para este banco.",
         
         // Erros de conta
