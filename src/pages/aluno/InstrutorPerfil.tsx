@@ -12,8 +12,7 @@ import {
   Phone,
   ChevronRight,
   Check,
-  Loader2,
-  AlertTriangle
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,8 +55,6 @@ interface InstructorData {
   totalLessons: number;
   responseTime: string;
   tags: string[];
-  kycStatus?: string | null;
-  pagarmeRecipientId?: string | null;
 }
 
 export default function InstrutorPerfil() {
@@ -68,8 +65,6 @@ export default function InstrutorPerfil() {
   const [instructor, setInstructor] = useState<InstructorData | null>(null);
   const [selectedDay, setSelectedDay] = useState(defaultAvailability[0].day);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [isVerifiedForPayments, setIsVerifiedForPayments] = useState(true);
-
 
   useEffect(() => {
     if (id) {
@@ -102,21 +97,6 @@ export default function InstrutorPerfil() {
 
       const veiculo = veiculoData && veiculoData.length > 0 ? veiculoData[0] : null;
 
-      // Fetch kyc_status and recipient_id from instrutores table
-      const { data: instrutorPrivate } = await supabase
-        .from("instrutores")
-        .select("kyc_status, pagarme_recipient_id")
-        .eq("id", id)
-        .single();
-
-      const kycStatus = instrutorPrivate?.kyc_status || null;
-      const pagarmeRecipientId = instrutorPrivate?.pagarme_recipient_id || null;
-      
-      // Instructor is verified for payments if has recipient AND kyc is approved
-      setIsVerifiedForPayments(
-        !!pagarmeRecipientId && kycStatus === "approved"
-      );
-
       setInstructor({
         id: id!,
         name: cacheData.nome || "Instrutor",
@@ -135,8 +115,6 @@ export default function InstrutorPerfil() {
         totalLessons: cacheData.total_aulas || 0,
         responseTime: "5 min",
         tags: ["Paciente", "Pontual", "Experiente"],
-        kycStatus,
-        pagarmeRecipientId,
       });
     } catch (err) {
       console.error("Error in fetchInstructorData:", err);
@@ -180,17 +158,12 @@ export default function InstrutorPerfil() {
         </button>
 
         {/* Verified Badge */}
-        {instructor.verified && isVerifiedForPayments ? (
+        {instructor.verified && (
           <div className="absolute top-6 right-6 flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-sm font-medium safe-top">
             <Shield className="w-4 h-4" />
             Verificado
           </div>
-        ) : !isVerifiedForPayments ? (
-          <div className="absolute top-6 right-6 flex items-center gap-2 bg-amber-500 text-white px-3 py-1.5 rounded-full text-sm font-medium safe-top">
-            <AlertTriangle className="w-4 h-4" />
-            Verificação pendente
-          </div>
-        ) : null}
+        )}
       </div>
 
       {/* Profile Info */}
@@ -355,18 +328,7 @@ export default function InstrutorPerfil() {
           <Button variant="outline" size="lg" className="w-14">
             <MessageCircle className="w-5 h-5" />
           </Button>
-          {!isVerifiedForPayments ? (
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1 border-amber-500 text-amber-600"
-              disabled
-            >
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              Instrutor em verificação
-            </Button>
-          ) : (
-            <Button
+          <Button
             variant="hero"
             size="lg"
             className="flex-1"
@@ -376,8 +338,7 @@ export default function InstrutorPerfil() {
             {selectedTime
               ? `Agendar ${selectedDay} às ${selectedTime}`
               : "Selecione um horário"}
-            </Button>
-          )}
+          </Button>
         </div>
       </div>
     </div>
