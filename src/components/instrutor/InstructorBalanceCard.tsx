@@ -422,7 +422,15 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 <p className="text-xs text-amber-600 mt-1">Liberação em 48h</p>
               )}
               {recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">Liberação D+14</p>
+                <div className="text-xs text-muted-foreground mt-1">
+                  <p>Aguardando liberação</p>
+                  <button 
+                    className="text-primary underline text-left"
+                    onClick={() => window.open('https://wa.me/5518981288372?text=Olá, gostaria de saber sobre o prazo de liberação do meu saldo', '_blank')}
+                  >
+                    Dúvidas? Fale conosco
+                  </button>
+                </div>
               )}
             </div>
             
@@ -443,13 +451,17 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
             disabled={balance.available <= 0}
             className={cn(
               "w-full",
-              recipientStatus === "active"
+              recipientStatus === "active" && balance.available > 0
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                 : "bg-muted text-muted-foreground"
             )}
           >
             <Banknote className="w-4 h-4 mr-2" />
-            {recipientStatus === "active" ? "Sacar Saldo" : "Sacar (verificação necessária)"}
+            {recipientStatus !== "active" 
+              ? "Sacar (verificação necessária)" 
+              : balance.available > 0 
+                ? "Sacar Saldo" 
+                : "Sem saldo disponível"}
           </Button>
 
           {/* Last Updated */}
