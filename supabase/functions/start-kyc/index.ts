@@ -150,6 +150,50 @@ serve(async (req) => {
       );
     }
 
+    // If recipient was refused, they need to re-register before KYC
+    if (recipientStatus === "refused") {
+      logStep("Recipient is refused, needs to re-register");
+      
+      // Update local status to refused
+      if (instrutorData.kyc_status !== "refused") {
+        await supabase
+          .from("instrutores")
+          .update({ kyc_status: "refused", kyc_updated_at: new Date().toISOString() })
+          .eq("id", instrutorData.id);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "recipient_refused",
+          message: "Seu cadastro foi recusado pela verificação. Clique em 'Recadastrar dados bancários' para tentar novamente com dados corretos.",
+          recipientStatus: "refused",
+        }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // If recipient is suspended, they cannot do KYC
+    if (recipientStatus === "suspended") {
+      logStep("Recipient is suspended");
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "recipient_suspended",
+          message: "Sua conta está suspensa. Entre em contato com o suporte para resolver.",
+          recipientStatus: "suspended",
+        }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
     // Check if we have a valid cached KYC URL
     if (instrutorData.kyc_url && instrutorData.kyc_link_expires_at) {
       const expiresAt = new Date(instrutorData.kyc_link_expires_at);

@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Banknote, Smartphone } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, CheckCircle2, Banknote, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { openExternalLink } from "@/lib/openExternalLink";
 import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
+import { KYCVerificationModal } from "@/components/instrutor/KYCVerificationModal";
 
 interface BalanceData {
   available: number;
@@ -28,6 +29,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [loading, setLoading] = useState(false);
   const [loadingKyc, setLoadingKyc] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [kycUrl, setKycUrl] = useState<string | null>(null);
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -96,7 +99,10 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   }, [hasRecipient]);
 
   const handleVerifyIdentity = async () => {
+    // Show modal immediately with loading state
+    setShowKycModal(true);
     setLoadingKyc(true);
+    setKycUrl(null);
     setError(null);
 
     try {
@@ -109,6 +115,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       }
 
       if (data?.status === "already_active") {
+        setShowKycModal(false);
         toast({
           title: "Conta já verificada! ✅",
           description: "Você pode fazer saques normalmente.",
@@ -118,6 +125,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       }
 
       if (data?.error === "recipient_not_found") {
+        setShowKycModal(false);
         toast({
           variant: "destructive",
           title: "Dados bancários não configurados",
@@ -126,16 +134,41 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         return;
       }
 
+      if (data?.error === "recipient_refused") {
+        setShowKycModal(false);
+        // Refresh balance to update UI state
+        fetchBalance();
+        toast({
+          variant: "destructive",
+          title: "Cadastro recusado",
+          description: "Seu cadastro foi recusado. Clique em 'Recadastrar dados bancários' para tentar novamente.",
+          duration: 8000,
+        });
+        return;
+      }
+
+      if (data?.error === "recipient_suspended") {
+        setShowKycModal(false);
+        toast({
+          variant: "destructive",
+          title: "Conta suspensa",
+          description: "Sua conta está suspensa. Entre em contato com o suporte.",
+        });
+        return;
+      }
+
       if (data?.error === "kyc_link_failed") {
+        setShowKycModal(false);
         toast({
           variant: "destructive",
           title: "Erro ao gerar link",
-          description: "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372",
+          description: data.message || "Erro ao gerar link de verificação. Tente novamente ou contate suporte via WhatsApp: wa.me/5518981288372",
         });
         return;
       }
 
       if (data?.error) {
+        setShowKycModal(false);
         toast({
           variant: "destructive",
           title: "Erro",
@@ -145,19 +178,12 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       }
 
       if (data?.kyc_url) {
-        toast({
-          title: "Abrindo no navegador 📱",
-          description: "Complete a selfie e documento lá. Quando terminar, volte pro app — atualizamos automaticamente!",
-          duration: 8000,
-        });
-        
-        // Pequeno delay para usuário ler a instrução antes de abrir
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        openExternalLink(data.kyc_url);
+        // Set the URL so modal can display it
+        setKycUrl(data.kyc_url);
         return;
       }
 
+      setShowKycModal(false);
       toast({
         variant: "destructive",
         title: "Erro inesperado",
@@ -166,6 +192,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
     } catch (err: any) {
       console.error("[InstructorBalanceCard] KYC Error:", err);
+      setShowKycModal(false);
       toast({
         variant: "destructive",
         title: "Erro",
@@ -174,6 +201,11 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     } finally {
       setLoadingKyc(false);
     }
+  };
+
+  const handleCloseKycModal = () => {
+    setShowKycModal(false);
+    setKycUrl(null);
   };
 
   const handleWithdrawClick = () => {
@@ -257,19 +289,28 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         </Button>
       </div>
 
-      {/* KYC Verified Badge - Show when active */}
+      {/* KYC Verified Badge - Show when active with tooltip */}
       {recipientStatus === "active" && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            <span className="font-medium text-emerald-700 dark:text-emerald-300">
-              Identidade verificada ✓
-            </span>
-            <Badge className="ml-auto bg-emerald-100 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300 border-0">
-              Ativo
-            </Badge>
-          </div>
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 cursor-help">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                    Identidade verificada ✓
+                  </span>
+                  <Badge className="ml-auto bg-emerald-100 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300 border-0">
+                    Ativo
+                  </Badge>
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Verificação aprovada. Saques liberados!</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       {/* Status Alert for Affiliation/Refused/Suspended */}
@@ -531,6 +572,14 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         hasRecipient={hasRecipient}
         onSetupBank={onSetupClick}
         onSuccess={handleWithdrawSuccess}
+      />
+
+      {/* KYC Verification Modal */}
+      <KYCVerificationModal
+        open={showKycModal}
+        onClose={handleCloseKycModal}
+        kycUrl={kycUrl}
+        isLoading={loadingKyc}
       />
     </div>
   );
