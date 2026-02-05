@@ -36,6 +36,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  // Local KYC status from database - used to prevent showing KYC banner for refused accounts
+  const [localKycStatus, setLocalKycStatus] = useState<string | null>(null);
 
   const formatCurrency = (value: number, currency: string = "BRL") => {
     return new Intl.NumberFormat("pt-BR", {
@@ -90,6 +92,32 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       setLoading(false);
     }
   };
+
+  // Fetch local KYC status from database immediately to prevent showing wrong banners
+  useEffect(() => {
+    const fetchLocalKycStatus = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const { data } = await supabase
+          .from("instrutores")
+          .select("kyc_status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        if (data) {
+          setLocalKycStatus(data.kyc_status);
+        }
+      } catch (err) {
+        console.error("[InstructorBalanceCard] Error fetching local KYC status:", err);
+      }
+    };
+    
+    if (hasRecipient) {
+      fetchLocalKycStatus();
+    }
+  }, [hasRecipient]);
 
   // Auto-fetch balance when component mounts if instructor has recipient
   useEffect(() => {
@@ -256,16 +284,29 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   }
 
   // Determine if KYC banner should be shown
+  // NEVER show KYC banner if status is refused - only show re-register button
   const showKycBanner = recipientStatus && 
     recipientStatus !== "active" && 
     recipientStatus !== "refused" && 
     recipientStatus !== "suspended";
 
-  const showKycBannerInitial = !recipientStatus && hasRecipient && !loading && balance;
+  // Show KYC banner when balance loaded but no recipient status yet
+  // AND status is not refused (refused accounts must re-register first)
+  const showKycBannerInitial = !recipientStatus && 
+    hasRecipient && 
+    !loading && 
+    balance &&
+    recipientStatus !== "refused";
 
-  // Show KYC banner when instructor has bank data but hasn't verified yet
+  // Show KYC banner when instructor has bank data but hasn't loaded balance yet
   // This banner shows even during loading to ensure the button is always visible
-  const showKycBannerBeforeBalance = hasRecipient && !recipientStatus && !balance;
+  // BUT NOT when recipient status is refused (from API) or local kyc_status is refused (from DB)
+  // Refused accounts must re-register their bank data first
+  const showKycBannerBeforeBalance = hasRecipient && 
+    !recipientStatus && 
+    !balance &&
+    !loading &&
+    localKycStatus !== "refused";
 
   return (
     <div className="bg-card rounded-2xl shadow-card p-4">
@@ -335,8 +376,18 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         </Alert>
       )}
 
-      {/* Re-register button when refused */}
-      {recipientStatus === "refused" && onReRegisterClick && (
+      {/* Early Refused Alert - Show when local kyc_status is refused but API hasn't loaded yet */}
+      {!recipientStatus && localKycStatus === "refused" && (
+        <Alert className="mb-4 border-destructive/50 bg-destructive/10">
+          <AlertCircle className="w-4 h-4 text-destructive" />
+          <AlertDescription className="text-destructive">
+            Seu cadastro foi recusado. Verifique se os dados bancários estão corretos e recadastre.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Re-register button when refused (from API or local status) */}
+      {(recipientStatus === "refused" || (!recipientStatus && localKycStatus === "refused")) && onReRegisterClick && (
         <Button
           variant="outline"
           className="w-full mb-4 border-destructive text-destructive hover:bg-destructive/10"
