@@ -1,165 +1,168 @@
 
-# Plano de Correção: Cálculos de Saldo e Ganhos do Instrutor
+# Análise e Correção: Prazo de Liberação D+14 vs Saque no Mesmo Dia
 
-## Diagnóstico dos Problemas
+## Diagnóstico do Problema
 
-### Problema 1: Divisão duplicada por 100 no saldo
-- **Edge Function** já converte centavos para reais (linha 140-142):
-  ```typescript
-  available: (balanceData.available?.amount || 0) / 100
-  ```
-- **Frontend** divide novamente por 100 (linha 407):
-  ```typescript
-  {formatCurrency(balance.available / 100, ...)}
-  ```
-- **Resultado**: Se o saldo é R$ 4,52, mostra R$ 0,04
+### O que está acontecendo?
 
-### Problema 2: Total de ganhos mostrando valor bruto
-- A página "Aulas" soma `aula.valor` (valor cheio da aula: R$ 9,03)
-- Deveria mostrar apenas a parte do instrutor: 50% = R$ 4,52
-- **Resultado**: Estatística inflada mostrando o dobro do real
+1. **Pagamento do Frank Alexandre**: R$ 4,52 aprovado em 31/01/2026
+2. **Status atual da Pagar.me**: 
+   - Disponível: R$ 0,00
+   - A receber: R$ 4,52
+3. **Teste de saque**: Retornou "Saldo insuficiente para saque"
 
-### Problema 3: Saldo Pagar.me zerado mesmo com pagamento aprovado
-- O pagamento local mostra `valor_instrutor: 4.52` com status `aprovado`
-- A Pagar.me retorna `available_amount: 0`
-- **Causa provável**: O split só credita após D+14 ou D+30 dependendo do plano
+### Causa raiz: Antecipação NÃO está ativa na sua conta
+
+A Pagar.me tem dois modos de liberação de pagamentos de cartão:
+
+| Modo | Prazo | Requisito |
+|------|-------|-----------|
+| **Sem antecipação** (padrão) | D+29 a D+31 | Nenhum |
+| **Com antecipação automática** | D+0 a D+1 | Precisa de liberação manual pela Pagar.me |
+
+O código já envia a configuração correta:
+```typescript
+automatic_anticipation_settings: {
+  enabled: true,
+  type: "full",
+  volume_percentage: 100
+}
+```
+
+**Porém**, a documentação da Pagar.me diz:
+> "Para utilizar configurações de antecipação automática é necessário realizar a liberação junto a Pagar.me."
+
+Ou seja, você precisa **entrar em contato com a Pagar.me** para habilitar a antecipação automática na sua conta.
 
 ---
 
-## Correções a Implementar
+## Solução: Contatar Pagar.me para Habilitar Antecipação
 
-### 1. Remover divisão duplicada no InstructorBalanceCard.tsx
+### Passo 1: Enviar e-mail para relacionamento@pagar.me
 
-**Antes:**
-```typescript
-{formatCurrency(balance.available / 100, balance.currency)}
-{formatCurrency(balance.waitingFunds / 100, balance.currency)}
-{formatCurrency(balance.transferred / 100, balance.currency)}
-availableBalance={balance?.available ? balance.available / 100 : 0}
+**Assunto**: Habilitação de Antecipação Automática - Marketplace CNH360
+
+**Corpo**:
+```
+Olá,
+
+Somos a plataforma CNH360 e precisamos habilitar a antecipação automática 
+para nossos recebedores (instrutores de autoescola).
+
+Dados da conta:
+- E-mail da conta: [seu-email@cnh360.com]
+- CNPJ: [seu-cnpj]
+
+Configuração desejada:
+- Tipo: Full (100% do volume)
+- Prazo: D+0 ou D+1 (mesma dia ou próximo dia útil)
+- Aplicável a: Todos os recebedores do marketplace
+
+Nosso modelo de negócio é similar a Uber/99, onde instrutores precisam 
+receber rapidamente após cada aula concluída.
+
+Aguardo retorno.
 ```
 
-**Depois:**
-```typescript
-{formatCurrency(balance.available, balance.currency)}
-{formatCurrency(balance.waitingFunds, balance.currency)}
-{formatCurrency(balance.transferred, balance.currency)}
-availableBalance={balance?.available ?? 0}
+### Passo 2: Alternativa Temporária (enquanto aguarda liberação)
+
+Enquanto a antecipação não é liberada, podemos melhorar a comunicação ao instrutor:
+
+**Antes**:
+```
+A receber: R$ 4,52
+Liberação D+14
+```
+
+**Depois**:
+```
+A receber: R$ 4,52
+Liberação em até 30 dias (antecipação em ativação)
+[Link: Saiba mais sobre prazos]
 ```
 
 ---
 
-### 2. Corrigir cálculo de "Total ganho" na página InstrutorAulas.tsx
+## Verificação do Botão de Saque
 
-**Opção A - Calcular 50% do valor da aula:**
-```typescript
-const totalGanhos = aulas
-  .filter(a => a.status === 'concluida')
-  .reduce((acc, a) => acc + (a.valor * 0.5), 0);
+O botão "Sacar Saldo" está funcionando corretamente. O erro retornado:
+```json
+{"success":false,"error":"Saldo insuficiente para saque. Aguarde a liberação do saldo pendente."}
 ```
 
-**Opção B (mais precisa) - Buscar da tabela pagamentos:**
-- Adicionar query para buscar `SUM(valor_instrutor)` da tabela pagamentos
-- Isso garante valores exatos mesmo com descontos variáveis
+**Este comportamento está correto** porque:
+1. O saldo `available` na Pagar.me é R$ 0,00
+2. O saldo `waitingFunds` é R$ 4,52 (pendente de liberação)
+3. Só é possível sacar valores de `available`, não de `waitingFunds`
 
-Vou implementar a **Opção B** para maior precisão, já que a tabela `pagamentos` já tem o campo `valor_instrutor` calculado corretamente.
+Quando a antecipação for ativada, o valor cairá em `available` quase instantaneamente e o saque funcionará.
 
 ---
 
-### 3. Melhorar display de saldo pendente
+## Melhorias na UI (opcional)
 
-Adicionar explicação quando saldo Pagar.me é zero mas há pagamentos locais:
+### 1. Atualizar mensagem de prazo no card de saldo
+
+Alterar de "D+14" para algo mais preciso e informativo:
+
 ```typescript
+// InstructorBalanceCard.tsx
 {recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
-  <p className="text-xs text-muted-foreground mt-1">
-    Liberação após processamento (D+14/D+30)
-  </p>
+  <div className="text-xs text-muted-foreground mt-1">
+    <p>Aguardando liberação do pagamento</p>
+    <button 
+      className="text-primary underline"
+      onClick={() => window.open('https://wa.me/5518981288372?text=Olá, gostaria de saber sobre o prazo de liberação do meu saldo', '_blank')}
+    >
+      Dúvidas? Fale conosco
+    </button>
+  </div>
 )}
 ```
 
+### 2. Desabilitar botão de saque quando não há saldo disponível
+
+Atualmente o botão está habilitado mesmo sem saldo disponível. Podemos melhorar:
+
+```typescript
+<Button 
+  onClick={handleWithdrawClick}
+  disabled={!balance || balance.available <= 0}
+  className={cn(
+    balance?.available > 0 
+      ? "bg-[#4CAF50] hover:bg-[#43A047]" 
+      : "bg-muted text-muted-foreground"
+  )}
+>
+  {balance?.available > 0 ? "Sacar Saldo" : "Sem saldo disponível"}
+</Button>
+```
+
 ---
 
-## Arquivos a Modificar
+## Resumo das Ações
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Remover `/100` duplicado em 4 lugares |
-| `src/pages/instrutor/InstrutorAulas.tsx` | Buscar `valor_instrutor` da tabela pagamentos ao invés de calcular |
+| Ação | Responsável | Urgência |
+|------|-------------|----------|
+| Contatar Pagar.me para habilitar antecipação | Você | Alta |
+| Atualizar mensagem de prazo no UI | Eu (código) | Média |
+| Desabilitar botão de saque quando saldo = 0 | Eu (código) | Baixa |
 
 ---
 
 ## Seção Técnica
 
-### Alterações no InstructorBalanceCard.tsx
+### Arquivos a Modificar (melhorias UI)
 
-Linhas afetadas:
-- **Linha 407**: `balance.available / 100` → `balance.available`
-- **Linha 419**: `balance.waitingFunds / 100` → `balance.waitingFunds`  
-- **Linha 432**: `balance.transferred / 100` → `balance.transferred`
-- **Linha 465**: `balance.available / 100` → `balance.available`
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Melhorar mensagem de prazo e desabilitar botão quando saldo = 0 |
 
-### Alterações no InstrutorAulas.tsx
+### Teste do Fluxo de Saque
 
-Adicionar fetch de pagamentos e novo estado:
-```typescript
-const [totalGanhosReal, setTotalGanhosReal] = useState(0);
+O teste foi executado com sucesso:
+- **Endpoint**: `POST /request-manual-transfer-pagarme`
+- **Resposta**: `400 - Saldo insuficiente para saque`
+- **Status**: ✅ Funcionando corretamente (não há saldo disponível)
 
-// Dentro do useEffect, após buscar aulas:
-const { data: pagamentosData } = await supabase
-  .from('pagamentos')
-  .select('valor_instrutor')
-  .eq('instrutor_id', instrutor.id)
-  .eq('status', 'aprovado');
-
-const total = pagamentosData?.reduce(
-  (sum, p) => sum + (p.valor_instrutor || 0), 0
-) ?? 0;
-setTotalGanhosReal(total);
-```
-
-Display:
-```typescript
-<p className="text-2xl font-bold text-foreground">
-  R${totalGanhosReal.toFixed(2).replace('.', ',')}
-</p>
-```
-
-### Resultado Esperado
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Saldo disponível (display) | R$ 0,04 | R$ 4,52 |
-| Saldo pendente (display) | R$ 0,04 | R$ 4,52 |
-| Total ganho (aulas) | R$ 9,03 | R$ 4,52 |
-
----
-
-## Verificação Visual do Fluxo
-
-```text
-┌──────────────────────────────────────────────────────────┐
-│                    PÁGINA DE AULAS                       │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌─────────────────┐  ┌─────────────────┐               │
-│  │ 📚 1            │  │ 📈 R$ 4,52      │  ← CORRIGIDO  │
-│  │ Aulas concluídas│  │ Total ganho     │    (era 9,03) │
-│  └─────────────────┘  └─────────────────┘               │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────┐
-│                   CARD DE SALDO                          │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  Disponível para saque                                   │
-│  R$ 0,00                       ← Pagar.me real (D+14)    │
-│                                                          │
-│  ┌─────────────┐  ┌─────────────┐                       │
-│  │ A receber   │  │ Transferido │                       │
-│  │ R$ 4,52     │  │ R$ 0,00     │  ← CORRIGIDO          │
-│  └─────────────┘  └─────────────┘    (antes: 0,04)      │
-│                                                          │
-│  Liberação após processamento (D+14)                     │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-```
+Quando a Pagar.me liberar a antecipação e o saldo `available` for maior que zero, o saque funcionará.
