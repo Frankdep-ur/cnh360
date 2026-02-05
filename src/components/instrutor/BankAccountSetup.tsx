@@ -34,13 +34,18 @@ const SUPPORTED_BANKS = [
   { code: "212", name: "Banco Original" },
 ];
 
-// Bancos que EXIGEM dígito verificador de agência
-const BANKS_REQUIRING_AGENCY_DV = [
-  "001", // Banco do Brasil
-  "033", // Santander
-  "237", // Bradesco
-  "341", // Itaú
-  "422", // Safra
+// Bancos que EXIGEM dígito verificador de agência (opcional na maioria)
+// NOTA: A maioria dos bancos brasileiros NÃO tem dígito de agência
+// Apenas alguns bancos tradicionais usam isso (e mesmo assim é raro)
+const BANKS_REQUIRING_AGENCY_DV: string[] = [
+  // Lista vazia - dígito de agência é OPCIONAL para todos os bancos
+  // A Pagar.me valida isso automaticamente
+];
+
+// Bancos onde o dígito de agência é comum (mas não obrigatório)
+const BANKS_WITH_COMMON_AGENCY_DV = [
+  "001", // Banco do Brasil - alguns usam
+  "033", // Santander - alguns usam
 ];
 
 type Status = "idle" | "loading" | "success" | "error";
@@ -220,8 +225,9 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       errors.bankCode = "Selecione o banco";
     }
 
-    // Verificar se banco exige dígito de agência
-    if (bankCode && BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
+    // Dígito de agência é OPCIONAL - não exigir mais
+    // A Pagar.me valida automaticamente se o banco precisa ou não
+    if (false && bankCode && BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv) {
       const bankName = SUPPORTED_BANKS.find(b => b.code === bankCode)?.name || bankCode;
       errors.agencia = `O ${bankName} exige o dígito verificador da agência`;
     }
@@ -305,15 +311,16 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
       }
 
       setStatus("success");
-      toast.success("Dados bancários configurados!", {
-        description: "Você receberá seus pagamentos automaticamente",
+      toast.success("Dados enviados pra Pagar.me!", {
+        description: "Aguarde aprovação (pode levar alguns minutos). Você receberá seus pagamentos automaticamente após aprovação.",
+        duration: 6000,
       });
 
       setTimeout(() => {
         onSuccess?.();
         onClose();
         setStatus("idle");
-      }, 1500);
+      }, 2000);
 
     } catch (error: any) {
       console.error("[BankAccountSetup] Error:", error);
@@ -584,8 +591,8 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                 />
               </div>
               <div className="space-y-2">
-                <Label>
-                  Dígito {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && <span className="text-destructive">*</span>}
+                <Label className="text-muted-foreground">
+                  Dígito
                 </Label>
                 <Input
                   value={agenciaDv}
@@ -593,19 +600,18 @@ export function BankAccountSetup({ open, onClose, onSuccess, existingRecipientId
                     setAgenciaDv(e.target.value.replace(/\D/g, ""));
                     clearFieldError("agencia");
                   }}
-                  placeholder="0"
+                  placeholder="-"
                   maxLength={1}
-                  className={fieldErrors.agencia && !agenciaDv ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
             </div>
-            {BANKS_REQUIRING_AGENCY_DV.includes(bankCode) && !agenciaDv && !fieldErrors.agencia && (
-              <p className="text-xs text-muted-foreground -mt-2 flex items-center gap-1">
-                📋 Ex: Agência 63-<strong>9</strong> → Dígito é "9"
-              </p>
-            )}
+            {/* Hint: dígito de agência é opcional */}
+            <p className="text-xs text-muted-foreground -mt-2 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              A maioria das agências <strong>não tem dígito</strong>. Deixe vazio se não tiver.
+            </p>
             {fieldErrors.agencia && (
-              <p className="text-xs text-destructive flex items-center gap-1 -mt-2">
+              <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
                 {fieldErrors.agencia}
               </p>
