@@ -1,180 +1,159 @@
 
-# Correção: Erro de Conexão ao Salvar Dados Bancários
+# Correção: Conta Bancária Recusada e Fluxo KYC
 
 ## Diagnóstico do Problema
 
-### Causa Raiz Identificada
+### Situação Atual
 
-Analisando os logs da Edge Function `create-instructor-recipient-pagarme`:
+| Instrutor | Recipient ID | KYC Status | Status Pagar.me |
+|-----------|--------------|------------|-----------------|
+| Lucas Felipe | `re_cmla15zsj21vt0l9tdkclu5cu` | `refused` | **REFUSED** |
+| Frank Alexandre | `re_cmkx1ob1cy0mz0l9tjhxp6lcf` | `approved` | **ACTIVE** |
 
-```
-[22:05:53] Pagar.me API error - {"status":412,"message":"invalid_parameter | agencia_dv | Invalid format"}
-[22:05:53] Recipient payload built - {"bankAccount":{"bank":"237","branch":"63","account":"34844","type":"checking"}}
-```
+### Por que a conta do Lucas foi recusada?
 
-**Problema**: O código envia `branch_check_digit: ""` (string vazia) para a API da Pagar.me, que **rejeita esse formato**. A API V5 da Pagar.me exige que o campo seja:
-- **Completamente omitido** (não presente no JSON), OU  
-- Um dígito válido (0-9)
+A recusa da Pagar.me pode ocorrer por:
+1. **Dados bancários inválidos** - agência/conta/dígito incorretos
+2. **CPF não confere** - o CPF informado não corresponde ao titular da conta bancária
+3. **Verificação KYC falhou** - se já passou pelo KYC e a verificação facial/documental falhou
+4. **Divergência de dados** - nome no cadastro diferente do nome na conta bancária
 
-**Código atual (linha 195):**
-```typescript
-branch_check_digit: agenciaDv?.replace(/\D/g, "") || ""  // ❌ Envia "" quando vazio
-```
+### O que funciona vs o que está errado na UI:
 
-A mensagem "Erro de conexão" aparece porque o mapeamento de erros traduz qualquer erro com "agencia_dv" para uma mensagem confusa.
+**Funciona:**
+- O banner vermelho "Cadastro recusado" aparece corretamente
+- A mensagem pede para clicar em "Recadastrar dados bancários"
+
+**Problema atual:**
+- O banner amarelo "Verificar identidade agora" ainda está aparecendo (visível na imagem)
+- Isso confunde o usuário, pois ele não pode fazer verificação se a conta foi recusada
+- O botão "Recadastrar dados bancários" pode não estar aparecendo
 
 ---
 
 ## Plano de Correção
 
-### 1. Edge Function: Omitir campo quando vazio
+### 1. Corrigir a lógica de exibição do banner KYC
 
-**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
-
-**Mudança:** Construir o payload condicionalmente, omitindo `branch_check_digit` quando estiver vazio:
+O banner de verificação de identidade não deve aparecer quando o status é `refused`. Atualmente, a variável `showKycBannerBeforeBalance` pode exibir o banner mesmo quando não deveria:
 
 ```typescript
-const bankAccountPayload: any = {
-  holder_name: name.trim(),
-  holder_type: type,
-  holder_document: cleanDocument,
-  bank: cleanBankCode,
-  branch_number: agencia.replace(/\D/g, ""),
-  account_number: conta.replace(/\D/g, ""),
-  account_check_digit: contaDv || "",
-  type: accountType
+// Problema: não verifica se kyc_status é "refused"
+const showKycBannerBeforeBalance = hasRecipient && !recipientStatus && !balance;
+```
+
+**Correção em `InstructorBalanceCard.tsx`:**
+
+```typescript
+// Adicionar verificação de kyc_status local
+const [localKycStatus, setLocalKycStatus] = useState<string | null>(null);
+
+// Buscar kyc_status do banco ao montar
+useEffect(() => {
+  if (hasRecipient) {
+    fetchKycStatus();
+  }
+}, [hasRecipient]);
+
+const fetchKycStatus = async () => {
+  const { data } = await supabase
+    .from("instrutores")
+    .select("kyc_status")
+    .single();
+  if (data) setLocalKycStatus(data.kyc_status);
 };
 
-// Só incluir branch_check_digit se tiver valor
-const cleanAgenciaDv = agenciaDv?.replace(/\D/g, "");
-if (cleanAgenciaDv && cleanAgenciaDv.length > 0) {
-  bankAccountPayload.branch_check_digit = cleanAgenciaDv;
-}
+// Corrigir condição para não exibir banner quando refused
+const showKycBannerBeforeBalance = hasRecipient && 
+  !recipientStatus && 
+  !balance && 
+  localKycStatus !== "refused";
 ```
 
-### 2. Edge Function: Adicionar retry automático
+### 2. Garantir que o botão "Recadastrar" aparece
 
-**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
+Na prop `onReRegisterClick`, verificar se está sendo passada corretamente e se o botão está visível quando `recipientStatus === "refused"`.
 
-**Mudança:** Implementar lógica de retry para erros de conexão/timeout:
+### 3. Adicionar feedback visual claro sobre o motivo da recusa
 
-```typescript
-async function callPagarmeWithRetry(url: string, options: RequestInit, maxAttempts = 3): Promise<Response> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-      
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      // Retry apenas em 5xx (erros de servidor)
-      if (response.status >= 500 && attempt < maxAttempts) {
-        logStep(`Attempt ${attempt} failed with ${response.status}, retrying...`);
-        await new Promise(r => setTimeout(r, 3000)); // 3s delay
-        continue;
-      }
-      
-      return response;
-    } catch (error: any) {
-      lastError = error;
-      if (error.name === "AbortError") {
-        logStep(`Attempt ${attempt} timed out, retrying...`);
-      } else {
-        logStep(`Attempt ${attempt} network error: ${error.message}`);
-      }
-      
-      if (attempt < maxAttempts) {
-        await new Promise(r => setTimeout(r, 3000));
-      }
-    }
-  }
-  
-  throw new Error(`Falha na conexão com Pagar.me após ${maxAttempts} tentativas. Verifique sua internet.`);
-}
-```
+Quando a conta é recusada, mostrar:
+- Mensagem detalhada sobre o que verificar (agência, conta, titular)
+- Botão proeminente para "Recadastrar dados bancários"
+- Esconder completamente o botão de verificação KYC
 
-### 3. Edge Function: Melhorar mapeamento de erros
+### 4. Melhorar Edge Function para retornar motivo da recusa
 
-**Arquivo:** `supabase/functions/create-instructor-recipient-pagarme/index.ts`
-
-**Mudança:** Atualizar mensagens de erro para serem mais claras:
-
-| Erro da Pagar.me | Mensagem Atual | Nova Mensagem |
-|------------------|----------------|---------------|
-| `agencia_dv | Invalid format` | "Dígito da agência obrigatório..." | "Formato da agência inválido. Confira se digitou corretamente (ex: 63 ou 0063)." |
-| Timeout/Abort | — | "Falha na conexão. Tente novamente em alguns segundos." |
-| 5xx após retries | — | "Serviço temporariamente indisponível. Tente novamente em alguns minutos." |
-
-### 4. Frontend: Loading spinner e retry
-
-**Arquivo:** `src/components/instrutor/BankAccountSetup.tsx`
-
-**Mudanças:**
-
-1. **Botão com loading state** já implementado - verificar se funciona
-2. **Adicionar botão de retry no toast de erro:**
-
-```tsx
-toast.error("Erro de conexão", {
-  description: "Não foi possível conectar ao servidor. Tente novamente.",
-  action: {
-    label: "Tentar de novo",
-    onClick: () => handleSubmit(),
-  },
-  duration: 10000,
-});
-```
-
-3. **Validação extra de agência:**
-```tsx
-// Máximo 5 dígitos numéricos para agência
-if (agencia && agencia.replace(/\D/g, "").length > 5) {
-  errors.agencia = "Agência deve ter no máximo 5 dígitos";
-}
-```
+Atualmente a Edge Function `get-instructor-balance-pagarme` já retorna `recipientStatus: "refused"`, mas podemos adicionar mais contexto consultando o motivo específico na Pagar.me.
 
 ---
 
 ## Seção Técnica
 
-### Fluxo de Dados Corrigido
-
-```text
-Frontend (BankAccountSetup.tsx)
-    │
-    ├─ agenciaDv = "" (vazio)
-    │
-    ▼
-Edge Function (create-instructor-recipient-pagarme)
-    │
-    ├─ cleanAgenciaDv = ""
-    ├─ if (cleanAgenciaDv) → NÃO entra
-    ├─ branch_check_digit → OMITIDO do payload
-    │
-    ▼
-Pagar.me API V5
-    │
-    ├─ Não recebe branch_check_digit
-    ├─ Aceita payload ✓
-    │
-    ▼
-Sucesso!
-```
-
 ### Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/create-instructor-recipient-pagarme/index.ts` | Omitir `branch_check_digit` quando vazio, adicionar retry, melhorar logs |
-| `src/components/instrutor/BankAccountSetup.tsx` | Adicionar retry no toast de erro, validação de 5 dígitos |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Corrigir lógica de exibição do banner KYC, esconder quando refused |
+| `src/pages/instrutor/InstrutorPerfil.tsx` | Garantir prop `onReRegisterClick` funciona corretamente |
+
+### Lógica de Estados Corrigida
+
+```text
+recipientStatus == null (carregando)
+    └─ Mostrar skeleton/loading
+
+recipientStatus == "refused"
+    ├─ Banner VERMELHO: "Cadastro recusado"
+    ├─ Botão: "Recadastrar dados bancários"
+    └─ NÃO mostrar banner de verificação KYC
+
+recipientStatus == "affiliation" | outros
+    ├─ Banner AMARELO: "Verificação pendente"
+    └─ Botão: "Verificar identidade agora"
+
+recipientStatus == "active"
+    ├─ Badge VERDE: "Identidade verificada ✓"
+    └─ Mostrar saldo e botão de saque
+```
+
+### Mudanças Específicas em InstructorBalanceCard.tsx
+
+1. **Linha 264** - Corrigir `showKycBannerInitial`:
+```typescript
+const showKycBannerInitial = !recipientStatus && 
+  hasRecipient && 
+  !loading && 
+  balance && 
+  recipientStatus !== "refused"; // Adicionar verificação
+```
+
+2. **Linha 268** - Corrigir `showKycBannerBeforeBalance`:
+```typescript
+const showKycBannerBeforeBalance = hasRecipient && 
+  !recipientStatus && 
+  !balance && 
+  localKycStatus !== "refused"; // Adicionar verificação com estado local
+```
+
+3. **Adicionar estado local para kyc_status** para evitar exibir banner incorreto antes do balance carregar
+
+### Diferença entre Frank Alexandre e Lucas Felipe
+
+**Frank Alexandre:**
+- Dados bancários corretos → Pagar.me criou recipient
+- Verificação KYC completada → Status mudou para `active`
+- Pode fazer saques
+
+**Lucas Felipe:**
+- Dados bancários podem estar incorretos (ex: CPF não confere com titular)
+- Ou KYC falhou (selfie/documento não validou)
+- Precisa recadastrar com dados corretos
 
 ### Teste de Validação
 
-Após implementar:
-1. Cadastrar agência "63" (Bradesco) sem dígito
-2. Verificar nos logs que `branch_check_digit` não aparece no payload
-3. Confirmar toast verde de sucesso
-4. Testar cenário de timeout (desconectar internet) e verificar retry automático
+1. O usuário Lucas deve clicar em "Recadastrar dados bancários"
+2. Preencher novamente com atenção:
+   - Banco, Agência (sem dígito se Bradesco), Conta, Dígito da conta
+   - CPF deve ser EXATAMENTE o do titular da conta bancária
+   - Nome deve coincidir com o nome na conta
+3. Após recadastrar, fazer verificação KYC novamente
