@@ -37,6 +37,8 @@ interface InstructorData {
   aceitaCarroProprio: boolean;
   tags: string[];
   email: string | null;
+  kycStatus?: string | null;
+  hasRecipient?: boolean;
 }
 
 // Mock data fallback for demo (empty - uses real data from database)
@@ -67,6 +69,18 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
 
     // Get all instructor IDs for batch vehicle fetch
     const instructorIds = cacheData.map((inst) => inst.id);
+
+    // Fetch kyc_status and recipient_id for payment verification
+    const { data: instrutoresPrivate } = await supabase
+      .from("instrutores")
+      .select("id, kyc_status, pagarme_recipient_id")
+      .in("id", instructorIds);
+
+    // Create a map for quick kyc lookup
+    const kycMap = new Map<string, { kyc_status: string | null; pagarme_recipient_id: string | null }>();
+    instrutoresPrivate?.forEach((i) => {
+      kycMap.set(i.id, { kyc_status: i.kyc_status, pagarme_recipient_id: i.pagarme_recipient_id });
+    });
 
     // Fetch all vehicles at once (single query instead of N queries)
     const { data: allVehicles, error: vehiclesError } = await supabase
@@ -115,6 +129,8 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
         aceitaCarroProprio: true,
         tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
         email: null,
+        kycStatus: kycMap.get(inst.id)?.kyc_status || null,
+        hasRecipient: !!kycMap.get(inst.id)?.pagarme_recipient_id,
       };
     });
   } catch (error) {
@@ -296,6 +312,10 @@ export default function BuscarInstrutores() {
                   <InstructorCard 
                     key={instructor.id} 
                     {...instructor}
+                    showMEIBadge={instructor.isMEI}
+                    showCarroProprio={instructor.aceitaCarroProprio}
+                    kycStatus={instructor.kycStatus}
+                    hasRecipient={instructor.hasRecipient}
                   />
                 ))}
               </div>

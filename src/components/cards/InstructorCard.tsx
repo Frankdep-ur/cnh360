@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Star, MapPin, Car, Clock, Shield, Leaf } from "lucide-react";
+import { Star, MapPin, Car, Clock, Shield, Leaf, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,8 @@ interface InstructorCardProps {
   tags?: string[];
   showMEIBadge?: boolean;
   showCarroProprio?: boolean;
+  kycStatus?: string | null;
+  hasRecipient?: boolean;
 }
 
 function InstructorCardComponent({
@@ -35,7 +37,12 @@ function InstructorCardComponent({
   tags = [],
   showMEIBadge = false,
   showCarroProprio = false,
+  kycStatus,
+  hasRecipient = true,
 }: InstructorCardProps) {
+  // Instructor is verified for payments if has recipient AND kyc is approved
+  const isVerifiedForPayments = hasRecipient && kycStatus === "approved";
+
   return (
     <Link
       to={`/aluno/instrutor/${id}`}
@@ -63,6 +70,11 @@ function InstructorCardComponent({
                 <Shield className="w-3 h-3" />
               </div>
             )}
+            {!isVerifiedForPayments && (
+              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white p-1 rounded-full">
+                <AlertTriangle className="w-3 h-3" />
+              </div>
+            )}
           </div>
 
           {/* Info */}
@@ -86,6 +98,13 @@ function InstructorCardComponent({
                 {available ? "Disponível" : "Ocupado"}
               </div>
             </div>
+
+            {/* Payment verification warning */}
+            {!isVerifiedForPayments && (
+              <div className="text-[10px] bg-warning/10 text-warning px-2 py-0.5 rounded-full font-medium mt-1">
+                Verificação pendente
+              </div>
+            )}
 
             {/* Rating */}
             <div className="flex items-center gap-1 mt-1">
