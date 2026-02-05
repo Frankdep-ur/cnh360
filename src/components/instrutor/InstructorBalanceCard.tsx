@@ -291,22 +291,24 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     recipientStatus !== "suspended";
 
   // Show KYC banner when balance loaded but no recipient status yet
-  // AND status is not refused (refused accounts must re-register first)
+  // AND status is not refused/approved (refused must re-register, approved already verified)
   const showKycBannerInitial = !recipientStatus && 
     hasRecipient && 
     !loading && 
     balance &&
-    recipientStatus !== "refused";
+    localKycStatus !== "refused" &&
+    localKycStatus !== "approved";
 
   // Show KYC banner when instructor has bank data but hasn't loaded balance yet
   // This banner shows even during loading to ensure the button is always visible
-  // BUT NOT when recipient status is refused (from API) or local kyc_status is refused (from DB)
-  // Refused accounts must re-register their bank data first
+  // BUT NOT when recipient status is refused/approved (from DB)
+  // Refused accounts must re-register, approved accounts are already verified
   const showKycBannerBeforeBalance = hasRecipient && 
     !recipientStatus && 
     !balance &&
     !loading &&
-    localKycStatus !== "refused";
+    localKycStatus !== "refused" &&
+    localKycStatus !== "approved";
 
   return (
     <div className="bg-card rounded-2xl shadow-card p-4">
