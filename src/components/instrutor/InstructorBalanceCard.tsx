@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, ExternalLink, CheckCircle2, Banknote, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,6 +87,13 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       setLoading(false);
     }
   };
+
+  // Auto-fetch balance when component mounts if instructor has recipient
+  useEffect(() => {
+    if (hasRecipient) {
+      fetchBalance();
+    }
+  }, [hasRecipient]);
 
   const handleVerifyIdentity = async () => {
     setLoadingKyc(true);
@@ -224,6 +231,9 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
   const showKycBannerInitial = !recipientStatus && hasRecipient && !loading && balance;
 
+  // Show KYC banner immediately when instructor has bank data but verification not loaded yet
+  const showKycBannerBeforeBalance = hasRecipient && !balance && !loading && !error && !recipientStatus;
+
   return (
     <div className="bg-card rounded-2xl shadow-card p-4">
       {/* Header */}
@@ -351,6 +361,42 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 onClick={handleVerifyIdentity}
                 disabled={loadingKyc}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {loadingKyc ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Gerando link seguro...
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-4 h-4 mr-2" />
+                    Verificar identidade agora
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Banner - Show immediately when instructor has bank data but hasn't loaded balance yet */}
+      {showKycBannerBeforeBalance && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-800 flex items-center justify-center flex-shrink-0">
+              <Camera className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                Complete sua verificação
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                Verifique sua identidade para liberar seus saques.
+              </p>
+              <Button
+                onClick={handleVerifyIdentity}
+                disabled={loadingKyc}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
               >
                 {loadingKyc ? (
                   <>
