@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
@@ -32,6 +34,7 @@ import {
 } from "lucide-react";
 
 export default function InstrutorGanhos() {
+  const { activeLesson } = useActiveLessonBanner();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showBankSetup, setShowBankSetup] = useState(false);
@@ -207,6 +210,9 @@ export default function InstrutorGanhos() {
             Filtrar
           </Button>
         </div>
+
+        {/* Active Lesson Banner */}
+        {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
 
         {/* Status Alert for Account Activation */}
         {recipientStatus && recipientStatus !== "active" && statusMessage && (

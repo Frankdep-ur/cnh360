@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,7 @@ const ACTIVE_STATUSES: StatusAula[] = ['confirmada', 'em_andamento', 'em_rota', 
 
 export default function InstrutorChat() {
   const { user } = useAuth();
+  const { activeLesson } = useActiveLessonBanner();
   const location = useLocation();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,6 +225,9 @@ export default function InstrutorChat() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Conversas</h1>
         </div>
+
+        {/* Active Lesson Banner */}
+        {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChatTab)}>

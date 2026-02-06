@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock, AlertTriangle, Check, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,7 @@ export default function InstrutorPerfil() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { activeLesson } = useActiveLessonBanner();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -233,6 +236,12 @@ export default function InstrutorPerfil() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {/* Active Lesson Banner - fixed at top */}
+      {activeLesson && (
+        <div className="px-4 pt-2">
+          <ActiveLessonBanner lesson={activeLesson} />
+        </div>
+      )}
       {/* Header */}
       <header className="bg-secondary text-secondary-foreground px-6 pt-6 pb-20 safe-top">
         <div className="max-w-md mx-auto">

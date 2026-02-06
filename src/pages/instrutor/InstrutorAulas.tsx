@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +17,8 @@ import {
   Navigation,
   Zap,
   Filter,
-  MessageCircle,
+  Radio,
+  QrCode,
   TrendingUp,
   BookOpen
 } from "lucide-react";
@@ -41,6 +44,7 @@ type StatusFilter = 'todas' | 'pendente' | 'confirmada' | 'em_andamento' | 'conc
 
 export default function InstrutorAulas() {
   const { user } = useAuth();
+  const { activeLesson } = useActiveLessonBanner();
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<StatusFilter>('todas');
@@ -175,6 +179,9 @@ export default function InstrutorAulas() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Minhas Aulas</h1>
         </div>
+
+        {/* Active Lesson Banner */}
+        {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
 
         {/* Estatísticas */}
         <div className="grid grid-cols-2 gap-3">
@@ -327,16 +334,32 @@ export default function InstrutorAulas() {
 
                     {aula.status === "em_andamento" && (
                       <div className="flex gap-2 mt-3">
-                        <Link to={`/instrutor/a-caminho/${aula.id}`} className="flex-1">
-                          <Button size="sm" variant="outline" className="w-full">
-                            <MessageCircle className="w-4 h-4 mr-1" />
-                            Chat
+                        <Link to={`/instrutor/aula/${aula.id}`} className="flex-1">
+                          <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                            <Radio className="w-4 h-4 mr-1" />
+                            Retomar Aula
                           </Button>
                         </Link>
-                        <Link to="/instrutor/validar-aula" className="flex-1">
+                      </div>
+                    )}
+
+                    {aula.status === "aguardando_qr" && (
+                      <div className="flex gap-2 mt-3">
+                        <Link to={`/instrutor/aula/${aula.id}`} className="flex-1">
+                          <Button size="sm" className="w-full bg-violet-600 hover:bg-violet-700 text-white">
+                            <QrCode className="w-4 h-4 mr-1" />
+                            Finalizar Aula
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+
+                    {(aula.status === "em_rota" || aula.status === "aguardando_confirmacao") && (
+                      <div className="flex gap-2 mt-3">
+                        <Link to={`/instrutor/aula/${aula.id}`} className="flex-1">
                           <Button size="sm" className="w-full gradient-primary text-primary-foreground">
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            Finalizar
+                            <Navigation className="w-4 h-4 mr-1" />
+                            Gerenciar
                           </Button>
                         </Link>
                       </div>
