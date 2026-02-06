@@ -82,11 +82,67 @@ serve(async (req) => {
 
     const transactionId = aulaData.transaction_id;
 
-    // If no transaction_id, it's a wallet payment or PIX already confirmed
+    // If no transaction_id, create payment record directly if missing
     if (!transactionId) {
-      logStep("No transaction_id, assuming already paid");
+      logStep("No transaction_id — checking for existing payment record");
+
+      const { data: existingPayment } = await supabase
+        .from("pagamentos")
+        .select("id")
+        .eq("aula_id", aulaId)
+        .single();
+
+      if (existingPayment) {
+        logStep("Payment record already exists", { paymentId: existingPayment.id });
+        return new Response(
+          JSON.stringify({ success: true, message: "Pagamento já registrado" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // No payment record exists — create one with correct split
+      const { data: instrutorData } = await supabase
+        .from("instrutores")
+        .select("kyc_status")
+        .eq("id", aulaData.instrutor_id)
+        .single();
+
+      const kycApproved = instrutorData?.kyc_status === "approved";
+      const valorBruto = Number(aulaData.valor);
+      const taxaPlataforma = kycApproved ? valorBruto * 0.50 : valorBruto;
+      const valorInstrutor = kycApproved ? valorBruto * 0.50 : 0;
+
+      const { error: pagamentoError } = await supabase
+        .from("pagamentos")
+        .insert({
+          aula_id: aulaId,
+          aluno_id: aulaData.aluno_id,
+          instrutor_id: aulaData.instrutor_id,
+          valor_bruto: valorBruto,
+          taxa_plataforma: taxaPlataforma,
+          valor_instrutor: valorInstrutor,
+          metodo: "pix",
+          status: "aprovado",
+          pago_em: new Date().toISOString(),
+        });
+
+      if (pagamentoError) {
+        logStep("Error creating payment record", pagamentoError);
+        throw new Error("Erro ao registrar pagamento");
+      }
+
+      logStep("Direct payment record created", {
+        valorBruto, taxaPlataforma, valorInstrutor, kycStatus: instrutorData?.kyc_status
+      });
+
       return new Response(
-        JSON.stringify({ success: true, message: "Pagamento já processado" }),
+        JSON.stringify({
+          success: true,
+          message: "Pagamento registrado",
+          amount: valorBruto,
+          platformFee: taxaPlataforma,
+          instructorAmount: valorInstrutor,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
