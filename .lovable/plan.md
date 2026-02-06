@@ -1,99 +1,97 @@
 
 
-# Correção: "Acesso Negado" no Link de Verificação KYC
+# Melhorias no Perfil do Instrutor + Preco de Teste da Cleia Santos
 
-## Problema
+## 1. Mostrar status de aprovacao real do KYC no perfil
 
-Quando a Cleia clica em "Verificar identidade agora", o sistema retorna um link KYC antigo que foi invalidado pela Pagar.me. Isso acontece porque:
+### Problema atual
+O badge "Verificado" no perfil do instrutor usa uma logica simplificada que verifica apenas se o instrutor tem nome real, foto e credencial DETRAN. Nao consulta o `kyc_status` real do banco de dados, entao um instrutor com KYC aprovado pela Pagar.me pode ainda aparecer como "Pendente".
 
-1. O link foi gerado quando o status era `registration`
-2. A Pagar.me mudou o status para `affiliation` (em análise)
-3. Ao mudar de etapa, a Pagar.me invalida o token anterior
-4. Nosso sistema continua usando o link cacheado, que agora retorna "acesso negado"
+### Solucao
+Buscar o campo `kyc_status` da tabela `instrutores` e usar esse dado para determinar o badge correto no perfil. Quando `kyc_status === "approved"`, exibir um badge verde bonito com "Conta Verificada". Quando pendente ou em analise, mostrar o status correspondente.
 
-## Solucao
+### Mudancas no arquivo `src/pages/instrutor/InstrutorPerfil.tsx`:
 
-### Arquivo: `supabase/functions/start-kyc/index.ts`
+1. **Adicionar `kyc_status` ao `InstrutorData` interface** - Incluir o campo `kyc_status` para ser carregado junto com os dados do instrutor
 
-Adicionar uma verificacao que detecta mudanca de status do recebedor e invalida o cache automaticamente. Quando o status do recebedor na API da Pagar.me for diferente do que era quando o link foi gerado, forcar a geracao de um novo link.
+2. **Atualizar `fetchProfile`** - O campo `kyc_status` ja vem no `select("*")`, so precisa mapear no estado
 
-**Mudancas especificas:**
+3. **Atualizar logica do `isVerified`** - Usar `kyc_status === "approved"` como criterio principal de verificacao, mantendo os outros criterios como secundarios
 
-1. **Salvar o status do recebedor junto com o link cacheado** - Ao gerar um novo link, salvar tambem o `recipient_status` corrente no banco (novo campo ou reutilizar logica existente)
+4. **Melhorar o badge visual** - Quando KYC aprovado, mostrar um badge verde elegante "Conta Verificada" com icone de check. Quando em analise ("affiliation"/"registration"), mostrar "Em analise" em amarelo. Quando recusado, mostrar em vermelho.
 
-2. **Invalidar cache quando status muda** - Antes de usar o link cacheado, verificar se o `recipientStatus` atual (da API) e o mesmo de quando o link foi gerado. Se diferente, ignorar o cache e gerar novo link
+### Mudancas no arquivo `src/components/profile/VerifiedBadge.tsx`:
 
-3. **Fallback: Se o link falhar com 403, gerar novo automaticamente** - Adicionar tratamento para o caso em que a Pagar.me retorna 403 no link KYC, limpando o cache e tentando novamente
+1. **Adicionar suporte para multiplos estados** - Aceitar uma prop `status` opcional ("approved", "affiliation", "refused", "not_started") alem do booleano `isVerified`
 
-### Abordagem simplificada (preferida)
+2. **Renderizar badges diferentes por status**:
+   - `approved`: Verde com "Conta Verificada"
+   - `affiliation`/`registration`: Amarelo com "Em analise"
+   - `refused`: Vermelho com "Recusado"
+   - `not_started`/default: Cinza com "Pendente"
 
-Em vez de adicionar complexidade com campos extras, a solucao mais direta e: **nunca usar cache quando o status do recebedor e `affiliation`**. Nesse status, a Pagar.me pode estar processando etapas internas que invalidam tokens anteriores.
+## 2. Alterar preco da aula da Cleia Santos para R$10
 
-A logica na secao de cache ficara:
+### Dados atuais da Cleia:
+- **ID instrutor:** `1c8b7ace-c167-481f-ae06-986f00cb8d6f`
+- **Preco atual:** R$ 80,00
+- **KYC Status:** approved
 
-```text
-SE tem link cacheado E nao expirou:
-  SE recipientStatus == "affiliation":
-    -> NAO usar cache, gerar novo link
-    -> Limpar link cacheado do banco
-  SENAO:
-    -> Usar link cacheado normalmente
-```
+### Acao:
+- Atualizar o campo `preco_hora` na tabela `instrutores` de 80 para 10
+- Atualizar tambem na tabela `instrutores_publico_cache` para que o preco correto apareca na busca dos alunos
 
-### Tambem limpar o cache no banco
-
-Quando detectar que o link cacheado e invalido, limpar os campos `kyc_url`, `kyc_base64` e `kyc_link_expires_at` no banco para evitar reusar o link quebrado.
+---
 
 ## Secao Tecnica
 
-### Arquivo a modificar
+### Arquivos a modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/start-kyc/index.ts` | Invalidar cache quando `recipientStatus === "affiliation"` e gerar novo link |
+| `src/pages/instrutor/InstrutorPerfil.tsx` | Adicionar `kyc_status` ao estado e usar para badge |
+| `src/components/profile/VerifiedBadge.tsx` | Suportar multiplos estados de KYC com cores diferentes |
 
-### Logica atualizada (linhas ~197-234)
-
-Antes de usar o cache, adicionar verificacao:
+### Operacoes no banco de dados
 
 ```text
-// Check if recipient status changed to affiliation
-// In affiliation status, Pagar.me may have invalidated previous tokens
-if (recipientStatus === "affiliation") {
-  -> Log: "Status is affiliation, invalidating cached KYC URL"
-  -> Limpar kyc_url, kyc_base64, kyc_link_expires_at no banco
-  -> Pular cache e ir direto para gerar novo link
+UPDATE instrutores SET preco_hora = 10 WHERE id = '1c8b7ace-c167-481f-ae06-986f00cb8d6f'
+UPDATE instrutores_publico_cache SET preco_hora = 10 WHERE id = '1c8b7ace-c167-481f-ae06-986f00cb8d6f'
+```
+
+### Interface atualizada do InstrutorData
+
+```text
+interface InstrutorData {
+  id: string;
+  credencial_detran: string;
+  cnh_numero: string;
+  cnh_categoria: string;
+  preco_hora: number;
+  nota_media: number;
+  total_aulas: number;
+  pagarme_recipient_id: string | null;
+  kyc_status: string | null;          // NOVO
 }
 ```
 
-### Tratamento de erro 403
-
-Apos chamar o endpoint `kyc_link` da Pagar.me, se receber status 403:
-- Verificar se a mensagem contem "acesso negado" ou similar
-- Retornar mensagem amigavel: "A verificacao esta sendo processada pela instituicao financeira. Aguarde alguns minutos e tente novamente."
-- Isso cobre o caso em que a Pagar.me temporariamente bloqueia a geracao de novos links durante o processamento
-
-### Fluxo corrigido
+### Logica do badge atualizada
 
 ```text
-Usuario clica "Verificar identidade"
-  |
-  v
-start-kyc Edge Function
-  |
-  v
-Consulta status do recebedor na Pagar.me API
-  |
-  +-- Status = "affiliation"?
-  |     |
-  |     +-- SIM: Limpar cache -> Gerar NOVO link
-  |     |         |
-  |     |         +-- 403? -> "Verificacao em processamento, aguarde"
-  |     |         +-- 200? -> Retornar novo link
-  |     |
-  |     +-- NAO: Usar cache se valido, senao gerar novo
-  |
-  v
-Retornar link para o frontend
+// Antes (simplificado, nao real):
+isVerified = !isTestAccount && hasPhoto && hasCredential
+
+// Depois (baseado no KYC real):
+kycStatus = instrutorData?.kyc_status
+-> "approved" = Badge verde "Conta Verificada"
+-> "affiliation"/"registration" = Badge amarelo "Em analise"
+-> "refused" = Badge vermelho "Recusado"
+-> default = Badge cinza "Pendente"
 ```
 
+### Resultado visual esperado
+
+Para a Cleia Santos (KYC approved):
+- Badge verde com icone de check: "Conta Verificada"
+- Preco exibido: R$ 10,00/hora
+- Seção de saldo mostrando "Identidade verificada" (ja funciona)
