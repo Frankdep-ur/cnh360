@@ -199,8 +199,30 @@ serve(async (req) => {
       const expiresAt = new Date(instrutorData.kyc_link_expires_at);
       const now = new Date();
       
+      // If recipient is in "affiliation" status, Pagar.me may have invalidated previous tokens
+      // Always generate a fresh link in this case
+      if (recipientStatus === "affiliation") {
+        logStep("Status is affiliation, invalidating cached KYC URL to avoid 'access denied'", {
+          previousUrl: instrutorData.kyc_url,
+          recipientStatus,
+        });
+        
+        // Clear cached link from database
+        await supabase
+          .from("instrutores")
+          .update({ 
+            kyc_url: null, 
+            kyc_base64: null, 
+            kyc_link_expires_at: null,
+            kyc_updated_at: new Date().toISOString(),
+          })
+          .eq("id", instrutorData.id);
+        
+        logStep("Cached KYC link cleared, will generate fresh link");
+        // Fall through to generate a new link below
+      }
       // Add 2 minute buffer to avoid edge cases
-      if (expiresAt > new Date(now.getTime() + 2 * 60 * 1000)) {
+      else if (expiresAt > new Date(now.getTime() + 2 * 60 * 1000)) {
         logStep("Using cached KYC URL", { 
           url: instrutorData.kyc_url, 
           expiresAt: instrutorData.kyc_link_expires_at 
@@ -265,6 +287,34 @@ serve(async (req) => {
         errors: kycData?.errors,
         body: kycData,
       });
+      
+      // Handle 403 - Pagar.me may temporarily block link generation during processing
+      if (kycResponse.status === 403) {
+        logStep("Received 403 from Pagar.me, clearing cached link and returning friendly message");
+        
+        // Clear any cached link to prevent reuse
+        await supabase
+          .from("instrutores")
+          .update({ 
+            kyc_url: null, 
+            kyc_base64: null, 
+            kyc_link_expires_at: null,
+            kyc_updated_at: new Date().toISOString(),
+          })
+          .eq("id", instrutorData.id);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: "kyc_processing",
+            message: "A verificação está sendo processada pela instituição financeira. Aguarde alguns minutos e tente novamente.",
+          }),
+          { 
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
       
       const errorMessage = kycData?.message || kycData?.errors?.[0]?.message || "Erro desconhecido";
       
