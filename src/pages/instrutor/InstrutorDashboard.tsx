@@ -5,6 +5,8 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { OnlineStatusToggle } from "@/components/instrutor/OnlineStatusToggle";
 import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
 import { RideRequestNotification } from "@/components/instrutor/RideRequestNotification";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +57,7 @@ const aulaDemostracao = {
 export default function InstrutorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+  const { activeLesson } = useActiveLessonBanner();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
@@ -217,6 +219,9 @@ export default function InstrutorDashboard() {
 
         {/* Online Status Toggle */}
         <OnlineStatusToggle isOnline={isOnline} onToggle={handleOnlineToggle} />
+
+        {/* Active Lesson Banner */}
+        {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
 
         {/* Pending Lessons Alert */}
         <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
