@@ -1,102 +1,101 @@
 
+# Otimizacao do Scanner de QR Code - Escaneamento Rapido
 
-# Correcao do Erro 401 na Confirmacao de Inicio de Aula
+## Problema
 
-## Problema Identificado
+O escaneamento do QR Code pelo instrutor esta lento por uma combinacao de fatores tecnicos:
 
-Quando o aluno clica em "Confirmar inicio da aula", o sistema retorna "Edge Function returned a non-2xx status code". A analise dos logs HTTP revelou que as 3 tentativas do aluno retornaram **HTTP 401** (nao autorizado), enquanto as chamadas do instrutor (`em_rota` e `cheguei`) funcionaram normalmente com HTTP 200.
+1. **QR Code muito denso**: O payload contem JSON com hash SHA-256 (aprox. 180 caracteres), renderizado com nivel de correcao de erro "H" (maximo). Isso gera um QR Code com muitos modulos (pontos), dificil de ler por cameras de celulares.
 
-### Causa raiz
+2. **Scanner nao otimizado**: A biblioteca `html5-qrcode` esta configurada com parametros conservadores - nao usa a API nativa do navegador (`BarcodeDetector`), escaneia todos os formatos de codigo (nao so QR), e a area de escaneamento e fixa em 250x250 pixels independente do tamanho da tela.
 
-A configuracao `verify_jwt = true` no `config.toml` para a funcao `lesson-workflow` faz com que o gateway do Supabase valide o token JWT **antes** de executar o codigo da funcao. Quando o token do aluno esta expirado ou "stale" (comum em celulares onde o app fica aberto em segundo plano), o gateway rejeita a requisicao com 401 sem sequer executar o codigo da funcao. Por isso nao ha nenhum log de processamento - a funcao nunca chegou a rodar.
-
-A funcao ja possui sua propria verificacao de autenticacao interna (linhas 59-77 do codigo), tornando o `verify_jwt = true` redundante e problematico.
-
-### Evidencia dos logs HTTP
-
-```text
-20:32:06 - POST lesson-workflow -> 200 (em_rota - instrutor)
-20:32:17 - POST lesson-workflow -> 200 (cheguei - instrutor)  
-20:32:23 - POST lesson-workflow -> 401 (confirmar_inicio_aluno - ALUNO FALHOU)
-20:32:27 - POST lesson-workflow -> 401 (retry - ALUNO FALHOU)
-20:32:42 - POST lesson-workflow -> 401 (retry - ALUNO FALHOU)
-```
+3. **QR Code pequeno na tela do aluno**: Renderizado com apenas 200px, obrigando o instrutor a aproximar muito o celular.
 
 ---
 
-## Plano de Correcao
+## Solucao em 3 Frentes
 
-### 1. Remover validacao JWT duplicada (config.toml)
+### Frente 1: Tornar o QR Code mais facil de ler (lado do aluno)
 
-Alterar `verify_jwt = false` para `lesson-workflow` no `supabase/config.toml`. A funcao ja valida o JWT internamente e retorna mensagens de erro especificas. Isso e consistente com outras funcoes senssiveis como `capture-payment-pagarme` que tambem usam `verify_jwt = false`.
+**Arquivo:** `src/components/qr/QRCodeDisplay.tsx`
 
-### 2. Adicionar refresh de sessao no hook (useLessonWorkflow.ts)
+- Reduzir nivel de correcao de erro de **"H" para "M"** (medio). Nivel "H" adiciona 30% de redundancia, gerando um QR muito denso. Nivel "M" (15%) e mais do que suficiente para uma tela de celular (que nao tera danos fisicos como um QR impresso).
+- Aumentar tamanho do QR de **200px para 280px** - QR maior na tela = camera detecta mais rapido.
+- Adicionar **`includeMargin={true}`** para garantir a "quiet zone" branca ao redor, que ajuda o decodificador a identificar os limites do codigo.
 
-Antes de chamar a funcao, forcar um refresh da sessao do Supabase para garantir que o token JWT esta atualizado. Isso previne problemas com tokens expirados em sessoes longas (celular em segundo plano).
+### Frente 2: Otimizar o scanner da camera (lado do instrutor)
 
-### 3. Melhorar tratamento de erros (useLessonWorkflow.ts)
+**Arquivo:** `src/components/aula/GlobalInstructorQRScanner.tsx`
 
-Atualmente, quando a funcao retorna um erro HTTP, o Supabase client mostra a mensagem generica "Edge Function returned a non-2xx status code". Precisamos:
-- Extrair a mensagem real de erro do corpo da resposta
-- Mostrar mensagens amigaveis ao usuario
-- Adicionar retry automatico para erros 401 com refresh de token
+- Ativar **`useBarCodeDetectorIfSupported: true`** - usa a API nativa do navegador (suportada no Chrome/Android) que e significativamente mais rapida que a decodificacao por JavaScript puro.
+- Adicionar **`formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]`** - atualmente o scanner tenta decodificar todos os formatos (Code128, EAN, Aztec, etc.) em cada frame. Limitando a apenas QR Code, ele foca 100% do processamento no formato correto.
+- Aumentar **fps de 10 para 15** - mais frames processados por segundo = deteccao mais rapida.
+- Tornar **qrbox dinamico** (70% da largura da tela) em vez de fixo 250px - area de deteccao maior captura o QR mais facilmente.
+- Adicionar **`disableFlip: true`** - desativa a tentativa de leitura espelhada, economizando processamento.
+- Reduzir **delay de inicializacao de 200ms para 50ms**.
 
-### 4. Adicionar logs na funcao (lesson-workflow/index.ts)
+### Frente 3: Mesmo tratamento no scanner generico
 
-Adicionar logs no inicio da funcao para facilitar debug em caso de falhas futuras na autenticacao.
+**Arquivo:** `src/components/qr/QRCodeScanner.tsx`
+
+- Aplicar as mesmas otimizacoes do GlobalInstructorQRScanner: `useBarCodeDetectorIfSupported`, `formatsToSupport`, fps aumentado, qrbox dinamico, e `disableFlip`.
 
 ---
 
-## Secao Tecnica
+## Impacto Esperado
 
-### Arquivos a modificar
+| Antes | Depois |
+|-------|--------|
+| QR Code denso (nivel H, 200px) | QR Code limpo (nivel M, 280px, com margem) |
+| Scanner tenta todos os formatos | Scanner foca so em QR Code |
+| Decodificacao 100% JavaScript | Usa API nativa do navegador quando disponivel |
+| Area de scan fixa 250x250 | Area dinamica 70% da tela |
+| 10 fps | 15 fps |
+| Tentativa de leitura espelhada | Desativada (desnecessaria com camera traseira) |
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `supabase/config.toml` | Alterar `verify_jwt = false` para lesson-workflow |
-| `src/hooks/useLessonWorkflow.ts` | Adicionar refresh de sessao, retry com backoff, extração de erro real |
-| `supabase/functions/lesson-workflow/index.ts` | Adicionar logs de entrada para debug |
+O resultado combinado dessas mudancas deve reduzir o tempo de escaneamento de varios segundos para deteccao quase instantanea.
 
-### Mudanca no config.toml
+---
 
+## Secao Tecnica - Detalhes de Implementacao
+
+### QRCodeDisplay.tsx (QR do aluno)
+
+Mudancas na renderizacao do QRCodeSVG:
+- `level="H"` muda para `level="M"`
+- `size={200}` muda para `size={280}`
+- `includeMargin={false}` muda para `includeMargin={true}`
+
+### GlobalInstructorQRScanner.tsx (Scanner do instrutor)
+
+Importar `Html5QrcodeSupportedFormats` da biblioteca.
+
+Mudancas na configuracao do scanner:
 ```text
-[functions.lesson-workflow]
-verify_jwt = false    # Auth validada internamente pela funcao
-```
+// ANTES:
+{
+  fps: 10,
+  qrbox: { width: 250, height: 250 },
+}
 
-### Mudanca no useLessonWorkflow.ts
-
-```text
-const executeAction = async (aulaId, action, qrData, gpsData) => {
-  // 1. Refresh session antes de chamar a funcao
-  await supabase.auth.refreshSession();
-  
-  // 2. Chamar funcao
-  const { data, error } = await supabase.functions.invoke('lesson-workflow', {...});
-  
-  // 3. Se 401, tentar refresh + retry uma vez
-  if (error && error.message.includes('non-2xx')) {
-    // Tentar extrair erro real do context
-    // Retry com sessao atualizada
-  }
-  
-  // 4. Mostrar mensagem real ao usuario
+// DEPOIS:
+{
+  fps: 15,
+  qrbox: (viewfinderWidth, viewfinderHeight) => {
+    const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
+    return { width: size, height: size };
+  },
+  formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+  disableFlip: true,
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true,
+  },
+  rememberLastUsedCamera: true,
 }
 ```
 
-### Logs adicionais na Edge Function
+Reduzir delay de DOM de 200ms para 50ms.
 
-Adicionar log no inicio da funcao para registrar:
-- Action recebida
-- User ID autenticado
-- Aula ID
+### QRCodeScanner.tsx (Scanner generico)
 
-Isso garante que mesmo em caso de falha, teremos informacao no log para diagnostico.
-
-### Resultado esperado
-
-- Aluno consegue confirmar inicio da aula sem erro
-- Token expirado e renovado automaticamente antes da chamada
-- Mensagens de erro reais exibidas ao inves de mensagens genericas
-- Logs completos para debug futuro
-
+Mesmas otimizacoes de configuracao aplicadas ao scanner generico para consistencia.
