@@ -1,94 +1,129 @@
 
-# Correcao: Banner de Aula Ativa Global + Botao "Finalizar" Quebrado
 
-## Problemas Encontrados
+# Correcao dos Problemas de Pagamento
 
-### Problema 1: Botao "Finalizar" vai para pagina errada
-Na pagina "Minhas Aulas" (`InstrutorAulas.tsx`), quando uma aula esta `em_andamento`, o botao "Finalizar" leva para `/instrutor/validar-aula` -- uma pagina **deprecada** que tenta redirecionar, mas como nao recebe o ID da aula como parametro, simplesmente volta para o dashboard. Resultado: o instrutor nunca consegue acessar a tela de aula ao vivo por ali.
+## Problemas Identificados
 
-O botao "Chat" da mesma aula tambem esta errado -- leva para `/instrutor/a-caminho/${aula.id}` (pagina de rota), quando deveria ir para `/instrutor/aula/${aula.id}` (pagina de gerenciamento da aula em andamento).
+### Problema B: Aula concluida sem pagamento registrado
 
-### Problema 2: Banner so aparece no Dashboard
-O banner de aula ativa foi colocado **apenas** no `InstrutorDashboard`. Se o instrutor estiver em qualquer outra pagina (Aulas, Agenda, Chat, Perfil), ele nao ve o banner. Quando ele fecha o app e reabre, pode cair em qualquer dessas paginas e nao saber que tem uma aula rolando.
+A aula `a5886922` (Lucas, 26/Jan) foi concluida com `qr_validado: true`, porem sem `transaction_id` e sem nenhum registro na tabela `pagamentos`. Isso acontece porque:
+
+1. No `lesson-workflow`, a linha que dispara a captura exige ambas as condicoes: `releasePayment === true` **E** `aula.transaction_id` existir (linha 775)
+2. No `capture-payment-pagarme`, quando nao ha `transaction_id`, a funcao retorna "Pagamento ja processado" sem criar nenhum registro
+
+**Resultado**: Aulas sem pagamento via gateway (criadas manualmente, por teste, ou com falha no pagamento) passam pelo fluxo inteiro e sao concluidas sem nenhum registro financeiro.
+
+Existe outra aula `3e54ae28` (Lucas, status `confirmada`, valor R$120, sem `transaction_id`) que pode seguir o mesmo caminho.
+
+### Problema C: Pagamento historico com split 80/20
+
+O unico registro em `pagamentos` mostra `taxa_plataforma: 16.00` (20%) e `valor_instrutor: 64.00` (80%) sobre `valor_bruto: 80.00`. Isso e de dezembro/2025, antes da mudanca para 50/50. O registro precisa ser corrigido para refletir o split correto.
+
+---
 
 ## Solucao
 
-### 1. Corrigir links na pagina de Aulas
+### 1. Corrigir o `lesson-workflow` para criar pagamento mesmo sem `transaction_id`
 
-No `InstrutorAulas.tsx`, para aulas com status `em_andamento`:
-- Botao "Finalizar" muda de `/instrutor/validar-aula` para `/instrutor/aula/${aula.id}`
-- Botao "Chat" muda de `/instrutor/a-caminho/${aula.id}` para `/instrutor/aula/${aula.id}` (a pagina de aula ja tem chat integrado)
+Quando `releasePayment = true` mas nao existe `transaction_id`, o workflow deve:
+- Buscar os dados do instrutor (kyc_status)
+- Calcular o split 50/50 (ou 100% plataforma se instrutor nao aprovado)
+- Inserir o registro na tabela `pagamentos` diretamente, com `metodo: 'pix'` e `status: 'aprovado'`
+- Ainda chamar `capture-payment-pagarme` quando existe `transaction_id` (comportamento atual mantido)
 
-Tambem adicionar botoes de acao para status `aguardando_confirmacao`, `em_rota` e `aguardando_qr` que estao faltando -- todos direcionando para `/instrutor/aula/${aula.id}`.
+Isso garante que **toda** aula concluida tera um registro de pagamento, independente de ter passado pelo gateway ou nao.
 
-### 2. Adicionar banner em TODAS as paginas do instrutor
+### 2. Corrigir o `capture-payment-pagarme` para criar registro quando `transaction_id` ausente
 
-Adicionar o `ActiveLessonBanner` nas seguintes paginas:
-- `InstrutorAulas.tsx` (Minhas Aulas)
-- `InstrutorAgenda.tsx` (Agenda)
-- `InstrutorChat.tsx` (Chat)
-- `InstrutorPerfil.tsx` (Perfil)
-- `InstrutorGanhos.tsx` (Ganhos)
+Atualmente, quando nao ha `transaction_id`, a funcao retorna sucesso silencioso. A correcao fara com que ela crie o registro de pagamento com os valores corretos (50/50 ou 100% plataforma) mesmo sem transacao no gateway.
 
-Assim, nao importa onde o instrutor esteja, o banner verde pulsante com "AULA AO VIVO" estara visivel e clicavel.
+### 3. Corrigir o pagamento historico com split errado
+
+Via migracao SQL, atualizar o registro existente:
+- `taxa_plataforma`: de 16.00 para 40.00 (50%)
+- `valor_instrutor`: de 64.00 para 40.00 (50%)
+
+### 4. Criar pagamento retroativo para a aula `a5886922`
+
+Via migracao SQL, inserir o registro de pagamento que deveria ter sido criado quando a aula foi concluida.
 
 ---
 
 ## Secao Tecnica
 
-### InstrutorAulas.tsx - Correcoes
+### Arquivo: `supabase/functions/lesson-workflow/index.ts`
 
-Mudanca nos botoes de acao (linhas 328-343):
+A secao de pagamento (linhas 774-815) sera expandida:
 
 Antes:
 ```text
-{aula.status === "em_andamento" && (
-  <Link to={`/instrutor/a-caminho/${aula.id}`}>  // ERRADO
-    Chat
-  </Link>
-  <Link to="/instrutor/validar-aula">  // ERRADO - sem aulaId
-    Finalizar
-  </Link>
-)}
+if (releasePayment && aula.transaction_id) {
+  // chama capture-payment-pagarme
+}
 ```
 
 Depois:
 ```text
-{aula.status === "em_andamento" && (
-  <Link to={`/instrutor/aula/${aula.id}`}>
-    Retomar Aula
-  </Link>
-)}
+if (releasePayment) {
+  if (aula.transaction_id) {
+    // chama capture-payment-pagarme (comportamento existente mantido)
+  } else {
+    // Criar registro de pagamento direto
+    // Buscar kyc_status do instrutor
+    // Calcular split: 50/50 se approved, 100% plataforma caso contrario
+    // Inserir na tabela pagamentos com metodo 'pix', status 'aprovado'
+  }
+  // Notificacoes de pagamento (WhatsApp + in-app) - mover para fora do if
+}
 ```
 
-Adicionar tratamento para outros status ativos:
+### Arquivo: `supabase/functions/capture-payment-pagarme/index.ts`
+
+A secao sem `transaction_id` (linhas 84-92) sera atualizada para criar o registro de pagamento:
+
+Antes:
 ```text
-{["aguardando_confirmacao", "em_rota", "aguardando_qr"].includes(aula.status) && (
-  <Link to={`/instrutor/aula/${aula.id}`}>
-    Gerenciar
-  </Link>
-)}
+if (!transactionId) {
+  return { success: true, message: "Pagamento ja processado" };
+}
 ```
 
-Tambem importar e adicionar o `ActiveLessonBanner` no topo da pagina.
-
-### Paginas do instrutor que receberao o banner
-
-Cada pagina recebera:
+Depois:
 ```text
-import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
-import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
-
-// Dentro do componente:
-const { activeLesson } = useActiveLessonBanner();
-
-// No JSX, logo apos o header:
-{activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
+if (!transactionId) {
+  // Verificar se ja existe pagamento registrado
+  // Se nao existe, criar com split correto (50/50 ou 100% plataforma)
+  // Buscar kyc_status do instrutor para determinar split
+  return { success: true, message: "Pagamento registrado" };
+}
 ```
 
-Arquivos modificados:
-- `src/pages/instrutor/InstrutorAulas.tsx` (banner + links corrigidos)
-- `src/pages/instrutor/InstrutorAgenda.tsx` (banner)
-- `src/pages/instrutor/InstrutorChat.tsx` (banner)
-- `src/pages/instrutor/InstrutorPerfil.tsx` (banner)
-- `src/pages/instrutor/InstrutorGanhos.tsx` (banner)
+### Migracao SQL
+
+```text
+-- Corrigir split 80/20 -> 50/50 no pagamento historico
+UPDATE pagamentos 
+SET taxa_plataforma = 40.00, valor_instrutor = 40.00
+WHERE id = '106f20a1-46ca-4ff7-aec0-3090e98418ae';
+
+-- Criar pagamento retroativo para aula a5886922
+INSERT INTO pagamentos (aula_id, aluno_id, instrutor_id, valor_bruto, taxa_plataforma, valor_instrutor, metodo, status, pago_em)
+SELECT 
+  a.id, a.aluno_id, a.instrutor_id, 
+  a.valor,
+  a.valor * 1.00,  -- 100% plataforma (instrutor refused)
+  0.00,             -- 0% instrutor (refused)
+  'pix', 'aprovado', a.aula_fim
+FROM aulas a WHERE a.id = 'a5886922-3c43-41d5-bded-ff8396f25f1f';
+```
+
+Nota: Para o Lucas (refused), o split e 100% plataforma / 0% instrutor conforme a politica vigente.
+
+### Resumo de arquivos
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/lesson-workflow/index.ts` | Criar pagamento direto quando nao ha transaction_id |
+| `supabase/functions/capture-payment-pagarme/index.ts` | Registrar pagamento quando chamado sem transaction_id |
+| Migracao SQL | Corrigir split historico + pagamento retroativo |
+
