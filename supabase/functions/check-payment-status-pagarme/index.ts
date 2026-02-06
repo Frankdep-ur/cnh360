@@ -123,20 +123,16 @@ async function sendWhatsAppNotification(
         categoria: `Categoria ${instrutor.cnh_categoria || "B"}`,
       };
 
-      const response = await fetch(
-        `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-notification`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify(whatsappPayload),
-        }
+      const { data: whatsappResult, error: whatsappError } = await supabase.functions.invoke(
+        "send-whatsapp-notification",
+        { body: whatsappPayload }
       );
 
-      const whatsappResult = await response.json();
-      logStep("WhatsApp notification result", whatsappResult);
+      if (whatsappError) {
+        logStep("WhatsApp notification error", { error: whatsappError });
+      } else {
+        logStep("WhatsApp notification result", whatsappResult);
+      }
     } else {
       logStep("Instructor has no phone registered, skipping WhatsApp");
     }

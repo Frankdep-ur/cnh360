@@ -66,9 +66,6 @@ verify_jwt = false
 [functions.lesson-workflow]
 verify_jwt = false
 
-[functions.get-kyc-link-pagarme]
-verify_jwt = false
-
 [functions.pagarme-kyc-webhook]
 verify_jwt = false
 

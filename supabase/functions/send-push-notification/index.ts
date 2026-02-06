@@ -48,90 +48,13 @@ serve(async (req) => {
     );
 
     const payload: PushPayload = await req.json();
-    console.log("Sending push notification:", payload);
-
-    // Get user's push subscriptions
-    const { data: subscriptions, error: subError } = await supabase
-      .from("push_subscriptions")
-      .select("*")
-      .eq("user_id", payload.user_id);
-
-    if (subError) {
-      console.error("Error fetching subscriptions:", subError);
-      throw subError;
-    }
-
-    if (!subscriptions || subscriptions.length === 0) {
-      console.log("No subscriptions found for user:", payload.user_id);
-      
-      // Still save the notification to the database
-      await supabase.from("notifications").insert({
-        user_id: payload.user_id,
-        title: payload.title,
-        body: payload.body,
-        type: payload.type,
-        reference_id: payload.reference_id,
-      });
-
-      return new Response(
-        JSON.stringify({ success: true, sent: 0, message: "No subscriptions found" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // VAPID keys - in production, use your own generated keys
-    const vapidPublicKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-
-    if (!vapidPrivateKey) {
-      console.warn("VAPID_PRIVATE_KEY not set - push notifications disabled");
-      
-      // Save notification without sending push
-      await supabase.from("notifications").insert({
-        user_id: payload.user_id,
-        title: payload.title,
-        body: payload.body,
-        type: payload.type,
-        reference_id: payload.reference_id,
-      });
-
-      return new Response(
-        JSON.stringify({ success: true, sent: 0, message: "VAPID key not configured" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const pushPayload = JSON.stringify({
+    console.log("[send-push-notification] Saving notification:", {
+      userId: payload.user_id,
       title: payload.title,
-      body: payload.body,
-      url: payload.url || "/",
-      reference_id: payload.reference_id,
+      type: payload.type,
     });
 
-    let sentCount = 0;
-    const failedEndpoints: string[] = [];
-
-    for (const subscription of subscriptions) {
-      try {
-        // Note: In production, you'd use web-push library or a service like Firebase
-        // For now, we'll just log and save to database
-        console.log(`Would send to endpoint: ${subscription.endpoint}`);
-        sentCount++;
-      } catch (error) {
-        console.error(`Failed to send to ${subscription.endpoint}:`, error);
-        failedEndpoints.push(subscription.endpoint);
-      }
-    }
-
-    // Clean up failed subscriptions
-    if (failedEndpoints.length > 0) {
-      await supabase
-        .from("push_subscriptions")
-        .delete()
-        .in("endpoint", failedEndpoints);
-    }
-
-    // Save notification to database
+    // Save notification to database (in-app notification)
     const { error: notifError } = await supabase.from("notifications").insert({
       user_id: payload.user_id,
       title: payload.title,
@@ -141,15 +64,21 @@ serve(async (req) => {
     });
 
     if (notifError) {
-      console.error("Error saving notification:", notifError);
+      console.error("[send-push-notification] Error saving notification:", notifError);
+      throw notifError;
     }
 
+    console.log("[send-push-notification] Notification saved successfully");
+
+    // NOTE: Real push notifications (via web-push/Firebase) can be added here
+    // when VAPID keys or Firebase credentials are configured.
+
     return new Response(
-      JSON.stringify({ success: true, sent: sentCount }),
+      JSON.stringify({ success: true, saved: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error in send-push-notification:", error);
+    console.error("[send-push-notification] Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ error: message }),

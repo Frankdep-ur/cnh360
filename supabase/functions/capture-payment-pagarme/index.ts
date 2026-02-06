@@ -179,9 +179,17 @@ serve(async (req) => {
         .single();
 
       if (!existingPayment) {
+        // Check instructor KYC status before applying split
+        const { data: instrutorKycPaid } = await supabase
+          .from("instrutores")
+          .select("kyc_status")
+          .eq("id", aulaData.instrutor_id)
+          .single();
+
+        const kycApprovedPaid = instrutorKycPaid?.kyc_status === "approved";
         const valorBruto = Number(aulaData.valor);
-        const taxaPlataforma = valorBruto * 0.50; // 50% split
-        const valorInstrutor = valorBruto - taxaPlataforma;
+        const taxaPlataforma = kycApprovedPaid ? valorBruto * 0.50 : valorBruto;
+        const valorInstrutor = kycApprovedPaid ? valorBruto * 0.50 : 0;
 
         await supabase.from("pagamentos").insert({
           aula_id: aulaId,
@@ -195,7 +203,7 @@ serve(async (req) => {
           external_id: transactionId,
           pago_em: new Date().toISOString(),
         });
-        logStep("Payment recorded for already-paid order");
+        logStep("Payment recorded for already-paid order", { kycStatus: instrutorKycPaid?.kyc_status });
       }
 
       return new Response(
@@ -242,10 +250,17 @@ serve(async (req) => {
     const captureData = await captureResponse.json();
     logStep("Payment captured successfully", { chargeId, status: captureData.status });
 
-    // Calculate amounts for payment record
+    // Check instructor KYC status before applying split
+    const { data: instrutorKycCapture } = await supabase
+      .from("instrutores")
+      .select("kyc_status")
+      .eq("id", aulaData.instrutor_id)
+      .single();
+
+    const kycApprovedCapture = instrutorKycCapture?.kyc_status === "approved";
     const valorBruto = Number(aulaData.valor);
-    const taxaPlataforma = valorBruto * 0.50; // 50% split
-    const valorInstrutor = valorBruto - taxaPlataforma;
+    const taxaPlataforma = kycApprovedCapture ? valorBruto * 0.50 : valorBruto;
+    const valorInstrutor = kycApprovedCapture ? valorBruto * 0.50 : 0;
 
     // Record payment in database
     const { error: pagamentoError } = await supabase
