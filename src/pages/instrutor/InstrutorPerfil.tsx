@@ -32,6 +32,7 @@ interface InstrutorData {
   nota_media: number;
   total_aulas: number;
   pagarme_recipient_id: string | null;
+  kyc_status: string | null;
 }
 
 interface VeiculoData {
@@ -103,6 +104,7 @@ export default function InstrutorPerfil() {
           nota_media: Number(instrutorResult.nota_media) || 5,
           total_aulas: instrutorResult.total_aulas || 0,
           pagarme_recipient_id: instrutorResult.pagarme_recipient_id || null,
+          kyc_status: instrutorResult.kyc_status || null,
         });
 
         const { data: veiculoResult, error: veiculoError } = await supabase
@@ -217,11 +219,9 @@ export default function InstrutorPerfil() {
     }
   };
 
-  // Check if instructor is verified (has real name, photo, and credentials)
-  const isVerified = !profile.is_test_account && 
-    !!profile.avatar_url && 
-    !profile.avatar_url.includes("placeholder") &&
-    !!instrutorData?.credencial_detran;
+  // Use real KYC status for verification
+  const kycStatus = instrutorData?.kyc_status;
+  const isVerified = kycStatus === "approved";
 
   if (loading) {
     return (
@@ -280,7 +280,7 @@ export default function InstrutorPerfil() {
                     <div className="px-3 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium">
                       Instrutor MEI
                     </div>
-                    <VerifiedBadge isVerified={isVerified} size="sm" />
+                    <VerifiedBadge isVerified={isVerified} kycStatus={kycStatus} size="sm" />
                   </>
                 )}
               </div>
