@@ -20,6 +20,7 @@ import {
   formatCVV, 
   validateCard, 
   getCardBrand,
+  getFriendlyPaymentError,
   type CardData 
 } from "@/lib/pagarme";
 
@@ -195,11 +196,11 @@ export function PaymentCheckout({
 
       if (invokeError) {
         console.error("[PaymentCheckout] Error generating PIX:", invokeError);
-        throw new Error("Erro ao gerar pagamento PIX");
+        throw new Error(getFriendlyPaymentError(invokeError.message));
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        throw new Error(getFriendlyPaymentError(data.error));
       }
 
       if (data?.qrCode) {
@@ -268,11 +269,11 @@ export function PaymentCheckout({
 
       if (invokeError) {
         console.error("[PaymentCheckout] Error processing card:", invokeError);
-        throw new Error("Erro ao processar cartão");
+        throw new Error(getFriendlyPaymentError(invokeError.message));
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        throw new Error(getFriendlyPaymentError(data.error));
       }
 
       // Check payment status
@@ -365,11 +366,11 @@ export function PaymentCheckout({
       });
 
       if (invokeError) {
-        throw new Error("Erro ao processar pagamento");
+        throw new Error(getFriendlyPaymentError(invokeError.message));
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        throw new Error(getFriendlyPaymentError(data.error));
       }
 
       if (data?.status === "authorized" || data?.status === "paid" || data?.status === "pending") {
@@ -425,11 +426,11 @@ export function PaymentCheckout({
       });
 
       if (invokeError) {
-        throw new Error("Erro ao processar pagamento");
+        throw new Error(getFriendlyPaymentError(invokeError.message));
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        throw new Error(getFriendlyPaymentError(data.error));
       }
 
       if (data?.status === "authorized" || data?.status === "paid" || data?.status === "pending") {

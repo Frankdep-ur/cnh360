@@ -7,8 +7,47 @@ const corsHeaders = {
 };
 
 const logStep = (step: string, details?: any) => {
-  console.log(`[create-card-payment-pagarme] ${step}`, details ? JSON.stringify(details) : "");
+  const ts = new Date().toISOString();
+  console.log(`[create-card-payment-pagarme][${ts}] ${step}`, details ? JSON.stringify(details) : "");
 };
+
+// Fetch with timeout (30s) and retry for 5xx errors
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (response.status >= 400 && response.status < 500) return response;
+      if (response.status >= 500 && attempt < maxRetries) {
+        logStep(`Retry ${attempt + 1}/${maxRetries}`, { status: response.status, url });
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      return response;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      lastError = err.name === "AbortError" ? new Error("Gateway timeout (30s)") : err;
+      if (attempt < maxRetries) {
+        logStep(`Retry ${attempt + 1}/${maxRetries} after error`, { error: lastError.message });
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  throw lastError || new Error("Gateway unavailable");
+}
+
+// Return 200 with error in body (supabase client puts in data, not error)
+function businessError(message: string, errorCode: string, details?: string) {
+  logStep("Business error", { error_code: errorCode, message, details });
+  return new Response(
+    JSON.stringify({ error: message, error_code: errorCode, details }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+  );
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,12 +57,12 @@ serve(async (req) => {
   try {
     const pagarmeApiKey = Deno.env.get("PAGARME_API_KEY");
     const recipientCNH360 = Deno.env.get("PAGARME_RECIPIENT_CNH360");
-    
+
     if (!pagarmeApiKey) {
-      throw new Error("PAGARME_API_KEY não configurada");
+      return businessError("Sistema de pagamento indisponível.", "CONFIG_ERROR", "PAGARME_API_KEY missing");
     }
     if (!recipientCNH360) {
-      throw new Error("PAGARME_RECIPIENT_CNH360 não configurado");
+      return businessError("Sistema de pagamento indisponível.", "CONFIG_ERROR", "PAGARME_RECIPIENT_CNH360 missing");
     }
 
     // Auth
@@ -33,118 +72,134 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     let user: any = null;
-
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
       const { data: userData } = await supabaseAuth.auth.getUser(token);
       user = userData?.user;
     }
-
     if (!user) {
-      throw new Error("Usuário não autenticado");
+      return businessError("Faça login para continuar com o pagamento.", "AUTH_ERROR");
     }
-    logStep("User authenticated", { email: user.email });
+    logStep("User authenticated", { email: user.email, userId: user.id });
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body
-    const { 
-      cardHash,
-      card, // Legacy support (will be deprecated)
-      walletToken, // Google Pay / Apple Pay token
-      walletType, // "google_pay" | "apple_pay"
-      lessonId,
-      amount,
+    const {
+      cardHash, card, walletToken, walletType,
+      lessonId, amount,
     } = await req.json();
 
     if (!lessonId || !amount) {
-      throw new Error("Dados incompletos: lessonId e amount são obrigatórios");
+      return businessError("Dados incompletos: lessonId e amount são obrigatórios.", "VALIDATION_ERROR");
     }
 
-    // Determine payment method
     const useWallet = !!walletToken;
     const useCardHash = !!cardHash;
-    
+
     if (!useWallet && !useCardHash && !card) {
-      throw new Error("Dados de pagamento não fornecidos. Use cardHash, walletToken ou card.");
+      return businessError("Dados de pagamento não fornecidos.", "VALIDATION_ERROR");
     }
 
     if (!useWallet && !useCardHash && card) {
-      // Legacy validation for raw card data (will be deprecated)
       if (!card.number || !card.holder_name || !card.exp_month || !card.exp_year || !card.cvv) {
-        throw new Error("Dados do cartão incompletos");
+        return businessError("Dados do cartão incompletos.", "VALIDATION_ERROR");
       }
       logStep("Warning: Using legacy raw card data - should migrate to cardHash");
     }
 
     const amountCents = Math.round(amount * 100);
-    
-    logStep("Card payment request", { 
-      amount, 
-      amountCents,
-      lessonId,
-      useWallet,
-      walletType: walletType || null,
-      useCardHash,
-      cardLastFour: useWallet ? "wallet" : useCardHash ? "tokenized" : card?.number?.slice(-4),
+
+    logStep("Card payment request", {
+      amount, amountCents, lessonId, useWallet,
+      walletType: walletType || null, useCardHash,
+      payment_method: useWallet ? walletType : "credit_card",
     });
 
     // Get lesson details
     const { data: aula, error: aulaError } = await supabase
       .from("aulas")
-      .select("aluno_id, instrutor_id, duracao_minutos")
+      .select("aluno_id, instrutor_id, duracao_minutos, transaction_id, status")
       .eq("id", lessonId)
       .single();
 
     if (aulaError || !aula) {
-      throw new Error("Aula não encontrada");
+      return businessError("Aula não encontrada.", "NOT_FOUND");
     }
 
     // Verify lesson belongs to user
     const { data: alunoData, error: alunoError } = await supabase
-      .from("alunos")
-      .select("id")
-      .eq("user_id", user.id)
-      .single();
+      .from("alunos").select("id").eq("user_id", user.id).single();
 
     if (alunoError || !alunoData || alunoData.id !== aula.aluno_id) {
-      throw new Error("Aula não pertence ao usuário autenticado");
+      return businessError("Aula não pertence ao usuário autenticado.", "AUTH_ERROR");
     }
 
-    // Get instructor's recipient_id
+    // === DUPLICATE PAYMENT CHECK ===
+    if (aula.transaction_id) {
+      logStep("Checking existing transaction", { transactionId: aula.transaction_id, status: aula.status });
+      try {
+        const existingResp = await fetchWithRetry(
+          `https://api.pagar.me/core/v5/orders/${aula.transaction_id}`,
+          { headers: { "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}` } }
+        );
+        if (existingResp.ok) {
+          const existingOrder = await existingResp.json();
+          const existingCharge = existingOrder.charges?.[0];
+          const existingTxStatus = existingCharge?.last_transaction?.status;
+
+          if (existingTxStatus === "authorized" || existingTxStatus === "captured" || existingOrder.status === "paid") {
+            return businessError("Esta aula já possui um pagamento autorizado.", "PAYMENT_ALREADY_EXISTS");
+          }
+          logStep("Existing order terminal, creating new", { status: existingOrder.status, txStatus: existingTxStatus });
+        }
+      } catch (err: any) {
+        logStep("Error checking existing order (proceeding)", { error: err.message });
+      }
+    }
+
+    // === GET INSTRUCTOR + KYC STATUS ===
     const { data: instrutorData } = await supabase
       .from("instrutores")
-      .select("pagarme_recipient_id")
+      .select("pagarme_recipient_id, kyc_status")
       .eq("id", aula.instrutor_id)
       .single();
 
-    // Verify recipient status before including in split
-    let instructorRecipientValid = false;
-    if (instrutorData?.pagarme_recipient_id) {
+    // === VALIDATE RECIPIENT FOR SPLIT ===
+    let splitEnabled = false;
+    let splitExclusionReason = "";
+
+    if (!instrutorData?.pagarme_recipient_id) {
+      splitExclusionReason = "no_recipient_id";
+    } else if (instrutorData.kyc_status !== "approved") {
+      splitExclusionReason = `kyc_status=${instrutorData.kyc_status || "null"}`;
+    } else {
       try {
-        const recipientResponse = await fetch(
+        const recipientResp = await fetchWithRetry(
           `https://api.pagar.me/core/v5/recipients/${instrutorData.pagarme_recipient_id}`,
-          {
-            headers: {
-              "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
-            },
-          }
+          { headers: { "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}` } }
         );
-        if (recipientResponse.ok) {
-          const recipientInfo = await recipientResponse.json();
-          // Only include in split if recipient is active
-          instructorRecipientValid = recipientInfo.status === "active";
-          logStep("Instructor recipient status", { 
-            recipientId: instrutorData.pagarme_recipient_id, 
-            status: recipientInfo.status,
-            valid: instructorRecipientValid 
-          });
+        if (recipientResp.ok) {
+          const info = await recipientResp.json();
+          if (info.status === "active") {
+            splitEnabled = true;
+          } else {
+            splitExclusionReason = `recipient_status=${info.status}`;
+          }
+        } else {
+          splitExclusionReason = `recipient_check_http_${recipientResp.status}`;
         }
-      } catch (err) {
-        logStep("Error checking recipient status", { error: err });
+      } catch (err: any) {
+        splitExclusionReason = `recipient_check_error: ${err.message}`;
       }
     }
+
+    logStep("Split validation", {
+      splitEnabled, splitExclusionReason: splitExclusionReason || "none",
+      recipientId: instrutorData?.pagarme_recipient_id || "none",
+      kycStatus: instrutorData?.kyc_status || "none",
+    });
 
     // Calculate split (50/50)
     const platformFeeCents = Math.round(amountCents * 0.50);
@@ -152,56 +207,38 @@ serve(async (req) => {
 
     // Get customer profile
     const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, phone, cpf")
-      .eq("id", user.id)
-      .single();
+      .from("profiles").select("full_name, phone, cpf").eq("id", user.id).single();
 
-    // Build credit_card payment object based on payment method
+    // Build credit_card payment object
     let creditCardPayment: any;
 
     if (useWallet) {
-      // Digital wallet payment (Google Pay / Apple Pay)
-      // Pagar.me uses the wallet token as a payment token
       creditCardPayment = {
-        card_token: walletToken,
-        installments: 1,
-        capture: false, // Pre-authorization
-        statement_descriptor: "CNH360",
+        card_token: walletToken, installments: 1,
+        capture: false, statement_descriptor: "CNH360",
       };
       logStep(`Using ${walletType} wallet payment`);
     } else if (useCardHash) {
-      // Secure method: use encrypted card_hash from frontend SDK
       creditCardPayment = {
-        card_hash: cardHash,
-        installments: 1,
-        capture: false, // Pre-authorization - will be captured when instructor accepts
-        statement_descriptor: "CNH360",
+        card_hash: cardHash, installments: 1,
+        capture: false, statement_descriptor: "CNH360",
       };
       logStep("Using secure card_hash tokenization");
     } else {
-      // Legacy method: raw card data (should be deprecated)
       const expMonth = card.exp_month.toString().padStart(2, '0');
-      const expYear = card.exp_year.toString().length === 2 
-        ? `20${card.exp_year}` 
-        : card.exp_year.toString();
-
+      const expYear = card.exp_year.toString().length === 2 ? `20${card.exp_year}` : card.exp_year.toString();
       creditCardPayment = {
         card: {
           number: card.number.replace(/\s/g, ""),
           holder_name: card.holder_name.toUpperCase(),
-          exp_month: parseInt(expMonth),
-          exp_year: parseInt(expYear),
-          cvv: card.cvv,
+          exp_month: parseInt(expMonth), exp_year: parseInt(expYear), cvv: card.cvv,
         },
-        installments: 1,
-        capture: false, // Pre-authorization
-        statement_descriptor: "CNH360",
+        installments: 1, capture: false, statement_descriptor: "CNH360",
       };
       logStep("Using legacy raw card data (deprecated)");
     }
 
-    // Create card order in Pagar.me
+    // Build order payload
     const orderPayload: any = {
       code: `${useWallet ? walletType : "card"}-${Date.now()}`,
       customer: {
@@ -217,63 +254,40 @@ serve(async (req) => {
           },
         } : undefined,
       },
-      items: [
-        {
-          amount: amountCents,
-          description: `Aula de Direção - ${aula.duracao_minutos}min`,
-          quantity: 1,
-        },
-      ],
-      payments: [
-        {
-          payment_method: "credit_card",
-          credit_card: creditCardPayment,
-        },
-      ],
+      items: [{ amount: amountCents, description: `Aula de Direção - ${aula.duracao_minutos}min`, quantity: 1 }],
+      payments: [{ payment_method: "credit_card", credit_card: creditCardPayment }],
       metadata: {
-        user_id: user.id,
-        instrutor_id: aula.instrutor_id,
-        lesson_id: lessonId,
-        payment_type: useWallet ? walletType : "credit_card",
-        tokenized: useCardHash || useWallet,
+        user_id: user.id, instrutor_id: aula.instrutor_id,
+        lesson_id: lessonId, payment_type: useWallet ? walletType : "credit_card",
+        tokenized: useCardHash || useWallet, split_enabled: String(splitEnabled),
       },
     };
 
-    // Add split rules only if instructor has valid active recipient
-    if (instructorRecipientValid && instrutorData?.pagarme_recipient_id) {
+    // Add split rules ONLY if fully validated
+    if (splitEnabled && instrutorData?.pagarme_recipient_id) {
       orderPayload.payments[0].split = [
         {
           amount: platformFeeCents,
           recipient_id: recipientCNH360,
           type: "flat",
-          options: {
-            charge_processing_fee: true,
-            liable: true,
-          },
+          options: { charge_processing_fee: true, charge_remainder_fee: true, liable: true },
         },
         {
           amount: instructorAmountCents,
           recipient_id: instrutorData.pagarme_recipient_id,
           type: "flat",
-          options: {
-            charge_processing_fee: false,
-            liable: false,
-          },
+          options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false },
         },
       ];
-      logStep("Split added with instructor recipient");
+      logStep("Split rules added", { platform: platformFeeCents, instructor: instructorAmountCents });
     } else {
-      // No split - 100% goes to platform (instructor not configured or refused)
-      logStep("No split - instructor recipient not valid or missing");
+      logStep("No split - 100% platform", { reason: splitExclusionReason });
     }
 
-    logStep("Creating card order", { 
-      code: orderPayload.code,
-      amountCents,
-      hasSplit: !!instrutorData?.pagarme_recipient_id,
-    });
+    logStep("Creating card order", { code: orderPayload.code, amountCents, splitEnabled });
 
-    const orderResponse = await fetch("https://api.pagar.me/core/v5/orders", {
+    // === CREATE ORDER WITH RETRY ===
+    const orderResponse = await fetchWithRetry("https://api.pagar.me/core/v5/orders", {
       method: "POST",
       headers: {
         "Authorization": `Basic ${btoa(pagarmeApiKey + ":")}`,
@@ -282,65 +296,99 @@ serve(async (req) => {
       body: JSON.stringify(orderPayload),
     });
 
+    // Validate content-type
+    const ct = orderResponse.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const raw = await orderResponse.text();
+      logStep("Non-JSON response", { status: orderResponse.status, ct, body: raw.substring(0, 500) });
+      return businessError("Servidor de pagamentos retornou resposta inesperada.", "GATEWAY_ERROR");
+    }
+
     const orderData = await orderResponse.json();
 
     if (!orderResponse.ok) {
-      logStep("Pagar.me card error", orderData);
-      
-      // Extract user-friendly error message
-      let errorMessage = "Erro ao processar cartão";
-      if (orderData.message) {
-        errorMessage = orderData.message;
-      } else if (orderData.errors && orderData.errors.length > 0) {
-        errorMessage = orderData.errors.map((e: any) => e.message).join(", ");
+      logStep("Pagar.me card HTTP error", {
+        httpStatus: orderResponse.status, response: orderData,
+        payment_method: useWallet ? walletType : "credit_card",
+      });
+
+      const rawMsg = orderData.message || orderData.errors?.[0]?.message || "Erro no gateway";
+      const lower = rawMsg.toLowerCase();
+
+      if (lower.includes("charge_remainder_fee") || lower.includes("split")) {
+        return businessError("Erro de configuração do split. Contate o suporte.", "SPLIT_CONFIG_ERROR", rawMsg);
       }
-      
-      throw new Error(errorMessage);
+      if (lower.includes("recipient")) {
+        return businessError("Instrutor não habilitado para receber pagamentos.", "RECIPIENT_INACTIVE", rawMsg);
+      }
+      if (lower.includes("document") || lower.includes("cpf")) {
+        return businessError("CPF inválido ou incompleto. Atualize seu perfil.", "VALIDATION_ERROR", rawMsg);
+      }
+      if (lower.includes("card") || lower.includes("cartão") || lower.includes("declined")) {
+        return businessError("Cartão recusado. Verifique os dados ou tente outro cartão.", "VALIDATION_ERROR", rawMsg);
+      }
+
+      return businessError(rawMsg, "GATEWAY_ERROR", JSON.stringify(orderData));
     }
 
-    logStep("Card order created", { orderId: orderData.id, status: orderData.status });
+    logStep("Card order created", {
+      orderId: orderData.id, status: orderData.status,
+      chargeId: orderData.charges?.[0]?.id,
+      payment_method: useWallet ? walletType : "credit_card",
+    });
 
-    // Check if payment was authorized
+    // Check payment status
     const charge = orderData.charges?.[0];
     const transaction = charge?.last_transaction;
     const status = transaction?.status || orderData.status;
-    
-    // Update lesson with transaction_id
-    await supabase
-      .from("aulas")
-      .update({ 
-        transaction_id: orderData.id,
-        status: status === "authorized" || status === "pending" ? "confirmada" : "pendente",
-      })
-      .eq("id", lessonId);
 
-    logStep("Lesson updated with card payment", { lessonId, transactionId: orderData.id, status });
+    // Check if payment was declined
+    if (orderData.status === "failed" || status === "refused" || status === "failed") {
+      const declineMsg = transaction?.acquirer_message
+        || transaction?.gateway_response?.errors?.[0]?.message
+        || "Pagamento recusado";
+      logStep("Card payment declined", {
+        status, acquirerMessage: transaction?.acquirer_message,
+        gatewayResponse: transaction?.gateway_response,
+      });
+      return businessError(`Cartão recusado: ${declineMsg}`, "GATEWAY_ERROR", declineMsg);
+    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        transactionId: orderData.id,
-        status: status,
-        message: status === "authorized" 
-          ? "Pagamento pré-autorizado com sucesso" 
-          : status === "paid"
-          ? "Pagamento confirmado"
-          : "Pagamento em processamento",
-      }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
+    // Update lesson
+    await supabase.from("aulas").update({
+      transaction_id: orderData.id,
+      status: status === "authorized" || status === "pending" ? "confirmada" : "pendente",
+    }).eq("id", lessonId);
+
+    logStep("Card payment complete", {
+      lessonId, transactionId: orderData.id, status,
+      splitEnabled, payment_method: useWallet ? walletType : "credit_card",
+      chargeId: charge?.id,
+      recipientId: instrutorData?.pagarme_recipient_id || "none",
+      kycStatus: instrutorData?.kyc_status || "none",
+    });
+
+    return new Response(JSON.stringify({
+      success: true, transactionId: orderData.id, status,
+      message: status === "authorized" ? "Pagamento pré-autorizado com sucesso"
+        : status === "paid" ? "Pagamento confirmado"
+        : "Pagamento em processamento",
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
 
   } catch (error: any) {
-    logStep("Error", { message: error.message });
+    logStep("Unhandled error", { message: error.message, stack: error.stack?.substring(0, 500) });
+
+    const msg = error.message || "";
+    if (msg.includes("timeout") || msg.includes("abort") || msg.includes("Gateway")) {
+      return businessError(
+        "Servidor de pagamentos indisponível. Tente novamente em alguns minutos.",
+        "GATEWAY_TIMEOUT", msg
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+      JSON.stringify({ error: error.message || "Erro interno", error_code: "INTERNAL_ERROR" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
 });

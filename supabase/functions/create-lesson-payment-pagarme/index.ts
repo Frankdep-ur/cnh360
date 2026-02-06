@@ -74,7 +74,7 @@ serve(async (req) => {
     // Get instructor's recipient_id
     const { data: instrutorData, error: instrutorError } = await supabase
       .from("instrutores")
-      .select("pagarme_recipient_id, user_id")
+      .select("pagarme_recipient_id, user_id, kyc_status")
       .eq("id", instructorId)
       .single();
 
@@ -157,8 +157,8 @@ serve(async (req) => {
       },
     };
 
-    // Add split rules if instructor has recipient_id
-    if (instrutorData.pagarme_recipient_id) {
+    // Add split rules if instructor has valid recipient AND approved KYC
+    if (instrutorData.pagarme_recipient_id && instrutorData.kyc_status === "approved") {
       orderPayload.payments[0].split = [
         {
           amount: platformFeeCents,
@@ -166,6 +166,7 @@ serve(async (req) => {
           type: "flat",
           options: {
             charge_processing_fee: true,
+            charge_remainder_fee: true,
             liable: true,
           },
         },
@@ -175,6 +176,7 @@ serve(async (req) => {
           type: "flat",
           options: {
             charge_processing_fee: false,
+            charge_remainder_fee: false,
             liable: false,
           },
         },
@@ -182,6 +184,11 @@ serve(async (req) => {
       logStep("Split rules added", { 
         platform: platformFeeCents, 
         instructor: instructorAmountCents 
+      });
+    } else {
+      logStep("No split - instructor not eligible", {
+        hasRecipient: !!instrutorData.pagarme_recipient_id,
+        kycStatus: instrutorData.kyc_status,
       });
     }
 

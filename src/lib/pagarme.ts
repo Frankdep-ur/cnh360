@@ -122,3 +122,64 @@ export function formatExpYear(value: string): string {
 export function formatCVV(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
 }
+
+// Deterministic error mapping for payment errors (frontend)
+export function getFriendlyPaymentError(error: string): string {
+  if (!error) return "Erro ao processar pagamento. Tente novamente.";
+  const lower = error.toLowerCase();
+
+  // Already mapped by backend - pass through
+  const friendlyPrefixes = [
+    "Erro de configuração do split",
+    "Instrutor não habilitado",
+    "CPF inválido",
+    "Saldo insuficiente",
+    "Servidor de pagamentos",
+    "Esta aula já possui",
+    "Complete seu cadastro",
+    "Faça login",
+    "Aula não encontrada",
+    "Aula não pertence",
+    "QR Code PIX",
+    "PIX recusado",
+    "Cartão recusado",
+    "Dados do PIX",
+    "Dados incompletos",
+    "Dados de pagamento",
+    "Dados do cartão",
+    "Sistema de pagamento",
+  ];
+  for (const prefix of friendlyPrefixes) {
+    if (error.startsWith(prefix)) return error;
+  }
+
+  // Map Edge Function wrapper errors
+  if (lower.includes("non-2xx") || lower.includes("edge function")) {
+    return "Não foi possível processar o pagamento. Tente novamente.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("network")) {
+    return "Erro de conexão. Verifique sua internet e tente novamente.";
+  }
+  if (lower.includes("timeout") || lower.includes("abort")) {
+    return "Servidor de pagamentos indisponível. Tente em alguns minutos.";
+  }
+  if (lower.includes("autenticad") || lower.includes("authenticated") || lower.includes("login")) {
+    return "Faça login para continuar com o pagamento.";
+  }
+  if (lower.includes("aluno não encontrado") || lower.includes("cadastro")) {
+    return "Complete seu cadastro para agendar aulas.";
+  }
+  if (lower.includes("recipient") || lower.includes("recebedor")) {
+    return "Instrutor não habilitado para receber pagamentos no momento.";
+  }
+  if (lower.includes("document") || lower.includes("cpf")) {
+    return "CPF inválido ou incompleto. Atualize seu perfil.";
+  }
+
+  // If short and readable, pass through
+  if (!lower.includes("error") && !lower.includes("failed") && error.length < 200) {
+    return error;
+  }
+
+  return "Erro ao processar pagamento. Tente novamente.";
+}
