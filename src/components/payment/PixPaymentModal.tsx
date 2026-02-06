@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Copy, Check, Clock, QrCode, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getFriendlyPaymentError } from "@/lib/pagarme";
 
 interface PixPaymentModalProps {
   open: boolean;
@@ -149,13 +150,13 @@ export function PixPaymentModal({
 
       if (invokeError) {
         console.error("[PixModal] Error generating PIX:", invokeError);
-        throw new Error(getFriendlyErrorMessage(invokeError.message));
+        throw new Error(getFriendlyPaymentError(invokeError.message));
       }
 
       console.log("[PixModal] PIX generated:", data);
 
       if (data?.error) {
-        throw new Error(getFriendlyErrorMessage(data.error));
+        throw new Error(getFriendlyPaymentError(data.error));
       }
 
       if (data?.qrCode) {
@@ -183,26 +184,6 @@ export function PixPaymentModal({
     }
   }
 
-  function getFriendlyErrorMessage(technicalError: string): string {
-    const errorMap: Record<string, string> = {
-      "Edge Function returned a non-2xx status code": "Não foi possível processar o pagamento. Tente novamente em instantes.",
-      "PAGARME_API_KEY não configurada": "Sistema de pagamento temporariamente indisponível. Tente novamente mais tarde.",
-      "User not authenticated": "Faça login para continuar com o pagamento.",
-      "Aluno não encontrado": "Complete seu cadastro para agendar aulas.",
-    };
-
-    for (const [key, friendlyMsg] of Object.entries(errorMap)) {
-      if (technicalError.toLowerCase().includes(key.toLowerCase())) {
-        return friendlyMsg;
-      }
-    }
-
-    if (technicalError.includes("non-2xx") || technicalError.includes("500") || technicalError.includes("error")) {
-      return "Não foi possível processar o pagamento. Tente novamente em instantes.";
-    }
-
-    return technicalError;
-  }
 
   const copyPixCode = async () => {
     if (!pixData?.qrCode) return;
