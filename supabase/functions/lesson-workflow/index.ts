@@ -772,14 +772,63 @@ Deno.serve(async (req) => {
     }
 
     // Release payment if QR validated
-    if (releasePayment && aula.transaction_id) {
+    if (releasePayment) {
       try {
-        console.log("Releasing payment for aula:", aula_id, "transaction:", aula.transaction_id);
-        await supabase.functions.invoke("capture-payment-pagarme", {
-          body: { aulaId: aula_id }
-        });
+        if (aula.transaction_id) {
+          // Has gateway transaction — capture via Pagar.me
+          console.log("Releasing payment for aula:", aula_id, "transaction:", aula.transaction_id);
+          await supabase.functions.invoke("capture-payment-pagarme", {
+            body: { aulaId: aula_id }
+          });
+        } else {
+          // No gateway transaction — create payment record directly
+          console.log("No transaction_id for aula:", aula_id, "— creating direct payment record");
 
-        // Send WhatsApp notification for payment (only for payments)
+          // Check if payment already exists
+          const { data: existingPayment } = await supabase
+            .from("pagamentos")
+            .select("id")
+            .eq("aula_id", aula_id)
+            .single();
+
+          if (!existingPayment) {
+            // Fetch instructor KYC status to determine split
+            const { data: instrutorData } = await supabase
+              .from("instrutores")
+              .select("kyc_status")
+              .eq("id", aula.instrutor_id)
+              .single();
+
+            const kycApproved = instrutorData?.kyc_status === "approved";
+            const valorBruto = Number(aula.valor);
+            const taxaPlataforma = kycApproved ? valorBruto * 0.50 : valorBruto;
+            const valorInstrutor = kycApproved ? valorBruto * 0.50 : 0;
+
+            const { error: pagamentoError } = await supabase
+              .from("pagamentos")
+              .insert({
+                aula_id: aula_id,
+                aluno_id: aula.aluno_id,
+                instrutor_id: aula.instrutor_id,
+                valor_bruto: valorBruto,
+                taxa_plataforma: taxaPlataforma,
+                valor_instrutor: valorInstrutor,
+                metodo: "pix",
+                status: "aprovado",
+                pago_em: new Date().toISOString(),
+              });
+
+            if (pagamentoError) {
+              console.error("Error creating direct payment record:", pagamentoError);
+            } else {
+              console.log(`Direct payment record created: bruto=${valorBruto}, plataforma=${taxaPlataforma}, instrutor=${valorInstrutor}, kyc=${instrutorData?.kyc_status}`);
+            }
+          } else {
+            console.log("Payment already exists for aula:", aula_id);
+          }
+        }
+
+        // Send WhatsApp notification for payment
         const { data: instrutorProfile } = await supabase
           .from("profiles")
           .select("phone")
