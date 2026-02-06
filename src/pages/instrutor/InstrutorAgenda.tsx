@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,6 +44,7 @@ interface Aula {
 
 export default function InstrutorAgenda() {
   const { user } = useAuth();
+  const { activeLesson } = useActiveLessonBanner();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [disponivel, setDisponivel] = useState(true);
@@ -167,6 +170,9 @@ export default function InstrutorAgenda() {
             Horários
           </Button>
         </div>
+
+        {/* Active Lesson Banner */}
+        {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
 
         {/* Disponibilidade */}
         <Card className="p-4 shadow-card">
