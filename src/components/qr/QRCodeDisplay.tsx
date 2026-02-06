@@ -65,9 +65,9 @@ export function QRCodeDisplay({ qrData, expiresAt, onRefresh, className }: QRCod
       <div className="bg-white p-4 rounded-2xl inline-block mb-4 shadow-lg">
         <QRCodeSVG
           value={qrData}
-          size={200}
-          level="H"
-          includeMargin={false}
+          size={280}
+          level="M"
+          includeMargin={true}
           bgColor="#FFFFFF"
           fgColor="#000000"
         />

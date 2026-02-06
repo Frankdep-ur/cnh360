@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { 
   QrCode, 
@@ -153,17 +153,25 @@ export function GlobalInstructorQRScanner() {
     setCameraError(null);
 
     // Wait for DOM to be ready
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     try {
-      scannerRef.current = new Html5Qrcode('instructor-qr-reader');
+      scannerRef.current = new Html5Qrcode('instructor-qr-reader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false,
+      });
 
       await scannerRef.current.start(
         { facingMode: 'environment' },
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
+          fps: 15,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
+            return { width: size, height: size };
+          },
+          disableFlip: true,
+          rememberLastUsedCamera: true,
+        } as any,
         handleScanResult,
         () => {
           // QR code not found - silent

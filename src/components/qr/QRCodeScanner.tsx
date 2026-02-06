@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Camera, X, Loader2, AlertCircle } from 'lucide-react';
@@ -43,18 +43,25 @@ export function QRCodeScanner({ open, onClose, onScan, isLoading, error }: QRCod
 
       try {
         // Small delay to ensure DOM is ready
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         if (!containerRef.current) return;
 
-        scannerRef.current = new Html5Qrcode("qr-reader");
+        scannerRef.current = new Html5Qrcode("qr-reader", {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+        });
 
         await scannerRef.current.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-          },
+            fps: 15,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
+              return { width: size, height: size };
+            },
+            disableFlip: true,
+          } as any,
           (decodedText) => {
             console.log("QR scanned:", decodedText);
             onScan(decodedText);
