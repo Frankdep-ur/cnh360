@@ -52,28 +52,34 @@ export default function InstrutorGanhos() {
   const handleVerifyIdentity = async () => {
     setLoadingKyc(true);
     try {
-      const { data, error } = await supabase.functions.invoke("get-kyc-link-pagarme");
+      const { data, error } = await supabase.functions.invoke("start-kyc");
       
       if (error) {
         console.error("Error getting KYC link:", error);
         return;
       }
 
-      if (data?.alreadyActive) {
-        // Refresh balance to update status
+      // Already active - refresh balance
+      if (data?.status === "already_active") {
         fetchBalance();
         return;
       }
 
-      // Automatic verification - Pagar.me sends email/SMS directly
-      if (data?.automaticVerification) {
-        // Show toast or alert - verification link was sent to user's email/SMS
-        console.log("Verification link sent via email/SMS by Pagar.me");
+      // KYC is being processed by the financial institution
+      if (data?.error === "kyc_processing") {
+        console.log("KYC is being processed, try again later");
         return;
       }
 
-      if (data?.url) {
-        const fullUrl = data.url.startsWith("http") ? data.url : `https://${data.url}`;
+      // Recipient was refused - needs re-registration
+      if (data?.error === "recipient_refused") {
+        console.log("Recipient refused, needs bank re-registration");
+        return;
+      }
+
+      // Open KYC verification URL
+      if (data?.kyc_url) {
+        const fullUrl = data.kyc_url.startsWith("http") ? data.kyc_url : `https://${data.kyc_url}`;
         window.open(fullUrl, "_blank");
       }
     } catch (err) {
