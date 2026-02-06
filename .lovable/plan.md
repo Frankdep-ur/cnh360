@@ -1,89 +1,99 @@
 
 
-# Correção: Bug na Lógica do Banner KYC
+# Correção: "Acesso Negado" no Link de Verificação KYC
 
-## Problema Identificado
+## Problema
 
-Na análise do `InstructorBalanceCard.tsx`, encontrei um bug lógico:
+Quando a Cleia clica em "Verificar identidade agora", o sistema retorna um link KYC antigo que foi invalidado pela Pagar.me. Isso acontece porque:
 
-```typescript
-// Linha 295-299 - BUG
-const showKycBannerInitial = !recipientStatus && 
-  hasRecipient && 
-  !loading && 
-  balance &&
-  recipientStatus !== "refused";  // Quando recipientStatus é null, isso SEMPRE retorna true
-```
+1. O link foi gerado quando o status era `registration`
+2. A Pagar.me mudou o status para `affiliation` (em análise)
+3. Ao mudar de etapa, a Pagar.me invalida o token anterior
+4. Nosso sistema continua usando o link cacheado, que agora retorna "acesso negado"
 
-O problema: quando `recipientStatus` é `null` (ainda não carregou da API), a condição `recipientStatus !== "refused"` é sempre `true`, fazendo o banner de verificação KYC aparecer mesmo quando o `localKycStatus` já está como `refused`.
+## Solucao
 
----
+### Arquivo: `supabase/functions/start-kyc/index.ts`
 
-## Dados Verificados - Frank vs Lucas
+Adicionar uma verificacao que detecta mudanca de status do recebedor e invalida o cache automaticamente. Quando o status do recebedor na API da Pagar.me for diferente do que era quando o link foi gerado, forcar a geracao de um novo link.
 
-| Campo | Frank Alexandre | Lucas Felipe |
-|-------|-----------------|--------------|
-| Recipient ID | `re_cmkx1ob1cy0mz0l9tjhxp6lcf` | `re_cmla3cmxv2i8o0l9tfom1sp7h` |
-| KYC Status | `approved` | `refused` |
-| CPF | `447.908.628-52` | `473.547.278-90` |
+**Mudancas especificas:**
 
-O Frank está corretamente configurado com status `approved`.
+1. **Salvar o status do recebedor junto com o link cacheado** - Ao gerar um novo link, salvar tambem o `recipient_status` corrente no banco (novo campo ou reutilizar logica existente)
 
----
+2. **Invalidar cache quando status muda** - Antes de usar o link cacheado, verificar se o `recipientStatus` atual (da API) e o mesmo de quando o link foi gerado. Se diferente, ignorar o cache e gerar novo link
 
-## Correção Proposta
+3. **Fallback: Se o link falhar com 403, gerar novo automaticamente** - Adicionar tratamento para o caso em que a Pagar.me retorna 403 no link KYC, limpando o cache e tentando novamente
 
-### Arquivo: `src/components/instrutor/InstructorBalanceCard.tsx`
+### Abordagem simplificada (preferida)
 
-**Mudança nas linhas 293-309:**
+Em vez de adicionar complexidade com campos extras, a solucao mais direta e: **nunca usar cache quando o status do recebedor e `affiliation`**. Nesse status, a Pagar.me pode estar processando etapas internas que invalidam tokens anteriores.
 
-```typescript
-// CORREÇÃO: Verificar também localKycStatus
-const showKycBannerInitial = !recipientStatus && 
-  hasRecipient && 
-  !loading && 
-  balance &&
-  localKycStatus !== "refused" &&  // ADICIONAR
-  localKycStatus !== "approved";   // ADICIONAR - também não mostrar se já aprovado
-
-// Já está corrigido:
-const showKycBannerBeforeBalance = hasRecipient && 
-  !recipientStatus && 
-  !balance &&
-  !loading &&
-  localKycStatus !== "refused";
-// ADICIONAR também:
-//  && localKycStatus !== "approved"
-```
-
-### Lógica Corrigida
+A logica na secao de cache ficara:
 
 ```text
-localKycStatus == "approved"
-    └─ NÃO mostrar banner (já verificado)
-
-localKycStatus == "refused"
-    └─ NÃO mostrar banner de KYC
-    └─ MOSTRAR botão "Recadastrar dados bancários"
-
-localKycStatus == null ou outros
-    └─ MOSTRAR banner de verificação KYC
+SE tem link cacheado E nao expirou:
+  SE recipientStatus == "affiliation":
+    -> NAO usar cache, gerar novo link
+    -> Limpar link cacheado do banco
+  SENAO:
+    -> Usar link cacheado normalmente
 ```
 
----
+### Tambem limpar o cache no banco
 
-## Seção Técnica
+Quando detectar que o link cacheado e invalido, limpar os campos `kyc_url`, `kyc_base64` e `kyc_link_expires_at` no banco para evitar reusar o link quebrado.
 
-### Alterações Específicas
+## Secao Tecnica
 
-| Linha | De | Para |
-|-------|-----|------|
-| 295-299 | Não verifica `localKycStatus` em `showKycBannerInitial` | Adicionar `localKycStatus !== "refused" && localKycStatus !== "approved"` |
-| 305-309 | Não verifica se já está aprovado | Adicionar `localKycStatus !== "approved"` |
+### Arquivo a modificar
 
-### Resumo
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/start-kyc/index.ts` | Invalidar cache quando `recipientStatus === "affiliation"` e gerar novo link |
 
-- Frank Alexandre: **OK** - status `approved`, pode fazer saques
-- Lucas Felipe: **RECUSADO** - precisa recadastrar dados bancários
-- Bug no código: Banner de KYC aparecia mesmo quando status local era `refused`
+### Logica atualizada (linhas ~197-234)
+
+Antes de usar o cache, adicionar verificacao:
+
+```text
+// Check if recipient status changed to affiliation
+// In affiliation status, Pagar.me may have invalidated previous tokens
+if (recipientStatus === "affiliation") {
+  -> Log: "Status is affiliation, invalidating cached KYC URL"
+  -> Limpar kyc_url, kyc_base64, kyc_link_expires_at no banco
+  -> Pular cache e ir direto para gerar novo link
+}
+```
+
+### Tratamento de erro 403
+
+Apos chamar o endpoint `kyc_link` da Pagar.me, se receber status 403:
+- Verificar se a mensagem contem "acesso negado" ou similar
+- Retornar mensagem amigavel: "A verificacao esta sendo processada pela instituicao financeira. Aguarde alguns minutos e tente novamente."
+- Isso cobre o caso em que a Pagar.me temporariamente bloqueia a geracao de novos links durante o processamento
+
+### Fluxo corrigido
+
+```text
+Usuario clica "Verificar identidade"
+  |
+  v
+start-kyc Edge Function
+  |
+  v
+Consulta status do recebedor na Pagar.me API
+  |
+  +-- Status = "affiliation"?
+  |     |
+  |     +-- SIM: Limpar cache -> Gerar NOVO link
+  |     |         |
+  |     |         +-- 403? -> "Verificacao em processamento, aguarde"
+  |     |         +-- 200? -> Retornar novo link
+  |     |
+  |     +-- NAO: Usar cache se valido, senao gerar novo
+  |
+  v
+Retornar link para o frontend
+```
 
