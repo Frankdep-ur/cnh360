@@ -55,10 +55,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Parse body first so we can log the action even if auth fails
+    const body: WorkflowRequest = await req.json();
+    const { aula_id, action, qr_data, latitude, longitude, accuracy, device_info } = body;
+
+    console.log(`[lesson-workflow] ▶ Received request: action=${action}, aula_id=${aula_id}`);
+
     // Get user from JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization header" }), {
+      console.error(`[lesson-workflow] ✗ Missing authorization header for action=${action}, aula_id=${aula_id}`);
+      return new Response(JSON.stringify({ error: "Sessão não encontrada. Faça login novamente." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -70,17 +77,17 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid user" }), {
+      console.error(`[lesson-workflow] ✗ Auth failed for action=${action}, aula_id=${aula_id}, error=${userError?.message || 'no user'}`);
+      return new Response(JSON.stringify({ error: "Sessão expirada. Faça login novamente." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log(`[lesson-workflow] ✓ Authenticated: user_id=${user.id}, action=${action}, aula_id=${aula_id}`);
+
     // Use service role for operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const body: WorkflowRequest = await req.json();
-    const { aula_id, action, qr_data, latitude, longitude, accuracy, device_info } = body;
 
     if (!aula_id || !action) {
       return new Response(JSON.stringify({ error: "Missing aula_id or action" }), {
