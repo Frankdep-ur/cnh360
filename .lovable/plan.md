@@ -1,99 +1,94 @@
 
-# Retorno do Instrutor a Aula Ativa - Banner Global de Aula em Andamento
+# Correcao: Banner de Aula Ativa Global + Botao "Finalizar" Quebrado
 
-## Problema Identificado
+## Problemas Encontrados
 
-Quando o instrutor sai do app durante uma aula ativa (status `em_andamento`) e volta, nao existe nenhum mecanismo que o redirecione ou avise que ele tem uma aula acontecendo. O dashboard so mostra aulas `pendente`, e o monitor global so detecta `aguardando_confirmacao` e `aguardando_qr`.
+### Problema 1: Botao "Finalizar" vai para pagina errada
+Na pagina "Minhas Aulas" (`InstrutorAulas.tsx`), quando uma aula esta `em_andamento`, o botao "Finalizar" leva para `/instrutor/validar-aula` -- uma pagina **deprecada** que tenta redirecionar, mas como nao recebe o ID da aula como parametro, simplesmente volta para o dashboard. Resultado: o instrutor nunca consegue acessar a tela de aula ao vivo por ali.
 
-**Confirmacao:** Existe uma aula `em_andamento` agora no banco de dados (ID: 60a1227c) com `aula_inicio` registrado mas sem forma do instrutor acessar pelo dashboard.
+O botao "Chat" da mesma aula tambem esta errado -- leva para `/instrutor/a-caminho/${aula.id}` (pagina de rota), quando deveria ir para `/instrutor/aula/${aula.id}` (pagina de gerenciamento da aula em andamento).
+
+### Problema 2: Banner so aparece no Dashboard
+O banner de aula ativa foi colocado **apenas** no `InstrutorDashboard`. Se o instrutor estiver em qualquer outra pagina (Aulas, Agenda, Chat, Perfil), ele nao ve o banner. Quando ele fecha o app e reabre, pode cair em qualquer dessas paginas e nao saber que tem uma aula rolando.
 
 ## Solucao
 
-Criar um **banner flutuante global** que aparece em QUALQUER pagina do instrutor quando existe uma aula ativa. Este banner persiste ate a aula ser concluida e leva o instrutor diretamente para a pagina de gerenciamento da aula.
+### 1. Corrigir links na pagina de Aulas
 
-### O que sera feito
+No `InstrutorAulas.tsx`, para aulas com status `em_andamento`:
+- Botao "Finalizar" muda de `/instrutor/validar-aula` para `/instrutor/aula/${aula.id}`
+- Botao "Chat" muda de `/instrutor/a-caminho/${aula.id}` para `/instrutor/aula/${aula.id}` (a pagina de aula ja tem chat integrado)
 
-**1. Novo hook: `useActiveLessonBanner`**
+Tambem adicionar botoes de acao para status `aguardando_confirmacao`, `em_rota` e `aguardando_qr` que estao faltando -- todos direcionando para `/instrutor/aula/${aula.id}`.
 
-Um hook leve que detecta aulas em qualquer status "ativo" do instrutor:
-- `confirmada` (aceita, pronta para iniciar rota)
-- `em_rota` (instrutor a caminho)
-- `aguardando_confirmacao` (instrutor chegou)
-- `em_andamento` (aula acontecendo - o caso principal)
-- `aguardando_qr` (finalizando)
+### 2. Adicionar banner em TODAS as paginas do instrutor
 
-O hook retorna os dados da aula ativa (id, status, aluno_nome, aula_inicio) para exibicao no banner.
+Adicionar o `ActiveLessonBanner` nas seguintes paginas:
+- `InstrutorAulas.tsx` (Minhas Aulas)
+- `InstrutorAgenda.tsx` (Agenda)
+- `InstrutorChat.tsx` (Chat)
+- `InstrutorPerfil.tsx` (Perfil)
+- `InstrutorGanhos.tsx` (Ganhos)
 
-**2. Novo componente: `ActiveLessonBanner`**
-
-Um banner fixo no topo da tela com:
-- Indicador pulsante de aula ao vivo
-- Nome do aluno
-- Status atual (ex: "Em Andamento - 45min")
-- Timer em tempo real mostrando quanto tempo decorreu
-- Botao "Retomar" que navega para `/instrutor/aula/:aulaId`
-
-O banner tera visual de urgencia (fundo gradiente com animacao pulsante) para ser impossivel de ignorar.
-
-**3. Integracao no `InstrutorDashboard`**
-
-O banner aparecera no topo do dashboard, acima de todos os outros cards, com z-index alto para garantir visibilidade.
-
-**4. Integracao no `InstructorBottomNav`**
-
-Adicionar um indicador visual (ponto pulsante vermelho) no icone "Aulas" da barra inferior quando houver uma aula ativa, sinalizando que o instrutor precisa retornar.
+Assim, nao importa onde o instrutor esteja, o banner verde pulsante com "AULA AO VIVO" estara visivel e clicavel.
 
 ---
 
 ## Secao Tecnica
 
-### Arquivos novos
+### InstrutorAulas.tsx - Correcoes
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/hooks/useActiveLessonBanner.ts` | Hook que monitora aulas ativas do instrutor via query + realtime |
-| `src/components/instrutor/ActiveLessonBanner.tsx` | Componente visual do banner flutuante |
+Mudanca nos botoes de acao (linhas 328-343):
 
-### Arquivos modificados
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/instrutor/InstrutorDashboard.tsx` | Adicionar o `ActiveLessonBanner` no topo |
-| `src/components/layout/InstructorBottomNav.tsx` | Adicionar ponto pulsante no icone Aulas quando ha aula ativa |
-
-### Hook: useActiveLessonBanner
-
+Antes:
 ```text
-- Verifica se o usuario logado e instrutor (busca instrutores.id)
-- Query na tabela aulas com status IN ('confirmada','em_rota','aguardando_confirmacao','em_andamento','aguardando_qr')
-- Retorna a aula mais recente/prioritaria
-- Subscription Realtime para atualizacao automatica
-- Polling de 5s como fallback
-- Retorna: { activeLesson, isLoading }
+{aula.status === "em_andamento" && (
+  <Link to={`/instrutor/a-caminho/${aula.id}`}>  // ERRADO
+    Chat
+  </Link>
+  <Link to="/instrutor/validar-aula">  // ERRADO - sem aulaId
+    Finalizar
+  </Link>
+)}
 ```
 
-### Componente: ActiveLessonBanner
+Depois:
+```text
+{aula.status === "em_andamento" && (
+  <Link to={`/instrutor/aula/${aula.id}`}>
+    Retomar Aula
+  </Link>
+)}
+```
 
-Visual por status:
-- `confirmada`: fundo azul, "Aula confirmada - Iniciar rota"
-- `em_rota`: fundo azul com animacao, "A caminho do aluno"
-- `aguardando_confirmacao`: fundo amarelo, "Aguardando aluno confirmar"
-- `em_andamento`: fundo verde pulsante, "AULA AO VIVO - XX:XX" (timer)
-- `aguardando_qr`: fundo roxo, "Finalize - Escanear QR"
+Adicionar tratamento para outros status ativos:
+```text
+{["aguardando_confirmacao", "em_rota", "aguardando_qr"].includes(aula.status) && (
+  <Link to={`/instrutor/aula/${aula.id}`}>
+    Gerenciar
+  </Link>
+)}
+```
 
-O banner navega para `/instrutor/aula/:aulaId` ao ser clicado.
+Tambem importar e adicionar o `ActiveLessonBanner` no topo da pagina.
 
-### InstructorBottomNav
+### Paginas do instrutor que receberao o banner
 
-- Importar `useActiveLessonBanner`
-- Quando `activeLesson` existe, mostrar um circulo vermelho pulsante sobre o icone "Aulas"
-- Isso funciona como notificacao visual persistente
+Cada pagina recebera:
+```text
+import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
+import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 
-### Prioridade de status
+// Dentro do componente:
+const { activeLesson } = useActiveLessonBanner();
 
-Se houver multiplas aulas ativas (raro), a prioridade e:
-1. `em_andamento` (mais urgente)
-2. `aguardando_qr`
-3. `aguardando_confirmacao`
-4. `em_rota`
-5. `confirmada`
+// No JSX, logo apos o header:
+{activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
+```
+
+Arquivos modificados:
+- `src/pages/instrutor/InstrutorAulas.tsx` (banner + links corrigidos)
+- `src/pages/instrutor/InstrutorAgenda.tsx` (banner)
+- `src/pages/instrutor/InstrutorChat.tsx` (banner)
+- `src/pages/instrutor/InstrutorPerfil.tsx` (banner)
+- `src/pages/instrutor/InstrutorGanhos.tsx` (banner)
