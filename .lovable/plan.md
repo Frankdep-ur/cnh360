@@ -1,115 +1,92 @@
 
+# Correcao do Bug de Saldo - Parsing Incorreto da API Pagar.me
 
-# Varredura de Seguranca Completa - Resultados
+## Problema Identificado
 
-## Resumo Geral
+O saldo da Cleia Santos mostra **R$ 0,00 disponivel** e **R$ 4,52 a receber** quando deveria mostrar **R$ 4,51 disponivel para saque**.
 
-A varredura identificou **18 findings** no total. Apos analise detalhada:
-- **1 problema real** que precisa de correcao imediata
-- **1 problema menor** de politicas conflitantes
-- **5 findings de design** que sao decisoes de negocio (marketplace publico)
-- **7 findings ja ignorados** em varreduras anteriores (revisados e documentados)
-- **4 findings informativos** sem risco real
+### Causa Raiz
 
----
+A Edge Function `get-instructor-balance-pagarme` esta parseando a resposta da API Pagar.me V5 usando o formato ERRADO.
 
-## Problema 1 (CORRECAO NECESSARIA): Notifications INSERT sem restricao
-
-A tabela `notifications` tem uma policy INSERT com `WITH CHECK (true)`, que permite qualquer usuario autenticado inserir notificacoes para QUALQUER `user_id` — nao apenas o seu.
-
-**Risco**: Um usuario malicioso poderia enviar notificacoes falsas para outros usuarios.
-
-**Correcao**: Remover a policy `"Service role can insert notifications"`. Edge Functions usam a service role key que ignora RLS automaticamente, entao a policy nao e necessaria.
+**Resposta real da Pagar.me V5 (formato FLAT):**
 
 ```text
-DROP POLICY "Service role can insert notifications" ON notifications;
--- Service role (usado pelas Edge Functions) ja bypassa RLS automaticamente
--- Nenhuma policy INSERT e necessaria para chamadas internas
+{
+  "currency": "BRL",
+  "available_amount": 451,        <-- campo correto
+  "waiting_funds_amount": 0,
+  "transferred_amount": 0
+}
 ```
 
----
-
-## Problema 2 (MENOR): Veiculos com politicas conflitantes
-
-A tabela `veiculos` tem 4 policies SELECT que se sobrepoe:
-- "Authenticated users can view active instructor vehicles"
-- "Public can view active instructor vehicles" (mesma condicao)
-- "Block anonymous access to veiculos" (qual: false)
-- "Students can view vehicles from their lessons"
-
-A policy "Block anonymous access" com `qual: false` e uma policy PERMISSIVE que retorna false, mas nao bloqueia nada porque as outras policies permissivas permitem acesso (PERMISSIVE = OR logic). Ja a policy "Public" duplica a "Authenticated".
-
-**Correcao**: Consolidar removendo a policy duplicada e a policy morta.
+**Codigo atual (espera formato NESTED):**
 
 ```text
--- Remover policy duplicada (mesma condicao da "Authenticated")
-DROP POLICY "Public can view active instructor vehicles" ON veiculos;
-
--- Remover policy morta (PERMISSIVE com false nao bloqueia nada)
-DROP POLICY "Block anonymous access to veiculos" ON veiculos;
+balance.available = (balanceData.available?.amount || 0) / 100
+//                   ^^^^^^^^^^^^^^^^^^^^^^^^
+//                   balanceData.available nao existe!
+//                   Resultado: (undefined || 0) / 100 = 0
 ```
 
----
+### Consequencia em Cadeia
 
-## Findings de Design (Marketplace) - Ignorar com justificativa
-
-Estes findings sao consequencia de decisoes de design para um marketplace publico. Vou documenta-los como intencionais:
-
-### 3. instrutores_publico_cache publico
-Cache com nome e foto do instrutor para listagem publica. Essencial para marketplace — usuarios precisam ver instrutores disponiveis antes de se cadastrar.
-
-### 4. avaliacoes publicas
-Avaliacoes publicas sao padrao em marketplaces (Uber, iFood, Airbnb). Apenas expoem nota, comentario e IDs.
-
-### 5. curso_aulas/modulos/quiz publicos
-Conteudo educativo gratuito para alunos da plataforma. Se futuramente o curso for pago, sera necessario adicionar autenticacao.
-
-### 6. Views _seguros sem RLS explicito
-As views `alunos_seguros`, `instrutores_seguros`, `autoescolas_seguros` e `pagamentos_seguros` usam SECURITY INVOKER (padrao do PostgreSQL). Isso significa que herdam automaticamente as policies RLS das tabelas base (`alunos`, `instrutores`, etc.). Nao ha exposicao real de dados.
+1. `balance.available` = 0 (parsing errado)
+2. `balance.waitingFunds` = 0 (parsing errado)
+3. A condicao `balance.available === 0 && balance.waitingFunds === 0` vira TRUE
+4. O fallback local busca R$ 4,52 do banco de dados e coloca em `waitingFunds`
+5. O botao de saque fica desabilitado porque `balance.available` continua 0
 
 ---
 
-## Findings ja Resolvidos/Ignorados (varreduras anteriores)
+## Correcao
 
-- Leaked Password Protection — recurso nao disponivel na interface Cloud
-- SECURITY DEFINER functions — todas revisadas e documentadas como seguras
-- Math.random() — usado apenas para UI, sem impacto de seguranca
-- Edge Functions auth — todas validam JWT corretamente no codigo
-- Avatar storage — policies ja protegem corretamente
-- Disponibilidade publica — intencional para fluxo de agendamento
+Alterar **1 arquivo**: `supabase/functions/get-instructor-balance-pagarme/index.ts`
+
+### Antes (linhas 139-144):
+
+```text
+const balance = {
+  available: (balanceData.available?.amount || 0) / 100,
+  waitingFunds: (balanceData.waiting_funds?.amount || 0) / 100,
+  transferred: (balanceData.transferred?.amount || 0) / 100,
+  currency: balanceData.available?.currency || "BRL",
+};
+```
+
+### Depois:
+
+```text
+const balance = {
+  available: (balanceData.available_amount ?? balanceData.available?.amount ?? 0) / 100,
+  waitingFunds: (balanceData.waiting_funds_amount ?? balanceData.waiting_funds?.amount ?? 0) / 100,
+  transferred: (balanceData.transferred_amount ?? balanceData.transferred?.amount ?? 0) / 100,
+  currency: balanceData.currency ?? balanceData.available?.currency ?? "BRL",
+};
+```
+
+Usa o operador `??` (nullish coalescing) para tentar primeiro o formato flat (`available_amount`) e, se nao existir, o formato nested (`available.amount`), garantindo compatibilidade com ambos os formatos.
+
+---
+
+## Resultado Esperado
+
+Apos a correcao:
+- "Disponivel para saque" mostrara **R$ 4,51** (451 centavos / 100)
+- "A receber" mostrara **R$ 0,00** (nenhum valor pendente no gateway)
+- O botao mudara de "Sem saldo disponivel" para **"Sacar Saldo"** (verde, habilitado)
+- O fallback local NAO sera acionado (pois `available > 0`)
 
 ---
 
 ## Secao Tecnica
 
-### Migracao SQL
-
-Uma unica migracao resolve os 2 problemas:
-
-```text
--- Problema 1: Remover INSERT irrestrito em notifications
-DROP POLICY IF EXISTS "Service role can insert notifications" ON notifications;
-
--- Problema 2: Remover policies conflitantes em veiculos
-DROP POLICY IF EXISTS "Public can view active instructor vehicles" ON veiculos;
-DROP POLICY IF EXISTS "Block anonymous access to veiculos" ON veiculos;
-```
-
-### Atualizar findings de seguranca
-
-Apos a migracao, atualizar os findings:
-- Deletar `rls_notifications_insert` (corrigido)
-- Ignorar `instrutores_publico_cache_personal_info` (design intencional)
-- Ignorar `avaliacoes_public_exposure` (padrao marketplace)
-- Ignorar `curso_aulas_content_exposure` (conteudo gratuito)
-- Ignorar `instrutores_seguros_view_no_rls` (SECURITY INVOKER herda RLS)
-- Ignorar `curso_modulos_public_access` (conteudo gratuito)
-
 ### Arquivos impactados
 
-| Item | Acao |
-|------|------|
-| Migracao SQL | DROP 3 policies (1 notifications + 2 veiculos) |
-| Security findings | Deletar 1 + ignorar 5 com justificativas |
-| Codigo fonte | Nenhuma alteracao necessaria |
+| Arquivo | Alteracao |
+|---------|-----------|
+| `supabase/functions/get-instructor-balance-pagarme/index.ts` | Corrigir parsing do balance (linhas 139-144) |
 
+### Validacao
+
+Apos o deploy da Edge Function, testar chamando diretamente a funcao para confirmar que o balance retorna os valores corretos antes de verificar na UI.
