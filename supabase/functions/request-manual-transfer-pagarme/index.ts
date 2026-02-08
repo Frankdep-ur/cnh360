@@ -77,7 +77,7 @@ serve(async (req) => {
     const balanceData = await balanceRes.json();
     logStep("Balance fetched", balanceData);
 
-    const availableAmount = balanceData.available?.amount || 0;
+    const availableAmount = balanceData.available_amount ?? balanceData.available?.amount ?? 0;
     
     if (availableAmount <= 0) {
       throw new Error("Saldo insuficiente para saque. Aguarde a liberação do saldo pendente.");
