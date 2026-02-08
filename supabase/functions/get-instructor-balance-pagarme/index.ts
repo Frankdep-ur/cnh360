@@ -136,11 +136,12 @@ serve(async (req) => {
 
     // Parse balance data from Pagar.me response
     // Pagar.me returns amounts in cents
+    // Support both flat format (available_amount) and nested format (available.amount)
     const balance: BalanceResponse = {
-      available: (balanceData.available?.amount || 0) / 100,
-      waitingFunds: (balanceData.waiting_funds?.amount || 0) / 100,
-      transferred: (balanceData.transferred?.amount || 0) / 100,
-      currency: balanceData.available?.currency || "BRL",
+      available: (balanceData.available_amount ?? balanceData.available?.amount ?? 0) / 100,
+      waitingFunds: (balanceData.waiting_funds_amount ?? balanceData.waiting_funds?.amount ?? 0) / 100,
+      transferred: (balanceData.transferred_amount ?? balanceData.transferred?.amount ?? 0) / 100,
+      currency: balanceData.currency ?? balanceData.available?.currency ?? "BRL",
     };
 
     // HYBRID BALANCE LOGIC:
