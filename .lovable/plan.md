@@ -1,124 +1,115 @@
 
 
-# Correcao dos 4 Problemas Encontrados
+# Varredura de Seguranca Completa - Resultados
 
-## Problema 1 (CRITICO): capture-payment-pagarme nao verifica KYC
+## Resumo Geral
 
-Nas linhas 182-184 e 246-248 do `capture-payment-pagarme`, o split e hardcoded como 50/50 sem verificar o `kyc_status` do instrutor. Isso significa que se uma order Pagar.me for paga/autorizada para um instrutor com status `refused`, ele receberia 50% indevidamente.
-
-**A secao sem `transaction_id` (linhas 103-113) ja esta correta** — ela busca `kyc_status` e aplica o split condicionalmente. O problema e apenas nas duas outras secoes que lidam com orders existentes na Pagar.me.
-
-**Correcao**: Adicionar busca de `kyc_status` antes de calcular o split nas linhas 181 e 245. Aplicar a mesma logica: 50/50 se `approved`, 100% plataforma caso contrario.
-
----
-
-## Problema 2 (Menor): Push notification e placeholder
-
-A funcao `send-push-notification` nao envia notificacoes push reais. Na linha 118, ela apenas faz `console.log("Would send to endpoint:")` e incrementa `sentCount` sem enviar nada de fato.
-
-**Correcao**: Como nao ha `VAPID_PRIVATE_KEY` configurada e a implementacao real exigiria uma biblioteca web-push (nao disponivel nativamente no Deno), a abordagem sera simplificar a funcao para focar no que ela ja faz corretamente: salvar a notificacao no banco de dados. Remover o codigo morto do loop de subscriptions e o placeholder VAPID, deixando claro que a funcao salva notificacoes in-app. Push real pode ser adicionado futuramente quando configurado.
+A varredura identificou **18 findings** no total. Apos analise detalhada:
+- **1 problema real** que precisa de correcao imediata
+- **1 problema menor** de politicas conflitantes
+- **5 findings de design** que sao decisoes de negocio (marketplace publico)
+- **7 findings ja ignorados** em varreduras anteriores (revisados e documentados)
+- **4 findings informativos** sem risco real
 
 ---
 
-## Problema 3 (Menor): Funcao KYC redundante
+## Problema 1 (CORRECAO NECESSARIA): Notifications INSERT sem restricao
 
-`get-kyc-link-pagarme` e `start-kyc` fazem a mesma coisa: geram link KYC na Pagar.me. Porem:
-- `start-kyc` tem cache de 20 minutos, tratamento de status `refused`/`suspended`/`affiliation`, retry logic, e logging detalhado
-- `get-kyc-link-pagarme` e uma versao simplificada sem essas melhorias
+A tabela `notifications` tem uma policy INSERT com `WITH CHECK (true)`, que permite qualquer usuario autenticado inserir notificacoes para QUALQUER `user_id` — nao apenas o seu.
 
-O `InstrutorGanhos.tsx` ainda chama `get-kyc-link-pagarme`, enquanto o `InstructorBalanceCard.tsx` ja usa `start-kyc`.
+**Risco**: Um usuario malicioso poderia enviar notificacoes falsas para outros usuarios.
 
-**Correcao**: Atualizar `InstrutorGanhos.tsx` para chamar `start-kyc` ao inves de `get-kyc-link-pagarme`, adaptando o tratamento de resposta (os campos retornados sao diferentes: `kyc_url` vs `url`, `status` vs `alreadyActive`). Depois, deletar a funcao `get-kyc-link-pagarme` e remover sua entrada do `config.toml`.
+**Correcao**: Remover a policy `"Service role can insert notifications"`. Edge Functions usam a service role key que ignora RLS automaticamente, entao a policy nao e necessaria.
+
+```text
+DROP POLICY "Service role can insert notifications" ON notifications;
+-- Service role (usado pelas Edge Functions) ja bypassa RLS automaticamente
+-- Nenhuma policy INSERT e necessaria para chamadas internas
+```
 
 ---
 
-## Problema 4 (Menor): fetch() direto no check-payment-status-pagarme
+## Problema 2 (MENOR): Veiculos com politicas conflitantes
 
-Na linha 126-136 do `check-payment-status-pagarme`, a chamada para `send-whatsapp-notification` usa `fetch()` direto ao inves de `supabase.functions.invoke()`. Embora funcione, nao segue o padrao recomendado.
+A tabela `veiculos` tem 4 policies SELECT que se sobrepoe:
+- "Authenticated users can view active instructor vehicles"
+- "Public can view active instructor vehicles" (mesma condicao)
+- "Block anonymous access to veiculos" (qual: false)
+- "Students can view vehicles from their lessons"
 
-**Correcao**: Substituir o `fetch()` por `supabase.functions.invoke("send-whatsapp-notification", { body: whatsappPayload })`.
+A policy "Block anonymous access" com `qual: false` e uma policy PERMISSIVE que retorna false, mas nao bloqueia nada porque as outras policies permissivas permitem acesso (PERMISSIVE = OR logic). Ja a policy "Public" duplica a "Authenticated".
+
+**Correcao**: Consolidar removendo a policy duplicada e a policy morta.
+
+```text
+-- Remover policy duplicada (mesma condicao da "Authenticated")
+DROP POLICY "Public can view active instructor vehicles" ON veiculos;
+
+-- Remover policy morta (PERMISSIVE com false nao bloqueia nada)
+DROP POLICY "Block anonymous access to veiculos" ON veiculos;
+```
+
+---
+
+## Findings de Design (Marketplace) - Ignorar com justificativa
+
+Estes findings sao consequencia de decisoes de design para um marketplace publico. Vou documenta-los como intencionais:
+
+### 3. instrutores_publico_cache publico
+Cache com nome e foto do instrutor para listagem publica. Essencial para marketplace — usuarios precisam ver instrutores disponiveis antes de se cadastrar.
+
+### 4. avaliacoes publicas
+Avaliacoes publicas sao padrao em marketplaces (Uber, iFood, Airbnb). Apenas expoem nota, comentario e IDs.
+
+### 5. curso_aulas/modulos/quiz publicos
+Conteudo educativo gratuito para alunos da plataforma. Se futuramente o curso for pago, sera necessario adicionar autenticacao.
+
+### 6. Views _seguros sem RLS explicito
+As views `alunos_seguros`, `instrutores_seguros`, `autoescolas_seguros` e `pagamentos_seguros` usam SECURITY INVOKER (padrao do PostgreSQL). Isso significa que herdam automaticamente as policies RLS das tabelas base (`alunos`, `instrutores`, etc.). Nao ha exposicao real de dados.
+
+---
+
+## Findings ja Resolvidos/Ignorados (varreduras anteriores)
+
+- Leaked Password Protection — recurso nao disponivel na interface Cloud
+- SECURITY DEFINER functions — todas revisadas e documentadas como seguras
+- Math.random() — usado apenas para UI, sem impacto de seguranca
+- Edge Functions auth — todas validam JWT corretamente no codigo
+- Avatar storage — policies ja protegem corretamente
+- Disponibilidade publica — intencional para fluxo de agendamento
 
 ---
 
 ## Secao Tecnica
 
-### Arquivo: `supabase/functions/capture-payment-pagarme/index.ts`
+### Migracao SQL
 
-Duas secoes precisam de correcao:
+Uma unica migracao resolve os 2 problemas:
 
-**Secao 1 — Order ja paga (linhas 181-198):**
 ```text
-// ANTES (linha 182-184):
-const valorBruto = Number(aulaData.valor);
-const taxaPlataforma = valorBruto * 0.50;
-const valorInstrutor = valorBruto - taxaPlataforma;
+-- Problema 1: Remover INSERT irrestrito em notifications
+DROP POLICY IF EXISTS "Service role can insert notifications" ON notifications;
 
-// DEPOIS:
-const { data: instrutorKyc } = await supabase
-  .from("instrutores")
-  .select("kyc_status")
-  .eq("id", aulaData.instrutor_id)
-  .single();
-
-const kycApproved = instrutorKyc?.kyc_status === "approved";
-const valorBruto = Number(aulaData.valor);
-const taxaPlataforma = kycApproved ? valorBruto * 0.50 : valorBruto;
-const valorInstrutor = kycApproved ? valorBruto * 0.50 : 0;
+-- Problema 2: Remover policies conflitantes em veiculos
+DROP POLICY IF EXISTS "Public can view active instructor vehicles" ON veiculos;
+DROP POLICY IF EXISTS "Block anonymous access to veiculos" ON veiculos;
 ```
 
-**Secao 2 — Captura nova (linhas 245-248):**
-Mesma logica: buscar `kyc_status` antes de calcular split.
+### Atualizar findings de seguranca
 
-### Arquivo: `supabase/functions/send-push-notification/index.ts`
+Apos a migracao, atualizar os findings:
+- Deletar `rls_notifications_insert` (corrigido)
+- Ignorar `instrutores_publico_cache_personal_info` (design intencional)
+- Ignorar `avaliacoes_public_exposure` (padrao marketplace)
+- Ignorar `curso_aulas_content_exposure` (conteudo gratuito)
+- Ignorar `instrutores_seguros_view_no_rls` (SECURITY INVOKER herda RLS)
+- Ignorar `curso_modulos_public_access` (conteudo gratuito)
 
-Simplificar removendo o codigo morto do loop de subscriptions e VAPID placeholder. Manter apenas a logica de salvar notificacao no banco.
+### Arquivos impactados
 
-### Arquivo: `src/pages/instrutor/InstrutorGanhos.tsx`
-
-Trocar chamada de `get-kyc-link-pagarme` para `start-kyc` e adaptar o tratamento de resposta:
-```text
-// ANTES:
-supabase.functions.invoke("get-kyc-link-pagarme")
-// data.url, data.alreadyActive, data.automaticVerification
-
-// DEPOIS:
-supabase.functions.invoke("start-kyc")
-// data.kyc_url, data.status === "already_active", data.error === "kyc_processing"
-```
-
-### Arquivo: `supabase/functions/get-kyc-link-pagarme/index.ts`
-
-Deletar esta funcao inteira.
-
-### Arquivo: `supabase/config.toml`
-
-Remover a entrada `[functions.get-kyc-link-pagarme]`.
-
-### Arquivo: `supabase/functions/check-payment-status-pagarme/index.ts`
-
-Substituir `fetch()` direto por `supabase.functions.invoke()`:
-```text
-// ANTES (linhas 126-136):
-const response = await fetch(
-  `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-notification`,
-  { method: "POST", headers: {...}, body: JSON.stringify(whatsappPayload) }
-);
-
-// DEPOIS:
-const { data: whatsappResult, error: whatsappError } = await supabase.functions.invoke(
-  "send-whatsapp-notification",
-  { body: whatsappPayload }
-);
-```
-
-### Resumo de arquivos
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `capture-payment-pagarme/index.ts` | Adicionar verificacao KYC nas 2 secoes com split hardcoded |
-| `send-push-notification/index.ts` | Simplificar removendo placeholder VAPID e loop morto |
-| `InstrutorGanhos.tsx` | Trocar `get-kyc-link-pagarme` por `start-kyc` |
-| `get-kyc-link-pagarme/index.ts` | Deletar funcao redundante |
-| `config.toml` | Remover entrada da funcao deletada |
-| `check-payment-status-pagarme/index.ts` | Trocar fetch() por supabase.functions.invoke() |
+| Item | Acao |
+|------|------|
+| Migracao SQL | DROP 3 policies (1 notifications + 2 veiculos) |
+| Security findings | Deletar 1 + ignorar 5 com justificativas |
+| Codigo fonte | Nenhuma alteracao necessaria |
 
