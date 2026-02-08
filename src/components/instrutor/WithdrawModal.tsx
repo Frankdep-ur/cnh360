@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, Banknote, Building2, AlertTriangle, Check, ArrowRight } from "lucide-react";
+import { Loader2, Banknote, Building2, AlertTriangle, Check, ArrowRight, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +32,9 @@ export function WithdrawModal({
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [bankData, setBankData] = useState<BankData | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -45,11 +48,34 @@ export function WithdrawModal({
     if (open) {
       setStatus("idle");
       setLoading(false);
+      setErrorMessage(null);
       if (hasRecipient) {
         loadBankData();
       }
     }
   }, [open, hasRecipient]);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (!cooldownUntil) {
+      setCooldownSeconds(0);
+      return;
+    }
+
+    const tick = () => {
+      const remaining = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setCooldownUntil(null);
+        setCooldownSeconds(0);
+      } else {
+        setCooldownSeconds(remaining);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
 
   const loadBankData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -71,26 +97,42 @@ export function WithdrawModal({
     }
   };
 
+  const isCoolingDown = cooldownUntil !== null && Date.now() < cooldownUntil;
+
   const handleWithdraw = async () => {
     setStatus("loading");
     setLoading(true);
+    setErrorMessage(null);
 
     try {
       const { data, error } = await supabase.functions.invoke(
         "request-manual-transfer-pagarme"
       );
 
+      // Handle SDK-level errors (network, timeout, etc.)
       if (error) {
-        throw new Error(error.message || "Erro ao solicitar saque");
+        const msg = error.message || "";
+        if (msg.includes("non-2xx") || msg.includes("edge function")) {
+          throw new Error("Não foi possível processar o saque. Tente novamente em alguns minutos.");
+        }
+        if (msg.includes("Failed to fetch") || msg.includes("network")) {
+          throw new Error("Erro de conexão. Verifique sua internet e tente novamente.");
+        }
+        throw new Error(msg || "Erro ao solicitar saque");
       }
 
+      // Handle application-level errors (returned as 200 with error in body)
       if (data?.error) {
         throw new Error(data.error);
       }
 
+      if (!data?.success) {
+        throw new Error("Resposta inesperada do servidor. Tente novamente.");
+      }
+
       setStatus("success");
       toast.success("Saque solicitado com sucesso!", {
-        description: "O valor estará na sua conta em até 1 dia útil.",
+        description: `${formatCurrency(data.amount || availableBalance)} será creditado em até 1 dia útil.`,
       });
 
       setTimeout(() => {
@@ -101,11 +143,16 @@ export function WithdrawModal({
 
     } catch (err: any) {
       setStatus("error");
-      toast.error("Erro ao solicitar saque", {
-        description: err.message,
+      const friendlyMsg = err.message || "Erro ao solicitar saque. Tente novamente.";
+      setErrorMessage(friendlyMsg);
+      
+      toast.error("Falha na solicitação de saque", {
+        description: friendlyMsg,
       });
+
+      // Start 60-second cooldown after error to prevent spam
+      setCooldownUntil(Date.now() + 60_000);
       setLoading(false);
-      setTimeout(() => setStatus("idle"), 3000);
     }
   };
 
@@ -170,7 +217,7 @@ export function WithdrawModal({
 
   // Main withdraw modal
   return (
-      <Dialog open={open} onOpenChange={(v) => { if (!loading && !v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!loading && !v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -187,6 +234,21 @@ export function WithdrawModal({
               {formatCurrency(availableBalance)}
             </p>
           </div>
+
+          {/* Error message */}
+          {errorMessage && status === "error" && (
+            <Alert className="border-destructive/50 bg-destructive/10">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <AlertDescription className="text-destructive text-sm">
+                {errorMessage}
+                {isCoolingDown && (
+                  <span className="block mt-1 text-xs text-muted-foreground">
+                    Tente novamente em {cooldownSeconds}s
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Bank account info */}
           {bankData && (
@@ -235,12 +297,17 @@ export function WithdrawModal({
                 "flex-1 text-white",
                 "bg-[#4CAF50] hover:bg-[#43A047]"
               )}
-              disabled={loading || availableBalance <= 0}
+              disabled={loading || availableBalance <= 0 || isCoolingDown}
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Processando...
+                </>
+              ) : isCoolingDown ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Aguarde {cooldownSeconds}s
                 </>
               ) : (
                 <>
