@@ -56,7 +56,34 @@ serve(async (req) => {
     }
 
     const recipientId = instrutor.pagarme_recipient_id;
-    logStep("Recipient found", { recipientId });
+    const instrutorId = instrutor.id;
+    logStep("Recipient found", { recipientId, instrutorId });
+
+    // ========== CAMADA 2: Verificar saque pendente nos últimos 10 minutos ==========
+    const { data: pendingSaques, error: pendingError } = await supabase
+      .from("saques")
+      .select("id, created_at")
+      .eq("instrutor_id", instrutorId)
+      .eq("status", "pendente")
+      .gte("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+    if (pendingError) {
+      logStep("Error checking pending withdrawals", pendingError);
+    }
+
+    if (pendingSaques && pendingSaques.length > 0) {
+      logStep("Pending withdrawal found, rejecting", { pendingSaqueId: pendingSaques[0].id });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Você já tem um saque em processamento. Aguarde alguns minutos antes de tentar novamente.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
 
     // Fetch current balance
     const balanceRes = await fetch(
@@ -83,9 +110,28 @@ serve(async (req) => {
       throw new Error("Saldo insuficiente para saque. Aguarde a liberação do saldo pendente.");
     }
 
-    logStep("Creating transfer", { recipientId, amount: availableAmount });
+    // ========== Inserir registro de saque 'pendente' ANTES de chamar a API ==========
+    const { data: saqueRecord, error: saqueInsertError } = await supabase
+      .from("saques")
+      .insert({
+        instrutor_id: instrutorId,
+        valor: availableAmount,
+        status: "pendente",
+      })
+      .select("id")
+      .single();
+
+    if (saqueInsertError || !saqueRecord) {
+      logStep("Error inserting saque record", saqueInsertError);
+      throw new Error("Erro interno ao registrar solicitação de saque.");
+    }
+
+    const saqueId = saqueRecord.id;
+    logStep("Saque record created", { saqueId, amount: availableAmount });
 
     // Create transfer (Pagar.me V5)
+    logStep("Creating transfer", { recipientId, amount: availableAmount });
+
     const transferRes = await fetch("https://api.pagar.me/core/v5/transfers", {
       method: "POST",
       headers: {
@@ -94,7 +140,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         recipient_id: recipientId,
-        amount: availableAmount, // já está em centavos
+        amount: availableAmount,
       }),
     });
 
@@ -102,23 +148,40 @@ serve(async (req) => {
 
     if (!transferRes.ok) {
       logStep("Transfer error", transferData);
+
+      // Atualizar saque para 'rejeitado'
+      await supabase
+        .from("saques")
+        .update({ status: "rejeitado" })
+        .eq("id", saqueId);
+
       const errorMessage = transferData.message || 
         transferData.errors?.[0]?.message || 
         "Erro ao solicitar saque na Pagar.me";
       throw new Error(errorMessage);
     }
 
+    // Atualizar saque para 'processado' com transfer_id
+    await supabase
+      .from("saques")
+      .update({ 
+        status: "processado", 
+        transfer_id: String(transferData.id),
+      })
+      .eq("id", saqueId);
+
     logStep("Transfer created successfully", { 
       transferId: transferData.id,
       status: transferData.status,
-      amount: transferData.amount 
+      amount: transferData.amount,
+      saqueId,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
         transfer_id: transferData.id,
-        amount: availableAmount / 100, // Retorna em reais
+        amount: availableAmount / 100,
         status: transferData.status,
         message: "Saque solicitado com sucesso",
       }),

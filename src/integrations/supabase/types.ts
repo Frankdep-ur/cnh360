@@ -1147,6 +1147,48 @@ export type Database = {
         }
         Relationships: []
       }
+      saques: {
+        Row: {
+          created_at: string | null
+          id: string
+          instrutor_id: string
+          status: string
+          transfer_id: string | null
+          valor: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          instrutor_id: string
+          status?: string
+          transfer_id?: string | null
+          valor: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          instrutor_id?: string
+          status?: string
+          transfer_id?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saques_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saques_instrutor_id_fkey"
+            columns: ["instrutor_id"]
+            isOneToOne: false
+            referencedRelation: "instrutores_seguros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       simulados_historico: {
         Row: {
           acertos: number

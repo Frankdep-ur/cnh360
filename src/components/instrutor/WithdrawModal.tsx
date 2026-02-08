@@ -112,7 +112,7 @@ export function WithdrawModal({
   // Success state
   if (status === "success") {
     return (
-      <Dialog open={open} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
         <DialogContent className="sm:max-w-md">
           <div className="flex flex-col items-center justify-center py-8">
             <div className="w-20 h-20 rounded-full bg-[#4CAF50] flex items-center justify-center mb-4 animate-in zoom-in duration-300">
@@ -170,7 +170,7 @@ export function WithdrawModal({
 
   // Main withdraw modal
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={(v) => { if (!loading && !v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
