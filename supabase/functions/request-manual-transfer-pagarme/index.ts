@@ -105,10 +105,22 @@ serve(async (req) => {
     logStep("Balance fetched", balanceData);
 
     const availableAmount = balanceData.available_amount ?? balanceData.available?.amount ?? 0;
+    const WITHDRAWAL_FEE_CENTS = 367;
     
     if (availableAmount <= 0) {
       throw new Error("Saldo insuficiente para saque. Aguarde a liberação do saldo pendente.");
     }
+
+    if (availableAmount <= WITHDRAWAL_FEE_CENTS) {
+      const saldoReais = (availableAmount / 100).toFixed(2);
+      logStep("Balance too low for withdrawal fee", { availableAmount, fee: WITHDRAWAL_FEE_CENTS });
+      throw new Error(
+        `Saldo de R$ ${saldoReais} é insuficiente para cobrir a taxa de saque de R$ 3,67. Acumule mais saldo antes de sacar.`
+      );
+    }
+
+    const netAmountCents = availableAmount - WITHDRAWAL_FEE_CENTS;
+    logStep("Net amount after fee", { gross: availableAmount, fee: WITHDRAWAL_FEE_CENTS, net: netAmountCents });
 
     // ========== Inserir registro de saque 'pendente' ANTES de chamar a API ==========
     const { data: saqueRecord, error: saqueInsertError } = await supabase
