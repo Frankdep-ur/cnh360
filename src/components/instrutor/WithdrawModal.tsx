@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+const WITHDRAWAL_FEE = 3.67;
+
 interface BankData {
   holderName: string;
   document: string;
@@ -131,8 +133,9 @@ export function WithdrawModal({
       }
 
       setStatus("success");
+      const net = (data.amount || availableBalance) - WITHDRAWAL_FEE;
       toast.success("Saque solicitado com sucesso!", {
-        description: `${formatCurrency(data.amount || availableBalance)} será creditado em até 1 dia útil.`,
+        description: `${formatCurrency(net > 0 ? net : 0)} será creditado em até 1 dia útil (taxa: ${formatCurrency(WITHDRAWAL_FEE)}).`,
       });
 
       setTimeout(() => {
@@ -156,6 +159,9 @@ export function WithdrawModal({
     }
   };
 
+  const netAmount = availableBalance - WITHDRAWAL_FEE;
+  const insufficientForFee = availableBalance <= WITHDRAWAL_FEE;
+
   // Success state
   if (status === "success") {
     return (
@@ -167,7 +173,10 @@ export function WithdrawModal({
             </div>
             <h2 className="text-xl font-bold text-foreground mb-2">Saque Solicitado!</h2>
             <p className="text-muted-foreground text-center text-sm px-4">
-              O valor de {formatCurrency(availableBalance)} será transferido para sua conta em até 1 dia útil.
+              O valor líquido de <strong>{formatCurrency(netAmount)}</strong> será transferido para sua conta em até 1 dia útil.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              (Taxa de saque: {formatCurrency(WITHDRAWAL_FEE)})
             </p>
           </div>
         </DialogContent>
@@ -227,13 +236,33 @@ export function WithdrawModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Amount to withdraw */}
-          <div className="bg-gradient-to-br from-[#4CAF50]/10 to-[#4CAF50]/5 rounded-xl p-6 text-center border border-[#4CAF50]/20">
-            <p className="text-sm text-muted-foreground mb-1">Valor a sacar</p>
-            <p className="text-4xl font-bold text-[#4CAF50]">
-              {formatCurrency(availableBalance)}
-            </p>
+          {/* Amount breakdown */}
+          <div className="bg-gradient-to-br from-[#4CAF50]/10 to-[#4CAF50]/5 rounded-xl p-5 border border-[#4CAF50]/20 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Saldo disponível</span>
+              <span className="text-lg font-semibold text-foreground">{formatCurrency(availableBalance)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Taxa de saque</span>
+              <span className="text-sm font-medium text-destructive">-{formatCurrency(WITHDRAWAL_FEE)}</span>
+            </div>
+            <div className="border-t border-border pt-3 flex justify-between items-center">
+              <span className="text-sm font-semibold text-foreground">Você receberá</span>
+              <span className={cn("text-2xl font-bold", insufficientForFee ? "text-destructive" : "text-[#4CAF50]")}>
+                {insufficientForFee ? formatCurrency(0) : formatCurrency(netAmount)}
+              </span>
+            </div>
           </div>
+
+          {/* Insufficient balance warning */}
+          {insufficientForFee && (
+            <Alert className="border-destructive/50 bg-destructive/10">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <AlertDescription className="text-destructive text-sm">
+                Saldo insuficiente para cobrir a taxa de saque (R$ 3,67). Acumule mais saldo antes de sacar.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Error message */}
           {errorMessage && status === "error" && (
@@ -297,7 +326,7 @@ export function WithdrawModal({
                 "flex-1 text-white",
                 "bg-[#4CAF50] hover:bg-[#43A047]"
               )}
-              disabled={loading || availableBalance <= 0 || isCoolingDown}
+              disabled={loading || availableBalance <= 0 || isCoolingDown || insufficientForFee}
             >
               {loading ? (
                 <>
