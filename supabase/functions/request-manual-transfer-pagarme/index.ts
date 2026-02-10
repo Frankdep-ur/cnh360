@@ -85,6 +85,48 @@ serve(async (req) => {
       );
     }
 
+    // ========== CAMADA 3: Verificar saque processado nas últimas 2 horas ==========
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const { data: recentProcessed, error: processedError } = await supabase
+      .from("saques")
+      .select("id, created_at, valor")
+      .eq("instrutor_id", instrutorId)
+      .eq("status", "processado")
+      .gte("created_at", twoHoursAgo)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (processedError) {
+      logStep("Error checking processed withdrawals", processedError);
+    }
+
+    if (recentProcessed && recentProcessed.length > 0) {
+      const lastSaque = recentProcessed[0];
+      const saqueTime = new Date(lastSaque.created_at);
+      const unlockTime = new Date(saqueTime.getTime() + 2 * 60 * 60 * 1000);
+      const minutesRemaining = Math.ceil((unlockTime.getTime() - Date.now()) / 60000);
+      
+      logStep("Recent processed withdrawal found, rejecting", { 
+        saqueId: lastSaque.id, 
+        createdAt: lastSaque.created_at,
+        minutesRemaining 
+      });
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Você já realizou um saque recentemente. Aguarde ${minutesRemaining} minuto(s) para solicitar outro.`,
+          recentWithdrawal: true,
+          lastWithdrawalAt: lastSaque.created_at,
+          unlockAt: unlockTime.toISOString(),
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
     // Fetch current balance
     const balanceRes = await fetch(
       `https://api.pagar.me/core/v5/recipients/${recipientId}/balance`,

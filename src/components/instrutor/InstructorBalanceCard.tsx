@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, CheckCircle2, Banknote, Smartphone } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, CheckCircle2, Banknote, Smartphone, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -36,6 +36,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [recentWithdrawal, setRecentWithdrawal] = useState(false);
   // Local KYC status from database - used to prevent showing KYC banner for refused accounts
   const [localKycStatus, setLocalKycStatus] = useState<string | null>(null);
 
@@ -249,6 +250,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   };
 
   const handleWithdrawSuccess = () => {
+    setRecentWithdrawal(true);
     fetchBalance();
   };
 
@@ -592,20 +594,31 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
           {/* Withdraw Button */}
           <Button
             onClick={handleWithdrawClick}
-            disabled={balance.available <= 0}
+            disabled={balance.available <= 0 || recentWithdrawal}
             className={cn(
               "w-full",
-              recipientStatus === "active" && balance.available > 0
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                : "bg-muted text-muted-foreground"
+              recentWithdrawal
+                ? "bg-emerald-600 text-white cursor-not-allowed opacity-80"
+                : recipientStatus === "active" && balance.available > 0
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-muted text-muted-foreground"
             )}
           >
-            <Banknote className="w-4 h-4 mr-2" />
-            {recipientStatus !== "active" 
-              ? "Sacar (verificação necessária)" 
-              : balance.available > 0 
-                ? "Sacar Saldo" 
-                : "Sem saldo disponível"}
+            {recentWithdrawal ? (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Saque realizado — aguarde crédito
+              </>
+            ) : (
+              <>
+                <Banknote className="w-4 h-4 mr-2" />
+                {recipientStatus !== "active" 
+                  ? "Sacar (verificação necessária)" 
+                  : balance.available > 0 
+                    ? "Sacar Saldo" 
+                    : "Sem saldo disponível"}
+              </>
+            )}
           </Button>
 
           {/* Last Updated */}
