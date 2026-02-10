@@ -48,10 +48,8 @@ export default function InstrutorGanhos() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loadingKyc, setLoadingKyc] = useState(false);
 
-  // Real withdrawal history
-  const [saques, setSaques] = useState<Array<{ id: string; valor: number; status: string; created_at: string; transfer_id: string | null }>>([]);
-  const [loadingSaques, setLoadingSaques] = useState(false);
-  const WITHDRAWAL_FEE = 3.67;
+
+  // Handle KYC verification for affiliation status
 
   // Handle KYC verification for affiliation status
   const handleVerifyIdentity = async () => {
@@ -132,37 +130,7 @@ export default function InstrutorGanhos() {
 
   useEffect(() => {
     fetchBalance();
-    fetchSaques();
   }, []);
-
-  const fetchSaques = async () => {
-    setLoadingSaques(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: instrutor } = await supabase
-        .from("instrutores")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!instrutor) return;
-
-      const { data, error } = await supabase
-        .from("saques")
-        .select("id, valor, status, created_at, transfer_id")
-        .eq("instrutor_id", instrutor.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (!error) setSaques(data || []);
-    } catch (err) {
-      console.error("Error fetching saques:", err);
-    } finally {
-      setLoadingSaques(false);
-    }
-  };
 
   const saldo = {
     disponivel: balance?.available ?? 0,
@@ -469,53 +437,32 @@ export default function InstrutorGanhos() {
           </TabsContent>
           
           <TabsContent value="saques" className="space-y-3">
-            {loadingSaques ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : saques.length === 0 ? (
-              <Card className="p-6 shadow-soft text-center">
-                <p className="text-muted-foreground">Nenhum saque realizado ainda.</p>
-              </Card>
-            ) : (
-              saques.map((saque) => {
-                const bruto = saque.valor / 100;
-                const liquido = bruto - WITHDRAWAL_FEE;
-                const date = new Date(saque.created_at!);
-                const statusConfig = saque.status === "processado"
-                  ? { label: "Processado", className: "bg-primary/10 text-primary border-0", icon: <CheckCircle2 className="w-3 h-3 mr-1" /> }
-                  : saque.status === "pendente"
-                  ? { label: "Pendente", className: "bg-amber-500/10 text-amber-600 border-0", icon: <Clock className="w-3 h-3 mr-1" /> }
-                  : { label: "Falhou", className: "bg-destructive/10 text-destructive border-0", icon: <AlertCircle className="w-3 h-3 mr-1" /> };
-
-                return (
-                  <Card key={saque.id} className="p-4 shadow-soft">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-secondary/10">
-                        <ArrowUpRight className="w-5 h-5 text-secondary" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-semibold text-foreground text-sm">Transferência Pix</p>
-                          <p className="font-bold text-foreground">
-                            R$ {liquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">
-                            {date.toLocaleDateString("pt-BR")} • Bruto: R$ {bruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} • Taxa: R$ {WITHDRAWAL_FEE.toFixed(2)}
-                          </span>
-                          <Badge variant="outline" className={statusConfig.className}>
-                            {statusConfig.icon}
-                            {statusConfig.label}
-                          </Badge>
-                        </div>
-                      </div>
+            {transacoes.filter(tx => tx.tipo === "saque").map((tx) => (
+              <Card key={tx.id} className="p-4 shadow-soft">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-secondary/10">
+                    <ArrowUpRight className="w-5 h-5 text-secondary" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-foreground text-sm">{tx.descricao}</p>
+                      <p className="font-bold text-foreground">- R$ {tx.valor}</p>
                     </div>
-                  </Card>
-                );
-              })
-            )}
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs text-muted-foreground">{tx.data}</span>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${tx.status === "concluido" ? "bg-primary/10 text-primary border-0" : "bg-amber-500/10 text-amber-600 border-0"}`}
+                      >
+                        {tx.status === "concluido" ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}
+                        {tx.status === "concluido" ? "Concluído" : "Pendente"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </div>
+              </Card>
+            ))}
           </TabsContent>
         </Tabs>
 

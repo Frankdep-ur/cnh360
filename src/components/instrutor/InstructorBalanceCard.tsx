@@ -39,9 +39,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [recentWithdrawal, setRecentWithdrawal] = useState(false);
   // Local KYC status from database - used to prevent showing KYC banner for refused accounts
   const [localKycStatus, setLocalKycStatus] = useState<string | null>(null);
-  // Withdrawal history
-  const [withdrawals, setWithdrawals] = useState<Array<{ id: string; valor: number; status: string; created_at: string; transfer_id: string | null }>>([]);
-  const [loadingWithdrawals, setLoadingWithdrawals] = useState(false);
 
   const WITHDRAWAL_FEE = 3.67;
 
@@ -99,40 +96,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
     }
   };
 
-  const fetchWithdrawals = async () => {
-    setLoadingWithdrawals(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: instrutor } = await supabase
-        .from("instrutores")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!instrutor) return;
-
-      const { data, error: fetchError } = await supabase
-        .from("saques")
-        .select("id, valor, status, created_at, transfer_id")
-        .eq("instrutor_id", instrutor.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (fetchError) {
-        console.error("[InstructorBalanceCard] Error fetching withdrawals:", fetchError);
-        return;
-      }
-
-      setWithdrawals(data || []);
-    } catch (err) {
-      console.error("[InstructorBalanceCard] Error:", err);
-    } finally {
-      setLoadingWithdrawals(false);
-    }
-  };
-
   // Fetch local KYC status from database immediately to prevent showing wrong banners
   useEffect(() => {
     const fetchLocalKycStatus = async () => {
@@ -163,7 +126,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   useEffect(() => {
     if (hasRecipient) {
       fetchBalance();
-      fetchWithdrawals();
     }
   }, [hasRecipient]);
 
@@ -292,7 +254,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const handleWithdrawSuccess = () => {
     setRecentWithdrawal(true);
     fetchBalance();
-    fetchWithdrawals();
   };
 
   // If no recipient configured, show setup prompt
@@ -661,58 +622,6 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
               </>
             )}
           </Button>
-
-          {/* Withdrawal History */}
-          {withdrawals.length > 0 && (
-            <div className="border-t border-border pt-3">
-              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-secondary" />
-                Histórico de Saques
-              </h4>
-              <div className="space-y-2">
-                {withdrawals.map((w) => {
-                  const bruto = w.valor / 100;
-                  const liquido = bruto - WITHDRAWAL_FEE;
-                  const date = new Date(w.created_at!);
-                  const statusConfig = w.status === "processado"
-                    ? { label: "Processado", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0" }
-                    : w.status === "pendente"
-                    ? { label: "Pendente", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0" }
-                    : { label: "Falhou", className: "bg-destructive/10 text-destructive border-0" };
-
-                  return (
-                    <div key={w.id} className="p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-muted-foreground">
-                          {date.toLocaleDateString("pt-BR")} às {date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                        <Badge variant="outline" className={statusConfig.className}>
-                          {statusConfig.label}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="space-y-0.5">
-                          <p className="text-muted-foreground">Bruto: <span className="text-foreground font-medium">{formatCurrency(bruto)}</span></p>
-                          <p className="text-muted-foreground">Taxa: <span className="text-destructive font-medium">- {formatCurrency(WITHDRAWAL_FEE)}</span></p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Líquido</p>
-                          <p className="font-bold text-secondary">{formatCurrency(liquido)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {loadingWithdrawals && withdrawals.length === 0 && (
-            <div className="space-y-2">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          )}
 
           {/* Last Updated */}
           {lastUpdated && (
