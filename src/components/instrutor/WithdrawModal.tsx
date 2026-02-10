@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, Banknote, Building2, AlertTriangle, Check, ArrowRight, RefreshCw } from "lucide-react";
+import { Loader2, Banknote, Building2, AlertTriangle, Check, ArrowRight, RefreshCw, CheckCircle2, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +12,12 @@ const WITHDRAWAL_FEE = 3.67;
 interface BankData {
   holderName: string;
   document: string;
+}
+
+interface RecentWithdrawalInfo {
+  valor: number;
+  created_at: string;
+  unlockAt: Date;
 }
 
 interface WithdrawModalProps {
@@ -37,6 +43,8 @@ export function WithdrawModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [recentWithdrawal, setRecentWithdrawal] = useState<RecentWithdrawalInfo | null>(null);
+  const [checkingRecent, setCheckingRecent] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -45,14 +53,16 @@ export function WithdrawModal({
     }).format(value);
   };
 
-  // Reset status when modal opens
+  // Reset status and check recent withdrawals when modal opens
   useEffect(() => {
     if (open) {
       setStatus("idle");
       setLoading(false);
       setErrorMessage(null);
+      setRecentWithdrawal(null);
       if (hasRecipient) {
         loadBankData();
+        checkRecentWithdrawals();
       }
     }
   }, [open, hasRecipient]);
@@ -78,6 +88,50 @@ export function WithdrawModal({
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [cooldownUntil]);
+
+  const checkRecentWithdrawals = async () => {
+    setCheckingRecent(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: instrutor } = await supabase
+        .from("instrutores")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!instrutor) return;
+
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: recentSaques } = await supabase
+        .from("saques")
+        .select("id, valor, created_at, status")
+        .eq("instrutor_id", instrutor.id)
+        .eq("status", "processado")
+        .gte("created_at", twoHoursAgo)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (recentSaques && recentSaques.length > 0) {
+        const saque = recentSaques[0];
+        const saqueTime = new Date(saque.created_at);
+        const unlockAt = new Date(saqueTime.getTime() + 2 * 60 * 60 * 1000);
+        
+        if (unlockAt > new Date()) {
+          setRecentWithdrawal({
+            valor: saque.valor / 100,
+            created_at: saque.created_at,
+            unlockAt,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[WithdrawModal] Error checking recent withdrawals:", err);
+    } finally {
+      setCheckingRecent(false);
+    }
+  };
 
   const loadBankData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -111,7 +165,6 @@ export function WithdrawModal({
         "request-manual-transfer-pagarme"
       );
 
-      // Handle SDK-level errors (network, timeout, etc.)
       if (error) {
         const msg = error.message || "";
         if (msg.includes("non-2xx") || msg.includes("edge function")) {
@@ -123,7 +176,17 @@ export function WithdrawModal({
         throw new Error(msg || "Erro ao solicitar saque");
       }
 
-      // Handle application-level errors (returned as 200 with error in body)
+      if (data?.recentWithdrawal) {
+        setRecentWithdrawal({
+          valor: 0,
+          created_at: data.lastWithdrawalAt,
+          unlockAt: new Date(data.unlockAt),
+        });
+        setStatus("idle");
+        setLoading(false);
+        return;
+      }
+
       if (data?.error) {
         throw new Error(data.error);
       }
@@ -153,7 +216,6 @@ export function WithdrawModal({
         description: friendlyMsg,
       });
 
-      // Start 60-second cooldown after error to prevent spam
       setCooldownUntil(Date.now() + 60_000);
       setLoading(false);
     }
@@ -161,6 +223,7 @@ export function WithdrawModal({
 
   const netAmount = availableBalance - WITHDRAWAL_FEE;
   const insufficientForFee = availableBalance <= WITHDRAWAL_FEE;
+  const blockedByRecent = recentWithdrawal !== null;
 
   // Success state
   if (status === "success") {
@@ -224,6 +287,20 @@ export function WithdrawModal({
     );
   }
 
+  // Format remaining time for recent withdrawal block
+  const getTimeRemaining = () => {
+    if (!recentWithdrawal) return "";
+    const remaining = recentWithdrawal.unlockAt.getTime() - Date.now();
+    if (remaining <= 0) return "";
+    const mins = Math.ceil(remaining / 60000);
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const restMins = mins % 60;
+      return `${hrs}h${restMins > 0 ? ` ${restMins}min` : ""}`;
+    }
+    return `${mins} min`;
+  };
+
   // Main withdraw modal
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!loading && !v) onClose(); }}>
@@ -236,26 +313,49 @@ export function WithdrawModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Amount breakdown */}
-          <div className="bg-gradient-to-br from-[#4CAF50]/10 to-[#4CAF50]/5 rounded-xl p-5 border border-[#4CAF50]/20 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Saldo disponível</span>
-              <span className="text-lg font-semibold text-foreground">{formatCurrency(availableBalance)}</span>
+          {/* Recent withdrawal block */}
+          {blockedByRecent && (
+            <div className="p-4 rounded-xl bg-[#4CAF50]/10 border border-[#4CAF50]/30 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-[#4CAF50]" />
+                <span className="font-semibold text-[#4CAF50]">Saque já realizado!</span>
+              </div>
+              <p className="text-sm text-foreground">
+                Seu último saque de <strong>{formatCurrency(recentWithdrawal.valor)}</strong> foi processado em{" "}
+                {new Date(recentWithdrawal.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>Próximo saque disponível em {getTimeRemaining()}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                O valor será creditado em sua conta em até 1 dia útil.
+              </p>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Taxa de saque</span>
-              <span className="text-sm font-medium text-destructive">-{formatCurrency(WITHDRAWAL_FEE)}</span>
+          )}
+
+          {/* Amount breakdown - show even when blocked for transparency */}
+          {!blockedByRecent && (
+            <div className="bg-gradient-to-br from-[#4CAF50]/10 to-[#4CAF50]/5 rounded-xl p-5 border border-[#4CAF50]/20 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Saldo disponível</span>
+                <span className="text-lg font-semibold text-foreground">{formatCurrency(availableBalance)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Taxa de saque</span>
+                <span className="text-sm font-medium text-destructive">-{formatCurrency(WITHDRAWAL_FEE)}</span>
+              </div>
+              <div className="border-t border-border pt-3 flex justify-between items-center">
+                <span className="text-sm font-semibold text-foreground">Você receberá</span>
+                <span className={cn("text-2xl font-bold", insufficientForFee ? "text-destructive" : "text-[#4CAF50]")}>
+                  {insufficientForFee ? formatCurrency(0) : formatCurrency(netAmount)}
+                </span>
+              </div>
             </div>
-            <div className="border-t border-border pt-3 flex justify-between items-center">
-              <span className="text-sm font-semibold text-foreground">Você receberá</span>
-              <span className={cn("text-2xl font-bold", insufficientForFee ? "text-destructive" : "text-[#4CAF50]")}>
-                {insufficientForFee ? formatCurrency(0) : formatCurrency(netAmount)}
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Insufficient balance warning */}
-          {insufficientForFee && (
+          {!blockedByRecent && insufficientForFee && (
             <Alert className="border-destructive/50 bg-destructive/10">
               <AlertTriangle className="w-4 h-4 text-destructive" />
               <AlertDescription className="text-destructive text-sm">
@@ -280,7 +380,7 @@ export function WithdrawModal({
           )}
 
           {/* Bank account info */}
-          {bankData && (
+          {!blockedByRecent && bankData && (
             <div className="bg-muted/50 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -303,12 +403,14 @@ export function WithdrawModal({
           )}
 
           {/* Info banner */}
-          <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
-            <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
-              <span>⏱️</span>
-              O valor será creditado em sua conta em até 1 dia útil após a solicitação.
-            </p>
-          </div>
+          {!blockedByRecent && (
+            <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+              <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                <span>⏱️</span>
+                O valor será creditado em sua conta em até 1 dia útil após a solicitação.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
@@ -318,33 +420,35 @@ export function WithdrawModal({
               className="flex-1"
               disabled={loading}
             >
-              Cancelar
+              {blockedByRecent ? "Fechar" : "Cancelar"}
             </Button>
-            <Button 
-              onClick={handleWithdraw} 
-              className={cn(
-                "flex-1 text-white",
-                "bg-[#4CAF50] hover:bg-[#43A047]"
-              )}
-              disabled={loading || availableBalance <= 0 || isCoolingDown || insufficientForFee}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processando...
-                </>
-              ) : isCoolingDown ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Aguarde {cooldownSeconds}s
-                </>
-              ) : (
-                <>
-                  Confirmar Saque
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </>
-              )}
-            </Button>
+            {!blockedByRecent && (
+              <Button 
+                onClick={handleWithdraw} 
+                className={cn(
+                  "flex-1 text-white",
+                  "bg-[#4CAF50] hover:bg-[#43A047]"
+                )}
+                disabled={loading || availableBalance <= 0 || isCoolingDown || insufficientForFee || checkingRecent}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : isCoolingDown ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Aguarde {cooldownSeconds}s
+                  </>
+                ) : (
+                  <>
+                    Confirmar Saque
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
