@@ -1,61 +1,62 @@
 
 
-# Informar Taxa de Saque Pagar.me (R$ 3,67) no Fluxo de Saque
+# Protecao Robusta Contra Saques Duplicados
 
-## Contexto
+## Problema
 
-O suporte da Pagar.me confirmou que toda transferencia (saque) tem uma **taxa fixa de R$ 3,67**. Atualmente o sistema envia o saldo disponivel como valor bruto do saque (ex: R$ 4,51), mas a Pagar.me desconta R$ 3,67, entregando apenas R$ 0,84 ao instrutor. O app nao informa essa taxa em nenhum momento.
+A Pagar.me nao zera o saldo instantaneamente apos um saque. Com a janela atual de 10 minutos (apenas status "pendente"), o instrutor consegue fazer multiplos saques do mesmo saldo se tentar apos esse intervalo. Isso resultou em 5 saques de R$ 4,51 para a mesma instrutora (Cleia).
 
 ## O que sera feito
 
-### 1. Mostrar a taxa de R$ 3,67 no modal de saque (WithdrawModal)
+### 1. Edge Function: Bloquear saques por 2 horas apos processamento
 
-Antes de confirmar, o instrutor vera:
+Na `request-manual-transfer-pagarme`, alem da verificacao de saques "pendente" (10 min), adicionar uma segunda verificacao: se existir qualquer saque com status "processado" nas ultimas **2 horas**, bloquear a nova tentativa com mensagem clara.
 
-```text
-Saldo disponivel:     R$ 4,51
-Taxa de saque:       -R$ 3,67
-------------------------------
-Voce recebera:        R$ 0,84
-```
+### 2. Frontend: Esconder botao de saque apos saque processado
 
-Se o saldo for menor ou igual a R$ 3,67, o botao "Confirmar Saque" ficara desabilitado com a mensagem: "Saldo insuficiente para cobrir a taxa de saque (R$ 3,67)."
+No `WithdrawModal`, antes de exibir o modal, consultar a tabela `saques` para verificar se ha um saque "processado" recente (2h). Se houver, mostrar uma mensagem informando que o saque ja foi realizado e o proximo estara disponivel apos o prazo.
 
-### 2. Validar valor minimo na Edge Function
-
-Na `request-manual-transfer-pagarme`, adicionar validacao: se `availableAmount <= 367` (centavos), rejeitar o saque antes de chamar a API, com mensagem clara sobre a taxa.
-
-### 3. Informar valor liquido na tela de sucesso
-
-Apos o saque ser aprovado, a mensagem de sucesso mostrara o valor liquido que o instrutor recebera (bruto - R$ 3,67), nao o valor bruto.
+No `InstructorBalanceCard`, apos um saque bem-sucedido, o saldo exibido como "disponivel" deve refletir que o valor ja foi sacado -- o `fetchBalance` ja e chamado via `onSuccess`, mas a API da Pagar.me pode ainda mostrar saldo. Entao adicionar um estado local `recentWithdrawal` que, quando ativo, substitui o botao "Sacar Saldo" por "Saque realizado - aguarde credito" desabilitado.
 
 ---
 
 ## Secao Tecnica
 
-### Constante da taxa
-
-Definir `WITHDRAWAL_FEE = 367` (centavos) / `WITHDRAWAL_FEE_DISPLAY = 3.67` (reais) em ambos os arquivos.
-
 ### Arquivos impactados
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/instrutor/WithdrawModal.tsx` | Adicionar breakdown de taxa, validar saldo minimo, mostrar valor liquido no sucesso |
-| `supabase/functions/request-manual-transfer-pagarme/index.ts` | Validar `availableAmount > 367` antes de criar transferencia |
-
-### WithdrawModal.tsx - Alteracoes
-
-1. Adicionar constante `WITHDRAWAL_FEE = 3.67`
-2. Calcular `netAmount = availableBalance - WITHDRAWAL_FEE`
-3. No bloco de "Valor a sacar", adicionar linhas mostrando taxa e valor liquido
-4. Desabilitar botao se `availableBalance <= WITHDRAWAL_FEE`
-5. Na tela de sucesso, mostrar o valor liquido
-6. Na mensagem do toast de sucesso, mostrar o valor liquido
+| `supabase/functions/request-manual-transfer-pagarme/index.ts` | Adicionar verificacao de saques "processado" nas ultimas 2h |
+| `src/components/instrutor/WithdrawModal.tsx` | Verificar saques recentes ao abrir modal, mostrar aviso se ja sacou |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Estado local `recentWithdrawal` para bloquear botao apos saque |
 
 ### Edge Function - Alteracoes
 
-1. Adicionar constante `WITHDRAWAL_FEE_CENTS = 367`
-2. Apos consultar saldo, verificar: `if (availableAmount <= WITHDRAWAL_FEE_CENTS)` rejeitar com mensagem amigavel
-3. Logar o valor liquido esperado para auditoria
+Apos o bloco existente que verifica `pendente` (linhas 62-86), adicionar:
+
+```text
+// CAMADA 3: Verificar saque processado nas ultimas 2 horas
+SELECT * FROM saques
+WHERE instrutor_id = X
+  AND status = 'processado'
+  AND created_at >= (now - 2 hours)
+LIMIT 1
+
+Se encontrar -> rejeitar com mensagem:
+"Voce ja realizou um saque recentemente. Aguarde 2 horas para solicitar outro."
+```
+
+### WithdrawModal - Alteracoes
+
+1. Ao abrir o modal (`useEffect` com `open`), consultar `saques` do instrutor com status `processado` nas ultimas 2h
+2. Se encontrar, setar `recentlyWithdrawn = true`
+3. Exibir alerta verde: "Saque de R$ X,XX realizado com sucesso as HH:MM. O valor sera creditado em ate 1 dia util."
+4. Desabilitar botao "Confirmar Saque"
+
+### InstructorBalanceCard - Alteracoes
+
+1. Adicionar estado `recentWithdrawal: boolean`
+2. No `handleWithdrawSuccess`, setar `recentWithdrawal = true`
+3. Quando `recentWithdrawal === true`, o botao de saque muda para "Saque realizado" (desabilitado, cor verde)
+4. Ao recarregar a pagina, o estado reseta mas o WithdrawModal fara a verificacao no banco novamente
 
