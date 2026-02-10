@@ -1,22 +1,22 @@
 
 
-# Protecao Robusta Contra Saques Duplicados
-
-## Problema
-
-A Pagar.me nao zera o saldo instantaneamente apos um saque. Com a janela atual de 10 minutos (apenas status "pendente"), o instrutor consegue fazer multiplos saques do mesmo saldo se tentar apos esse intervalo. Isso resultou em 5 saques de R$ 4,51 para a mesma instrutora (Cleia).
+# Historico de Saques no Dashboard do Instrutor
 
 ## O que sera feito
 
-### 1. Edge Function: Bloquear saques por 2 horas apos processamento
+Adicionar uma secao "Historico de Saques" no `InstructorBalanceCard` (visivel no perfil/ganhos do instrutor) que consulta a tabela `saques` em tempo real e exibe cada saque com:
 
-Na `request-manual-transfer-pagarme`, alem da verificacao de saques "pendente" (10 min), adicionar uma segunda verificacao: se existir qualquer saque com status "processado" nas ultimas **2 horas**, bloquear a nova tentativa com mensagem clara.
+- **Data/hora** do saque
+- **Valor bruto** (valor original em centavos convertido para reais)
+- **Taxa de saque** (R$ 3,67 fixa)
+- **Valor liquido** (bruto - taxa)
+- **Status** (pendente, processado, falhou) com badge colorido
 
-### 2. Frontend: Esconder botao de saque apos saque processado
+## Onde sera exibido
 
-No `WithdrawModal`, antes de exibir o modal, consultar a tabela `saques` para verificar se ha um saque "processado" recente (2h). Se houver, mostrar uma mensagem informando que o saque ja foi realizado e o proximo estara disponivel apos o prazo.
+A secao sera adicionada dentro do `InstructorBalanceCard.tsx`, logo abaixo do botao de saque e acima do "Atualizado as HH:MM". Assim, o instrutor ve o historico no mesmo card do saldo, sem precisar navegar para outra pagina.
 
-No `InstructorBalanceCard`, apos um saque bem-sucedido, o saldo exibido como "disponivel" deve refletir que o valor ja foi sacado -- o `fetchBalance` ja e chamado via `onSuccess`, mas a API da Pagar.me pode ainda mostrar saldo. Entao adicionar um estado local `recentWithdrawal` que, quando ativo, substitui o botao "Sacar Saldo" por "Saque realizado - aguarde credito" desabilitado.
+Tambem sera atualizada a aba "Saques" na pagina `InstrutorGanhos.tsx` para mostrar dados reais em vez dos dados estaticos atuais.
 
 ---
 
@@ -26,37 +26,33 @@ No `InstructorBalanceCard`, apos um saque bem-sucedido, o saldo exibido como "di
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/request-manual-transfer-pagarme/index.ts` | Adicionar verificacao de saques "processado" nas ultimas 2h |
-| `src/components/instrutor/WithdrawModal.tsx` | Verificar saques recentes ao abrir modal, mostrar aviso se ja sacou |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Estado local `recentWithdrawal` para bloquear botao apos saque |
-
-### Edge Function - Alteracoes
-
-Apos o bloco existente que verifica `pendente` (linhas 62-86), adicionar:
-
-```text
-// CAMADA 3: Verificar saque processado nas ultimas 2 horas
-SELECT * FROM saques
-WHERE instrutor_id = X
-  AND status = 'processado'
-  AND created_at >= (now - 2 hours)
-LIMIT 1
-
-Se encontrar -> rejeitar com mensagem:
-"Voce ja realizou um saque recentemente. Aguarde 2 horas para solicitar outro."
-```
-
-### WithdrawModal - Alteracoes
-
-1. Ao abrir o modal (`useEffect` com `open`), consultar `saques` do instrutor com status `processado` nas ultimas 2h
-2. Se encontrar, setar `recentlyWithdrawn = true`
-3. Exibir alerta verde: "Saque de R$ X,XX realizado com sucesso as HH:MM. O valor sera creditado em ate 1 dia util."
-4. Desabilitar botao "Confirmar Saque"
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Adicionar secao de historico de saques com query real |
+| `src/pages/instrutor/InstrutorGanhos.tsx` | Substituir aba "Saques" estatica por dados reais da tabela `saques` |
 
 ### InstructorBalanceCard - Alteracoes
 
-1. Adicionar estado `recentWithdrawal: boolean`
-2. No `handleWithdrawSuccess`, setar `recentWithdrawal = true`
-3. Quando `recentWithdrawal === true`, o botao de saque muda para "Saque realizado" (desabilitado, cor verde)
-4. Ao recarregar a pagina, o estado reseta mas o WithdrawModal fara a verificacao no banco novamente
+1. Adicionar estado `withdrawals` e `loadingWithdrawals`
+2. Criar funcao `fetchWithdrawals` que consulta:
+```text
+SELECT id, valor, status, created_at, transfer_id
+FROM saques
+WHERE instrutor_id = (instrutor do usuario logado)
+ORDER BY created_at DESC
+LIMIT 10
+```
+3. Chamar `fetchWithdrawals` no `useEffect` junto com `fetchBalance`
+4. Renderizar lista compacta abaixo do botao de saque:
+   - Cada item mostra: data, valor bruto (valor/100), taxa (R$ 3,67), liquido (bruto - 3.67), status badge
+   - Status "processado" = badge verde, "pendente" = badge amarelo, "falhou" = badge vermelho
+5. Usar a constante `WITHDRAWAL_FEE = 3.67` para calcular o liquido
+
+### InstrutorGanhos - Alteracoes
+
+1. Na aba "Saques", substituir o array estatico `transacoes.filter(tx => tx.tipo === "saque")` por uma query real a tabela `saques`
+2. Exibir breakdown: valor bruto, taxa R$ 3,67, valor liquido, status e data
+3. Manter o mesmo estilo visual (Card com icone ArrowUpRight)
+
+### Nenhuma alteracao de banco de dados necessaria
+
+A tabela `saques` ja possui todas as colunas necessarias (id, instrutor_id, valor, transfer_id, status, created_at).
 
