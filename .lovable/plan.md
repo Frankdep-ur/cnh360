@@ -1,121 +1,62 @@
 
-# Refatoracao Completa do Fluxo WhatsApp Z-API
 
-## Problemas Identificados na Auditoria
+# Teste do WhatsApp Z-API para Cleia Santos
 
-1. **Pagamento por cartao nunca dispara WhatsApp diretamente** -- a Edge Function `create-card-payment-pagarme` marca a aula como "confirmada" mas NAO seta `payment_confirmed: true` e NAO chama `send-whatsapp-notification`. O WhatsApp so e enviado se o frontend fizer polling via `check-payment-status-pagarme`, que e um fluxo fragil.
+## Situacao atual
 
-2. **Race condition no polling** -- duas chamadas simultaneas de `check-payment-status-pagarme` podem ambas ler `payment_confirmed = false`, ambas atualizar e ambas disparar WhatsApp duplicado.
+A Edge Function `send-whatsapp-notification` esta protegida corretamente -- ela so aceita chamadas internas via service role key. Isso impede teste direto via curl externo (retornou 401 como esperado).
 
-3. **Validacao de telefone fraca** -- numeros com menos de 10 digitos sao enviados sem erro, resultando em falha silenciosa na Z-API.
+## Solucao: Criar Edge Function de teste temporaria
 
-4. **Logs insuficientes no caller** -- quando o WhatsApp falha no `check-payment-status-pagarme`, o log nao inclui instrutor_id nem telefone.
+Criar uma funcao `test-whatsapp` que:
+- Aceita uma chamada autenticada (usuario logado)
+- Internamente usa o Supabase client com service role key para invocar `send-whatsapp-notification`
+- Envia uma mensagem de teste para Cleia Santos
+- Sera removida apos o teste
 
----
+### Payload de teste
 
-## O que sera feito
-
-### 1. Corrigir `create-card-payment-pagarme` (cartao de credito)
-
-Quando o pagamento por cartao for autorizado/pago com sucesso:
-- Setar `payment_confirmed: true` no update da aula (atualmente so seta `status: "confirmada"`)
-- Chamar `send-whatsapp-notification` diretamente, igual ao fluxo PIX
-
-Isso garante que o instrutor recebe WhatsApp IMEDIATAMENTE quando o cartao e autorizado, sem depender do polling do frontend.
-
-### 2. Corrigir race condition no `check-payment-status-pagarme`
-
-Substituir a logica atual de "SELECT + UPDATE separados" por um UPDATE condicional atomico:
-
-```text
-Antes (vulneravel):
-  1. SELECT payment_confirmed WHERE id = aulaId
-  2. IF false => UPDATE payment_confirmed = true
-  3. Send WhatsApp
-  (duas chamadas podem executar passo 1 ao mesmo tempo)
-
-Depois (atomico):
-  1. UPDATE payment_confirmed = true WHERE id = aulaId AND payment_confirmed = false
-  2. Se rowCount > 0 => Send WhatsApp (garante que so 1 execucao envia)
-```
-
-### 3. Adicionar validacao de telefone na `send-whatsapp-notification`
-
-Antes de enviar, validar que o numero limpo tem pelo menos 10 digitos (DDD + numero). Caso contrario, retornar erro especifico nos logs sem chamar a Z-API.
-
-### 4. Melhorar logs detalhados
-
-No `check-payment-status-pagarme`, adicionar ao log de WhatsApp:
-- `instrutor_id`
-- telefone destino (mascarado: `18****8372`)
-- `aulaId`
-
-Na `send-whatsapp-notification`, logar o `aulaId` no resultado final.
-
----
+| Campo | Valor |
+|-------|-------|
+| Aluno | Teste Auditoria CNH360 |
+| Instrutor | Cleia Santos |
+| Telefone | (18) 99613-8262 |
+| Data/Hora | 12/02/2026 10:00 |
+| Duracao | 50 min |
+| Local | Rua Teste, 123 - Centro |
+| Valor | R$ 10,00 |
+| Categoria | Categoria B |
 
 ## Secao Tecnica
 
-### Arquivos impactados
+### Arquivo a criar
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/create-card-payment-pagarme/index.ts` | Adicionar `payment_confirmed: true` no update + chamar WhatsApp |
-| `supabase/functions/check-payment-status-pagarme/index.ts` | Update atomico com `.eq("payment_confirmed", false)` para eliminar race condition + logs melhorados |
-| `supabase/functions/send-whatsapp-notification/index.ts` | Validacao minima de telefone (10 digitos) + log do aulaId |
+`supabase/functions/test-whatsapp/index.ts`
 
-### create-card-payment-pagarme -- Alteracoes
+- Funcao temporaria para teste
+- Usa `createClient(url, serviceRoleKey)` para chamar `send-whatsapp-notification` internamente
+- Dados da Cleia Santos hardcoded (instrutor_id: `1c8b7ace-c167-481f-ae06-986f00cb8d6f`, phone: `(18) 99613-8262`)
+- Retorna o resultado da Z-API (sucesso ou erro)
 
-Na linha onde atualiza a aula (linha ~358), adicionar `payment_confirmed: true` quando o status for autorizado/pago:
+### Config
 
+Adicionar em `supabase/config.toml`:
 ```text
-// Antes:
-.update({ transaction_id, status: "confirmada" })
-
-// Depois:
-.update({ transaction_id, status: "confirmada", payment_confirmed: true })
+[functions.test-whatsapp]
+verify_jwt = false
 ```
 
-Apos o update bem-sucedido, adicionar chamada para `sendWhatsAppNotification(supabase, lessonId)` usando a mesma logica que ja existe no `check-payment-status-pagarme`. A funcao sera copiada inline para manter independencia entre Edge Functions.
+### Apos o teste
 
-### check-payment-status-pagarme -- Alteracoes
+Remover a funcao `test-whatsapp` completamente (arquivo + config) para nao deixar superficie de ataque em producao.
 
-Substituir o SELECT + UPDATE separados (linhas 222-248) por update atomico:
-
-```text
-const { data: updatedRows, error: updateError } = await supabase
-  .from("aulas")
-  .update({ status: "confirmada", payment_confirmed: true })
-  .eq("id", aulaId)
-  .eq("payment_confirmed", false)  // trava atomica
-  .select("id");
-
-if (!updateError && updatedRows && updatedRows.length > 0) {
-  // Primeira execucao: envia WhatsApp
-  await sendWhatsAppNotification(supabase, aulaId);
-} else {
-  logStep("Already confirmed or update failed, skipping WhatsApp");
-}
-```
-
-Melhorar logs do catch do WhatsApp para incluir `instrutor_id` e telefone mascarado.
-
-### send-whatsapp-notification -- Alteracoes
-
-Adicionar validacao antes de chamar a Z-API:
+### Fluxo do teste
 
 ```text
-if (phoneFormatted.length < 12) {  // 55 + DDD(2) + numero(8-9) = minimo 12
-  return { success: false, error: "Telefone invalido (menos de 10 digitos)" };
-}
+1. Criar funcao test-whatsapp
+2. Deploy automatico
+3. Chamar via curl
+4. Verificar se Cleia recebeu no WhatsApp
+5. Checar logs da Z-API
+6. Remover funcao de teste
 ```
-
-Logar `aulaId` nos logs de sucesso e erro para rastreabilidade.
-
-### Nenhuma alteracao de banco de dados necessaria
-
-Todos os campos ja existem (`payment_confirmed`, `transaction_id`, `status`).
-
-### Nenhuma alteracao de frontend necessaria
-
-O polling no frontend continua funcionando como fallback, mas agora o WhatsApp ja tera sido enviado pelo backend antes do polling detectar.
