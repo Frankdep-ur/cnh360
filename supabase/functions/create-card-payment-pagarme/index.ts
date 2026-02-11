@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { checkRateLimit, rateLimitResponse } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,6 +83,12 @@ serve(async (req) => {
       return businessError("Faça login para continuar com o pagamento.", "AUTH_ERROR");
     }
     logStep("User authenticated", { email: user.email, userId: user.id });
+
+    // Rate limit: 5 payment attempts per minute per user
+    const { allowed, remaining } = checkRateLimit(`card:${user.id}`, 5, 60000);
+    if (!allowed) {
+      return rateLimitResponse(corsHeaders);
+    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
