@@ -355,9 +355,13 @@ export default function BuscarInstrutores() {
                   </div>
                   {Array.from(otherCitiesGrouped.entries()).map(([city, cityInstructors]) => (
                     <div key={city} className="mb-5">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">{city}</span>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full">
+                          <MapPin className="w-4 h-4" />
+                          <span className="text-sm font-semibold">
+                            {city} ({cityInstructors.length} instrutor{cityInstructors.length !== 1 ? "es" : ""})
+                          </span>
+                        </div>
                       </div>
                       <div className="space-y-4">
                         {cityInstructors.map((instructor) => (
