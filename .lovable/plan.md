@@ -1,76 +1,42 @@
 
 
-## Corrigir Sistema de Avaliações - Tornar Real e Funcional
+## Remover todas as menções a "Araçatuba" do CNH360
 
-### Problema Identificado
+### Arquivos a modificar (10 arquivos, ~15 alterações)
 
-As avaliacoes estao sendo salvas na tabela `avaliacoes` (2 registros existentes, ambos nota 5), porem a atualizacao de `nota_media` e `total_avaliacoes` na tabela `instrutores` **falha silenciosamente** porque:
+**1. `src/pages/aluno/BuscarInstrutores.tsx`** (tela de busca - prioridade)
+- Remover linha "Araçatuba, SP" com o ícone MapPin (linhas 201-204)
 
-- A RLS do `instrutores` so permite UPDATE quando `auth.uid() = user_id` (apenas o proprio instrutor)
-- Quem envia a avaliacao e o **aluno**, que nao tem permissao para atualizar a tabela do instrutor
-- Resultado: `nota_media = 5.00` mas `total_avaliacoes = 0` (inconsistente)
+**2. `src/pages/Index.tsx`** (landing page)
+- Remover o badge "Disponível em Araçatuba/SP" (linhas 148-153)
 
-### Solucao
+**3. `src/components/instrutor/RideRequestNotification.tsx`**
+- Substituir fallback "Araçatuba, SP" por "Localização não informada" (linha 80)
 
-Criar um **database trigger** que atualiza automaticamente `nota_media` e `total_avaliacoes` do instrutor sempre que uma avaliacao e inserida. Isso elimina a dependencia de RLS e garante consistencia.
+**4. `src/components/instrutor/NovaAulaPopupEnhanced.tsx`**
+- Substituir 3 referências a "Araçatuba, SP" por "Localização não informada" ou remover (linhas 53, 101, 129)
 
-### Detalhes Tecnicos
+**5. `src/pages/aluno/ValidacaoAula.tsx`**
+- Substituir endereço mock "Centro, Araçatuba" por texto genérico (linha 55)
 
-**1. Migracao SQL - Criar funcao e trigger**
+**6. `src/pages/aluno/ExamePratico.tsx`**
+- Substituir "CIRETRAN Araçatuba" por "CIRETRAN Regional" (linha 21)
 
-```sql
-CREATE OR REPLACE FUNCTION public.update_instrutor_rating_stats()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE public.instrutores
-  SET
-    nota_media = (
-      SELECT ROUND(AVG(nota)::numeric, 2)
-      FROM public.avaliacoes
-      WHERE instrutor_id = NEW.instrutor_id
-    ),
-    total_avaliacoes = (
-      SELECT COUNT(*)
-      FROM public.avaliacoes
-      WHERE instrutor_id = NEW.instrutor_id
-    )
-  WHERE id = NEW.instrutor_id;
+**7. `src/pages/autoescola/AutoescolaProvas.tsx`**
+- Substituir 4x "DETRAN Araçatuba" por "DETRAN Regional" (linhas 30-34)
 
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+**8. `src/pages/autoescola/AutoescolaLeads.tsx`**
+- Substituir 3x "Araçatuba" nas cidades dos leads mock por cidades genéricas (linhas 34-38)
 
-CREATE TRIGGER trigger_update_instrutor_rating
-AFTER INSERT ON public.avaliacoes
-FOR EACH ROW
-EXECUTE FUNCTION public.update_instrutor_rating_stats();
-```
+**9. `src/pages/onboarding/AutoescolaOnboarding.tsx`**
+- Remover valor padrão "Araçatuba" do campo cidade, deixar vazio (linha 46)
 
-A funcao usa `SECURITY DEFINER` para executar com permissoes elevadas, contornando a RLS.
+**10. `src/pages/TermosUso.tsx`**
+- Manter referência ao foro jurídico (Comarca de Araçatuba) - este é um texto legal que define jurisdição e **não deve ser removido** por questões jurídicas
 
-**2. Corrigir dados existentes** (na mesma migracao)
+### Resumo
+- 9 arquivos editados com remoções/substituições
+- 1 arquivo mantido (TermosUso.tsx - texto legal)
+- A tela de busca de instrutores ficará sem referência a cidade fixa
+- Landing page ficará sem o badge de cidade piloto
 
-```sql
-UPDATE public.instrutores i
-SET
-  nota_media = sub.avg_nota,
-  total_avaliacoes = sub.count_avaliacoes
-FROM (
-  SELECT instrutor_id, ROUND(AVG(nota)::numeric, 2) as avg_nota, COUNT(*) as count_avaliacoes
-  FROM public.avaliacoes
-  GROUP BY instrutor_id
-) sub
-WHERE i.id = sub.instrutor_id;
-```
-
-Isso corrige o instrutor que ja tem 2 avaliacoes mas mostra `total_avaliacoes = 0`.
-
-**3. Simplificar o hook `useAulaRating.ts`**
-
-Remover o bloco de codigo que faz UPDATE manual na tabela `instrutores` apos inserir a avaliacao (linhas 127-145), pois o trigger agora cuida disso automaticamente.
-
-### Resultado
-
-- Avaliacoes do aluno serao refletidas imediatamente no perfil do instrutor
-- `nota_media` e `total_avaliacoes` sempre consistentes
-- Dados existentes corrigidos (2 avaliacoes, nota media 5.0, total 2)
