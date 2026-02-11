@@ -52,7 +52,7 @@ export default function ValidacaoAula() {
   });
 
   const meetingPoint = {
-    address: "Av. Brasil, 1234 - Centro, Araçatuba",
+    address: "Ponto de encontro definido",
     lat: -21.2090,
     lng: -50.4327,
     radius: 50, // meters

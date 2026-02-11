@@ -197,13 +197,6 @@ export default function BuscarInstrutores() {
       {/* Header */}
       <header className="bg-card border-b border-border px-6 pt-8 pb-4 safe-top sticky top-0 z-40">
         <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Araçatuba, SP</span>
-            </div>
-          </div>
-
           <h1 className="text-2xl font-bold text-foreground mb-2">
             Encontre seu instrutor
           </h1>

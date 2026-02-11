@@ -18,7 +18,7 @@ import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 
 const examLocations = [
-  { id: 1, name: "CIRETRAN Araçatuba", address: "Av. Brasília, 1500 - Centro", available: true },
+  { id: 1, name: "CIRETRAN Regional", address: "Av. Brasília, 1500 - Centro", available: true },
   { id: 2, name: "DETRAN Birigui", address: "Rua São Paulo, 800", available: true },
   { id: 3, name: "CIRETRAN Penápolis", address: "Av. Brasil, 2200", available: false },
 ];

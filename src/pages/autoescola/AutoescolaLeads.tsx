@@ -31,10 +31,10 @@ export default function AutoescolaLeads() {
 
   // Mock leads
   const leads: Lead[] = [
-    { id: "1", nome: "Maria Silva", telefone: "(18) 99999-1234", email: "maria@email.com", modo: "nova_lei", categoria: "B", cidade: "Araçatuba", criadoEm: new Date(), comissao: 119.85, status: "novo" },
-    { id: "2", nome: "João Santos", telefone: "(18) 99888-5678", email: "joao@email.com", modo: "atual", categoria: "AB", cidade: "Araçatuba", criadoEm: new Date(Date.now() - 3600000), comissao: 375.00, status: "novo" },
+    { id: "1", nome: "Maria Silva", telefone: "(18) 99999-1234", email: "maria@email.com", modo: "nova_lei", categoria: "B", cidade: "São Paulo", criadoEm: new Date(), comissao: 119.85, status: "novo" },
+    { id: "2", nome: "João Santos", telefone: "(18) 99888-5678", email: "joao@email.com", modo: "atual", categoria: "AB", cidade: "Campinas", criadoEm: new Date(Date.now() - 3600000), comissao: 375.00, status: "novo" },
     { id: "3", nome: "Ana Oliveira", telefone: "(18) 99777-9012", email: "ana@email.com", modo: "nova_lei", categoria: "B", cidade: "Birigui", criadoEm: new Date(Date.now() - 7200000), comissao: 119.85, status: "contato" },
-    { id: "4", nome: "Carlos Pereira", telefone: "(18) 99666-3456", email: "carlos@email.com", modo: "atual", categoria: "B", cidade: "Araçatuba", criadoEm: new Date(Date.now() - 86400000), comissao: 330.00, status: "negociando" },
+    { id: "4", nome: "Carlos Pereira", telefone: "(18) 99666-3456", email: "carlos@email.com", modo: "atual", categoria: "B", cidade: "Ribeirão Preto", criadoEm: new Date(Date.now() - 86400000), comissao: 330.00, status: "negociando" },
   ];
 
   const filteredLeads = leads.filter(lead => {

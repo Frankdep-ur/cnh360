@@ -43,7 +43,7 @@ export default function AutoescolaOnboarding() {
     responsavel: "",
     email: "",
     whatsapp: "",
-    cidade: "Araçatuba",
+    cidade: "",
     estado: "SP",
   });
   const [credencialUploaded, setCredencialUploaded] = useState(false);

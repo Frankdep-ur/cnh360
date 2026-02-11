@@ -142,15 +142,6 @@ export default function Index() {
             </div>
           </div>
 
-          {/* City Pilot Badge - Inline */}
-          <div className={cn("flex justify-center mt-6 transition-all duration-500", showContent ? "opacity-100" : "opacity-0")} style={{
-          transitionDelay: "600ms"
-        }}>
-            <div className="bg-foreground/90 text-background px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2">
-              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              Disponível em Araçatuba/SP
-            </div>
-          </div>
 
           {/* Footer - Login */}
           <div className={cn("text-center py-8 transition-all duration-500", showContent ? "opacity-100" : "opacity-0")} style={{
