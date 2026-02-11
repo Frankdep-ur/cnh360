@@ -645,6 +645,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           bio: string | null
+          cidade: string | null
           cnh_categoria: Database["public"]["Enums"]["categoria_cnh"] | null
           foto: string | null
           id: string
@@ -659,6 +660,7 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           bio?: string | null
+          cidade?: string | null
           cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
           foto?: string | null
           id: string
@@ -673,6 +675,7 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           bio?: string | null
+          cidade?: string | null
           cnh_categoria?: Database["public"]["Enums"]["categoria_cnh"] | null
           foto?: string | null
           id?: string

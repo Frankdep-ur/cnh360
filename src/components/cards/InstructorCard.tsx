@@ -19,6 +19,7 @@ interface InstructorCardProps {
   tags?: string[];
   showMEIBadge?: boolean;
   showCarroProprio?: boolean;
+  cityLabel?: string;
 }
 
 function InstructorCardComponent({
@@ -35,6 +36,7 @@ function InstructorCardComponent({
   tags = [],
   showMEIBadge = false,
   showCarroProprio = false,
+  cityLabel,
 }: InstructorCardProps) {
   return (
     <Link
@@ -98,7 +100,7 @@ function InstructorCardComponent({
             <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
-                <span>{distance}</span>
+                <span>{cityLabel || distance}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Car className="w-3 h-3" />
