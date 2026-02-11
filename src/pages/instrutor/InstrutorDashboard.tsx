@@ -14,72 +14,37 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Star, 
   TrendingUp, 
-  Clock, 
-  MapPin, 
-  CheckCircle2, 
-  AlertCircle,
   Crown,
   Car,
   Users,
   Wallet,
   Calendar,
-  Navigation,
   Shield,
-  X,
-  Check,
-  Bell,
-  Loader2
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { useAulasPendentes } from "@/hooks/useAulasPendentes";
 import { useInstrutorNotifications } from "@/hooks/useInstrutorNotifications";
-import { cn } from "@/lib/utils";
-
-// Aula de demonstração estática para exibição visual quando não há aulas reais
-const aulaDemostracao = {
-  id: "demo-1",
-  aluno_id: "demo-aluno",
-  aluno_nome: "João Silva",
-  aluno_foto: null as string | null,
-  data_hora: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  duracao_minutos: 50,
-  ponto_encontro: "Av. Brasil, 1234 - Centro",
-  valor: 120.00,
-  usa_carro_aluno: false,
-  status: "pendente" as const,
-  created_at: new Date().toISOString(),
-  transaction_id: null as string | null,
-};
 
 export default function InstrutorDashboard() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const { activeLesson } = useActiveLessonBanner();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [instrutorId, setInstrutorId] = useState<string | null>(null);
-  const [processingId, setProcessingId] = useState<string | null>(null);
   
-  // Persist online status in localStorage
   const [isOnline, setIsOnline] = useState(() => {
     const saved = localStorage.getItem("instrutor_online_status");
-    console.log("[Dashboard] Estado online inicial do localStorage:", saved);
     return saved === "true";
   });
 
-  // Save online status to localStorage when it changes
   const handleOnlineToggle = (online: boolean) => {
-    console.log("[Dashboard] Alterando status online para:", online);
     setIsOnline(online);
     localStorage.setItem("instrutor_online_status", String(online));
   };
 
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; cidade: string | null } | null>(null);
 
-  // Fetch instructor ID for notifications
   useEffect(() => {
     const fetchInstrutorId = async () => {
       if (user) {
@@ -105,41 +70,7 @@ export default function InstrutorDashboard() {
     }
   }, [user]);
 
-  // Real lessons hook
-  const { 
-    aulasPendentes, 
-    loading: loadingAulas, 
-    aceitarAula, 
-    recusarAula 
-  } = useAulasPendentes();
-
-  // Notifications hook for Uber-style popup
   const { novaAula, showPopup, dismissPopup } = useInstrutorNotifications(instrutorId, isOnline);
-
-  // Filter only pending lessons
-  const aulasPendentesReais = aulasPendentes.filter(a => a.status === "pendente");
-  const temAulasReais = aulasPendentesReais.length > 0;
-
-  // Show real lessons if available, otherwise show demo
-  const aulasParaExibir = temAulasReais ? aulasPendentesReais : [aulaDemostracao];
-
-  const handleAceitarAula = async (aulaId: string) => {
-    setProcessingId(aulaId);
-    try {
-      await aceitarAula(aulaId);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleRecusarAula = async (aulaId: string) => {
-    setProcessingId(aulaId);
-    try {
-      await recusarAula(aulaId);
-    } finally {
-      setProcessingId(null);
-    }
-  };
 
   const instrutor = {
     nome: profile?.full_name || "Instrutor",
@@ -162,21 +93,6 @@ export default function InstrutorDashboard() {
     ganhosBrutos: 1440,
     taxaPlataforma: 403,
     ganhoLiquido: 1037,
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return {
-      data: date.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }),
-      hora: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    };
-  };
-
-  const handleDemoAction = () => {
-    toast({
-      title: "Modo demonstração",
-      description: "Esta é uma aula de exemplo para visualização.",
-    });
   };
 
   return (
@@ -222,27 +138,6 @@ export default function InstrutorDashboard() {
 
         {/* Active Lesson Banner */}
         {activeLesson && <ActiveLessonBanner lesson={activeLesson} />}
-
-        {/* Pending Lessons Alert */}
-        <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20">
-              <Bell className="w-5 h-5 text-amber-600" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">
-                {temAulasReais 
-                  ? `${aulasPendentesReais.length} nova(s) solicitação(ões)!` 
-                  : "Exemplo de solicitação"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {temAulasReais 
-                  ? "Aceite ou recuse as solicitações de aula abaixo" 
-                  : "Quando houver solicitações reais, elas aparecerão aqui"}
-              </p>
-            </div>
-          </div>
-        </Card>
 
         {/* Premium Upsell */}
         {!isPremium && (
@@ -336,127 +231,6 @@ export default function InstrutorDashboard() {
           </p>
         </Card>
 
-        {/* Solicitações e Próximas Aulas */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
-              <Clock className="w-5 h-5 text-primary" />
-              Solicitações e Aulas
-              <Badge className="bg-amber-500 text-white">
-                {temAulasReais ? aulasPendentesReais.length : 1}
-              </Badge>
-            </h3>
-            <Link to="/instrutor/agenda">
-              <Button variant="ghost" size="sm" className="text-primary">
-                Ver agenda
-              </Button>
-            </Link>
-          </div>
-          
-          {loadingAulas ? (
-            <Card className="p-8 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {aulasParaExibir.map((aula) => {
-                const isDemoAula = aula.id === "demo-1";
-                const { data, hora } = formatDateTime(aula.data_hora);
-                
-                return (
-                  <Card 
-                    key={aula.id} 
-                    className={cn(
-                      "p-4 shadow-card",
-                      isDemoAula 
-                        ? "border-dashed border-muted-foreground/30 opacity-70" 
-                        : "border-amber-500/50 bg-amber-500/5"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      {aula.aluno_foto ? (
-                        <img 
-                          src={aula.aluno_foto} 
-                          alt={aula.aluno_nome}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                          <Users className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-semibold text-foreground">{aula.aluno_nome}</h4>
-                          <Badge 
-                            variant="secondary"
-                            className={cn(
-                              "border-0",
-                              isDemoAula 
-                                ? "bg-muted text-muted-foreground" 
-                                : "bg-amber-500/10 text-amber-600"
-                            )}
-                          >
-                            {isDemoAula ? (
-                              <>Exemplo</>
-                            ) : (
-                              <><AlertCircle className="w-3 h-3 mr-1" /> Nova</>
-                            )}
-                          </Badge>
-                        </div>
-                        
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {data} às {hora} ({aula.duracao_minutos}min)
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                          <span className="font-semibold text-primary">R$ {aula.valor.toFixed(2)}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
-                          <MapPin className="w-3.5 h-3.5" />
-                          <span className="truncate">{aula.ponto_encontro}</span>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="flex-1 border-destructive text-destructive hover:bg-destructive/10"
-                            onClick={() => isDemoAula ? handleDemoAction() : handleRecusarAula(aula.id)}
-                            disabled={processingId === aula.id}
-                          >
-                            {processingId === aula.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <><X className="w-4 h-4 mr-1" /> Recusar</>
-                            )}
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            className="flex-1 gradient-primary text-primary-foreground"
-                            onClick={() => isDemoAula ? handleDemoAction() : handleAceitarAula(aula.id)}
-                            disabled={processingId === aula.id}
-                          >
-                            {processingId === aula.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <><Check className="w-4 h-4 mr-1" /> Aceitar</>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
         {/* Resumo da Semana */}
         <Card className="p-4 shadow-card">
           <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -510,7 +284,6 @@ export default function InstrutorDashboard() {
 
       </div>
 
-      {/* Premium Activation Modal */}
       <PremiumActivationModal
         open={showPremiumModal}
         onClose={() => setShowPremiumModal(false)}
@@ -519,7 +292,6 @@ export default function InstrutorDashboard() {
         taxPaidThisMonth={1358}
       />
 
-      {/* Uber-style notification for new lessons */}
       <RideRequestNotification
         aula={novaAula}
         open={showPopup}
