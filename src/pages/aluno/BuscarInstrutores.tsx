@@ -114,7 +114,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
         verified: true,
         isMEI: true,
         aceitaCarroProprio: true,
-        tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
+        tags: inst.cidade ? [inst.cidade] : (inst.bio ? [inst.bio.slice(0, 20)] : []),
         email: null,
         cidade: inst.cidade || null,
       };
@@ -221,10 +221,10 @@ export default function BuscarInstrutores() {
 
     filteredInstructors.forEach((inst) => {
       const instCity = inst.cidade?.toLowerCase().trim();
-      if (instCity && instCity === normalizedStudentCity) {
+      if (!instCity || instCity === normalizedStudentCity) {
         sameCity.push(inst);
       } else {
-        const cityKey = inst.cidade || "Cidade não informada";
+        const cityKey = inst.cidade!;
         const group = othersMap.get(cityKey) || [];
         group.push(inst);
         othersMap.set(cityKey, group);
