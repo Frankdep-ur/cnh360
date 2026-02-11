@@ -66,6 +66,13 @@ async function sendWhatsAppViaZAPI(
   const phoneClean = phone.replace(/\D/g, "");
   const phoneFormatted = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
 
+  // Validação mínima: 55 + DDD(2) + número(8-9) = mínimo 12 dígitos
+  if (phoneFormatted.length < 12) {
+    const errorMsg = `Telefone inválido: ${phoneFormatted.length} dígitos (mínimo 12). Número: ${phoneFormatted.substring(0, 4)}****`;
+    logStep(errorMsg);
+    return { success: false, error: errorMsg };
+  }
+
   const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
   try {
@@ -114,10 +121,14 @@ serve(async (req) => {
 
   try {
     const payload: WhatsAppPayload = await req.json();
+    const phoneMasked = payload.instrutorPhone
+      ? payload.instrutorPhone.substring(0, 2) + "****" + payload.instrutorPhone.slice(-4)
+      : "N/A";
     logStep("Payload recebido", { 
       aulaId: payload.aulaId, 
       alunoNome: payload.alunoNome,
-      instrutorNome: payload.instrutorNome 
+      instrutorNome: payload.instrutorNome,
+      phone_masked: phoneMasked,
     });
 
     // Verificar se Z-API está configurado
@@ -168,14 +179,14 @@ Bora ensinar! 🚗`;
     const result = await sendWhatsAppViaZAPI(payload.instrutorPhone, message);
 
     if (!result.success) {
-      logStep("Falha ao enviar WhatsApp", { error: result.error });
+      logStep("Falha ao enviar WhatsApp", { error: result.error, aulaId: payload.aulaId, phone_masked: phoneMasked });
       return new Response(
         JSON.stringify({ success: false, error: result.error }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
 
-    logStep("WhatsApp enviado com sucesso via Z-API", { messageId: result.messageId });
+    logStep("WhatsApp enviado com sucesso via Z-API", { messageId: result.messageId, aulaId: payload.aulaId });
 
     return new Response(
       JSON.stringify({ success: true, messageId: result.messageId, provider: "zapi" }),

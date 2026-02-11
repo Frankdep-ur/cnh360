@@ -354,11 +354,87 @@ serve(async (req) => {
       return businessError(`Cartão recusado: ${declineMsg}`, "GATEWAY_ERROR", declineMsg);
     }
 
-    // Update lesson
-    await supabase.from("aulas").update({
+    // Update lesson - include payment_confirmed when authorized/paid
+    const isConfirmed = status === "authorized" || status === "paid";
+    const updatePayload: any = {
       transaction_id: orderData.id,
-      status: status === "authorized" || status === "pending" ? "confirmada" : "pendente",
-    }).eq("id", lessonId);
+      status: isConfirmed ? "confirmada" : "pendente",
+    };
+    if (isConfirmed) {
+      updatePayload.payment_confirmed = true;
+    }
+
+    await supabase.from("aulas").update(updatePayload).eq("id", lessonId);
+
+    // Send WhatsApp notification immediately when card is authorized/paid
+    if (isConfirmed) {
+      try {
+        logStep("Sending WhatsApp notification for card payment", { lessonId });
+
+        // Fetch lesson + instructor + student data for WhatsApp
+        const { data: aulaCompleta } = await supabase
+          .from("aulas")
+          .select("id, data_hora, duracao_minutos, ponto_encontro, valor, instrutor_id, aluno_id")
+          .eq("id", lessonId)
+          .single();
+
+        if (aulaCompleta) {
+          const { data: instrutor } = await supabase
+            .from("instrutores")
+            .select("user_id, cnh_categoria")
+            .eq("id", aulaCompleta.instrutor_id)
+            .single();
+
+          const { data: instrutorProfile } = instrutor
+            ? await supabase.from("profiles").select("full_name, phone").eq("id", instrutor.user_id).single()
+            : { data: null };
+
+          const { data: aluno } = await supabase
+            .from("alunos").select("user_id").eq("id", aulaCompleta.aluno_id).single();
+
+          const { data: alunoProfile } = aluno
+            ? await supabase.from("profiles").select("full_name").eq("id", aluno.user_id).single()
+            : { data: null };
+
+          if (instrutorProfile?.phone) {
+            const phoneMasked = instrutorProfile.phone.substring(0, 2) + "****" + instrutorProfile.phone.slice(-4);
+            logStep("Dispatching WhatsApp via card flow", {
+              aulaId: lessonId,
+              instrutor_id: aulaCompleta.instrutor_id,
+              phone_masked: phoneMasked,
+            });
+
+            const { error: whatsappError } = await supabase.functions.invoke(
+              "send-whatsapp-notification",
+              {
+                body: {
+                  aulaId: lessonId,
+                  alunoNome: alunoProfile?.full_name || "Aluno",
+                  instrutorPhone: instrutorProfile.phone,
+                  instrutorNome: instrutorProfile.full_name || "Instrutor",
+                  dataHora: aulaCompleta.data_hora,
+                  duracaoMinutos: aulaCompleta.duracao_minutos,
+                  pontoEncontro: aulaCompleta.ponto_encontro,
+                  valor: aulaCompleta.valor,
+                  categoria: `Categoria ${instrutor?.cnh_categoria || "B"}`,
+                },
+              }
+            );
+
+            if (whatsappError) {
+              logStep("WhatsApp error (card flow)", { error: whatsappError, aulaId: lessonId });
+            } else {
+              logStep("WhatsApp sent successfully (card flow)", { aulaId: lessonId });
+            }
+          } else {
+            logStep("Instructor has no phone, skipping WhatsApp", { instrutor_id: aulaCompleta.instrutor_id });
+          }
+        }
+      } catch (whatsappErr: any) {
+        // Never fail the payment because of WhatsApp
+        logStep("WhatsApp dispatch failed (non-blocking)", { error: whatsappErr.message, lessonId });
+      }
+    }
 
     logStep("Card payment complete", {
       lessonId, transactionId: orderData.id, status,
@@ -366,6 +442,7 @@ serve(async (req) => {
       chargeId: charge?.id,
       recipientId: instrutorData?.pagarme_recipient_id || "none",
       kycStatus: instrutorData?.kyc_status || "none",
+      whatsappDispatched: isConfirmed,
     });
 
     return new Response(JSON.stringify({
