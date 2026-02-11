@@ -126,24 +126,7 @@ export function useAulaRating() {
       throw insertError;
     }
 
-    // Update instructor stats
-    const { data: todasAvaliacoes } = await supabase
-      .from("avaliacoes")
-      .select("nota")
-      .eq("instrutor_id", instrutorId);
-
-    if (todasAvaliacoes && todasAvaliacoes.length > 0) {
-      const totalNotas = todasAvaliacoes.reduce((acc, a) => acc + a.nota, 0);
-      const mediaNotas = totalNotas / todasAvaliacoes.length;
-
-      await supabase
-        .from("instrutores")
-        .update({
-          nota_media: Number(mediaNotas.toFixed(2)),
-          total_avaliacoes: todasAvaliacoes.length,
-        })
-        .eq("id", instrutorId);
-    }
+    // nota_media and total_avaliacoes are updated automatically by database trigger
 
     toast.success("Avaliação enviada!", {
       description: "Obrigado pelo seu feedback!",
