@@ -1,43 +1,24 @@
 
 
-## Destacar cidades na seção "Outras regiões"
+## Remover "Cidade não informada" e mostrar cidade no card
 
-### O que muda
+### Alterações
 
-Melhorar visualmente os headers de cidade na seção "Outras regioes" para transmitir credibilidade -- mostrar que o app ja tem instrutores em varias cidades do Brasil.
+**1. Filtrar instrutores sem cidade na seção "Outras regiões"** (`BuscarInstrutores.tsx`, linha 227)
+- Instrutores sem cidade cadastrada não entram na seção "Outras regiões"
+- Eles vão para a seção "Na sua cidade" junto com os locais (já que não temos como saber onde estão)
 
-### Alteracoes
+**2. Trocar tag "Experiente" pela cidade do instrutor** (`BuscarInstrutores.tsx`, linha 117)
+- No campo `tags`, em vez de colocar "Experiente" como fallback, colocar a cidade do instrutor quando disponível
+- Exemplo: em vez de "Experiente", aparece "Pereira Barreto"
 
-**Arquivo: `src/pages/aluno/BuscarInstrutores.tsx`** (linhas 356-361)
+### Arquivos modificados
 
-O header de cada cidade na secao "Outras regioes" vai ficar mais visivel e bonito:
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/aluno/BuscarInstrutores.tsx` | Linha 117: usar cidade como tag principal em vez de "Experiente" |
+| `src/pages/aluno/BuscarInstrutores.tsx` | Linha 222-231: instrutores sem cidade vão junto com os da mesma cidade, não criam grupo "Cidade não informada" |
 
-- Trocar o estilo discreto atual (texto cinza pequeno) por um badge/chip com fundo colorido
-- Adicionar icone `MapPin` com cor primaria (nao cinza)
-- Mostrar a quantidade de instrutores naquela cidade (ex: "Araçatuba (3)")
-- Manter simples e limpo, sem exagerar
-
-**De:**
-```
-MapPin cinza + texto cinza pequeno com nome da cidade
-```
-
-**Para:**
-```
-Badge com fundo primary/10 + MapPin colorido + "Cidade (N instrutores)"
-```
-
-### Resultado visual esperado
-
-```text
-─────── Outras regiões ───────
-
-  📍 Araçatuba (2 instrutores)
-  [Card instrutor 1]
-  [Card instrutor 2]
-
-  📍 São Paulo (1 instrutor)
-  [Card instrutor 3]
-```
-
-Isso passa mais credibilidade mostrando que o app tem presenca em varias cidades, com contagem de instrutores por regiao.
+### Resultado
+- Desaparece o grupo "Cidade não informada"
+- Cada card de instrutor mostra a cidade dele como tag (ex: "Pereira Barreto") no lugar de "Experiente"
