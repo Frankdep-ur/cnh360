@@ -1,35 +1,43 @@
 
 
-## Corrigir: Separação por cidade não aparece
+## Destacar cidades na seção "Outras regiões"
 
-### O problema
-A implementação do código está correta. A separação não aparece porque **seu perfil de aluno não tem cidade cadastrada**. Quando a cidade do aluno é `null`, o sistema mostra todos os instrutores juntos (comportamento correto de fallback).
+### O que muda
 
-Dados atuais no banco:
-- Apenas 2 pessoas têm cidade: Frank Alexandre e Cleia Santos (ambos "Pereira Barreto")
-- Todos os outros perfis (incluindo o seu como aluno) têm `cidade = null`
+Melhorar visualmente os headers de cidade na seção "Outras regioes" para transmitir credibilidade -- mostrar que o app ja tem instrutores em varias cidades do Brasil.
 
-### O que fazer
+### Alteracoes
 
-**1. Atualizar seu perfil de aluno com uma cidade para teste**
-- Executar um SQL para definir a cidade do seu perfil como "Pereira Barreto" (para testar a separação com os 2 instrutores que têm essa cidade)
+**Arquivo: `src/pages/aluno/BuscarInstrutores.tsx`** (linhas 356-361)
 
-**2. Corrigir o cast desnecessário no código**
-- Linha 119: trocar `(inst as any).cidade` por `inst.cidade` (o tipo já foi atualizado no schema)
+O header de cada cidade na secao "Outras regioes" vai ficar mais visivel e bonito:
 
-**3. Adicionar campo de cidade na tela de perfil do aluno**
-- Na tela `AlunoPerfil.tsx`, adicionar um campo para o aluno informar sua cidade
-- Isso garante que novos alunos possam definir a cidade e ver a separação automaticamente
+- Trocar o estilo discreto atual (texto cinza pequeno) por um badge/chip com fundo colorido
+- Adicionar icone `MapPin` com cor primaria (nao cinza)
+- Mostrar a quantidade de instrutores naquela cidade (ex: "Araçatuba (3)")
+- Manter simples e limpo, sem exagerar
 
-### Arquivos modificados
+**De:**
+```
+MapPin cinza + texto cinza pequeno com nome da cidade
+```
 
-| Arquivo | Alteração |
-|---------|-----------|
-| SQL (update direto) | Definir cidade do seu perfil para teste |
-| `src/pages/aluno/BuscarInstrutores.tsx` | Remover cast `(inst as any)` na linha 119 |
-| `src/pages/aluno/AlunoPerfil.tsx` | Adicionar campo "Cidade" no formulário de perfil |
+**Para:**
+```
+Badge com fundo primary/10 + MapPin colorido + "Cidade (N instrutores)"
+```
 
-### Resultado
-Após definir a cidade no perfil, a tela de busca vai mostrar:
-- Seção "Na sua cidade" com instrutores da mesma cidade
-- Seção "Outras regiões" com os demais agrupados por cidade
+### Resultado visual esperado
+
+```text
+─────── Outras regiões ───────
+
+  📍 Araçatuba (2 instrutores)
+  [Card instrutor 1]
+  [Card instrutor 2]
+
+  📍 São Paulo (1 instrutor)
+  [Card instrutor 3]
+```
+
+Isso passa mais credibilidade mostrando que o app tem presenca em varias cidades, com contagem de instrutores por regiao.
