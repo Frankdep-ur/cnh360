@@ -37,6 +37,7 @@ interface InstructorData {
   aceitaCarroProprio: boolean;
   tags: string[];
   email: string | null;
+  cidade: string | null;
 }
 
 // Mock data fallback for demo (empty - uses real data from database)
@@ -115,6 +116,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
         aceitaCarroProprio: true,
         tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
         email: null,
+        cidade: (inst as any).cidade || null,
       };
     });
   } catch (error) {
@@ -155,6 +157,22 @@ export default function BuscarInstrutores() {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
+  // Fetch student's city from profile
+  const { data: studentCity } = useQuery({
+    queryKey: ["student-city", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from("profiles")
+        .select("cidade")
+        .eq("id", user.id)
+        .single();
+      return data?.cidade || null;
+    },
+    enabled: !!user?.id,
+    staleTime: 10 * 60 * 1000,
+  });
+
   // Use React Query for data fetching with caching
   const { data: instructors = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.INSTRUTORES_PUBLIC,
@@ -192,15 +210,37 @@ export default function BuscarInstrutores() {
     });
   }, [instructors, searchQuery, activeFilters]);
 
+  // Split by city
+  const { sameCityInstructors, otherCitiesGrouped } = useMemo(() => {
+    if (!studentCity) {
+      return { sameCityInstructors: filteredInstructors, otherCitiesGrouped: new Map<string, InstructorData[]>() };
+    }
+    const normalizedStudentCity = studentCity.toLowerCase().trim();
+    const sameCity: InstructorData[] = [];
+    const othersMap = new Map<string, InstructorData[]>();
+
+    filteredInstructors.forEach((inst) => {
+      const instCity = inst.cidade?.toLowerCase().trim();
+      if (instCity && instCity === normalizedStudentCity) {
+        sameCity.push(inst);
+      } else {
+        const cityKey = inst.cidade || "Cidade não informada";
+        const group = othersMap.get(cityKey) || [];
+        group.push(inst);
+        othersMap.set(cityKey, group);
+      }
+    });
+
+    return { sameCityInstructors: sameCity, otherCitiesGrouped: othersMap };
+  }, [filteredInstructors, studentCity]);
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <header className="bg-card border-b border-border px-6 pt-8 pb-4 safe-top sticky top-0 z-40">
         <div className="max-w-md mx-auto">
           <h1 className="text-2xl font-bold text-foreground mb-2">
             Encontre seu instrutor
           </h1>
-
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -223,7 +263,6 @@ export default function BuscarInstrutores() {
         </div>
       </header>
 
-      {/* Filters */}
       <div className={cn(
         "bg-card border-b border-border px-6 py-3 overflow-hidden transition-all duration-300",
         showFilters ? "max-h-40" : "max-h-0 py-0 border-b-0"
@@ -242,7 +281,6 @@ export default function BuscarInstrutores() {
         </div>
       </div>
 
-      {/* Active Filters */}
       {activeFilters.length > 0 && (
         <div className="px-6 py-3 bg-muted/50">
           <div className="max-w-md mx-auto flex items-center gap-2">
@@ -273,7 +311,6 @@ export default function BuscarInstrutores() {
         </div>
       )}
 
-      {/* Results */}
       <div className="px-6 py-6">
         <div className="max-w-md mx-auto">
           {isLoading ? (
@@ -284,16 +321,73 @@ export default function BuscarInstrutores() {
                 {filteredInstructors.length} instrutor{filteredInstructors.length !== 1 ? "es" : ""} encontrado{filteredInstructors.length !== 1 ? "s" : ""}
               </p>
 
-              <div className="space-y-4">
-                {filteredInstructors.map((instructor) => (
-                  <InstructorCard 
-                    key={instructor.id} 
-                    {...instructor}
-                    showMEIBadge={instructor.isMEI}
-                    showCarroProprio={instructor.aceitaCarroProprio}
-                  />
-                ))}
-              </div>
+              {studentCity && sameCityInstructors.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <h2 className="font-semibold text-foreground">
+                      Na sua cidade ({sameCityInstructors.length})
+                    </h2>
+                    <span className="text-xs text-muted-foreground">{studentCity}</span>
+                  </div>
+                  <div className="space-y-4">
+                    {sameCityInstructors.map((instructor) => (
+                      <InstructorCard
+                        key={instructor.id}
+                        {...instructor}
+                        showMEIBadge={instructor.isMEI}
+                        showCarroProprio={instructor.aceitaCarroProprio}
+                        cityLabel={instructor.cidade || undefined}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {studentCity && otherCitiesGrouped.size > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Outras regiões
+                    </span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                  {Array.from(otherCitiesGrouped.entries()).map(([city, cityInstructors]) => (
+                    <div key={city} className="mb-5">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">{city}</span>
+                      </div>
+                      <div className="space-y-4">
+                        {cityInstructors.map((instructor) => (
+                          <InstructorCard
+                            key={instructor.id}
+                            {...instructor}
+                            showMEIBadge={instructor.isMEI}
+                            showCarroProprio={instructor.aceitaCarroProprio}
+                            cityLabel={instructor.cidade || undefined}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!studentCity && (
+                <div className="space-y-4">
+                  {filteredInstructors.map((instructor) => (
+                    <InstructorCard
+                      key={instructor.id}
+                      {...instructor}
+                      showMEIBadge={instructor.isMEI}
+                      showCarroProprio={instructor.aceitaCarroProprio}
+                      cityLabel={instructor.cidade || undefined}
+                    />
+                  ))}
+                </div>
+              )}
 
               {filteredInstructors.length === 0 && (
                 <div className="text-center py-12">
