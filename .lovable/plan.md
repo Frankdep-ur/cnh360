@@ -1,38 +1,36 @@
 
 
-# Analise Completa: O que falta para ir ao publico real
+## Remover Aulas de Exemplo do Dashboard do Instrutor
 
-## Status de Implementacao
+### O que sera feito
 
-| Item | Status | Notas |
-|------|--------|-------|
-| 1. Chaves Pagar.me producao | ⏳ Pendente | Voce precisa atualizar manualmente via Lovable Cloud |
-| 2. Protecao senhas vazadas | ⏳ Pendente | Requer ativacao manual no painel Lovable Cloud > Auth |
-| 3. Corrigir RLS permissiva | ✅ Feito | Politica `aulas_auditoria` corrigida |
-| 4. Confirmacao de email | ✅ Feito | Auto-confirm desabilitado |
-| 5. Rate limiting | ✅ Feito | 5 tentativas/min por usuario nas funcoes de pagamento |
-| 6. Antecipacao Pagar.me | ⏳ Pendente | Contatar relacionamento@pagar.me |
-| 7. Remover console.logs | ✅ Feito | console.log silenciado em producao |
-| 8. Webhook PIX | ✅ Feito | pagarme-payment-webhook criado e deployado |
-| 9. Monitoramento | ⏳ Futuro | Implementar quando necessario |
-| 10. Error Boundary | ✅ Feito | Componente global adicionado |
+Remover toda a secao "Solicitacoes e Aulas" do dashboard do instrutor, incluindo:
 
-## Acoes manuais pendentes
+1. **Aula de demonstracao estatica** (`aulaDemostracao`) - o objeto mock com "Joao Silva"
+2. **Card de alerta** "Exemplo de solicitacao" / "Nova(s) solicitacao(oes)"
+3. **Secao "Solicitacoes e Aulas"** completa (linhas 339-458) com os cards de aula, botoes Aceitar/Recusar
+4. **Funcao `handleDemoAction`** e logica relacionada (`aulasParaExibir`, `temAulasReais`, etc.)
 
-### 1. Atualizar chaves Pagar.me (CRITICO)
-No painel Lovable Cloud > Secrets, atualize:
-- `PAGARME_API_KEY`: sk_test_ -> sk_live_
-- `PAGARME_PUBLIC_KEY`: pk_test_ -> pk_live_
-- `VITE_PAGARME_PUBLIC_KEY`: pk_test_ -> pk_live_
-- `PAGARME_RECIPIENT_CNH360`: Criar novo no ambiente live
+### O que permanece
 
-### 2. Protecao de senhas vazadas
-Habilitar no painel Lovable Cloud > Auth > Password Security > "Enable leaked password protection"
+- Header com foto, nome e avaliacao
+- Toggle "Estou disponivel"
+- Banner de aula ativa (quando houver aula em andamento)
+- Premium upsell
+- Quick Stats (4 cards)
+- Meta do Mes
+- Resumo da Semana
+- Ranking
+- Notificacao popup Uber-style (RideRequestNotification) para novas aulas reais
 
-### 3. Antecipacao Pagar.me
-Contatar relacionamento@pagar.me para ativar antecipacao automatica D+0
+### Detalhes tecnicos
 
-### 4. Configurar webhook na Pagar.me
-No painel Pagar.me, adicionar webhook apontando para:
-`https://kyvtlmpkjjinhjelipvr.supabase.co/functions/v1/pagarme-payment-webhook`
-Eventos: `order.paid`
+**Arquivo:** `src/pages/instrutor/InstrutorDashboard.tsx`
+
+- Remover o objeto `aulaDemostracao` (linhas 41-55)
+- Remover estados e funcoes: `processingId`, `handleDemoAction`, `handleAceitarAula`, `handleRecusarAula`, `aulasParaExibir`, `temAulasReais`, `formatDateTime`
+- Remover o card de alerta "Pending Lessons Alert" (linhas 227-245)
+- Remover a secao "Solicitacoes e Aulas" (linhas 339-458)
+- Remover imports nao utilizados: `X`, `Check`, `Loader2`, `AlertCircle`, `Clock` (se nao usado em outro lugar), `MapPin`
+- Manter o hook `useAulasPendentes` apenas se necessario para o badge na nav; caso contrario, remover tambem
+
