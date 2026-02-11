@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.start-kyc]
 verify_jwt = false
+
+[functions.pagarme-payment-webhook]
+verify_jwt = false

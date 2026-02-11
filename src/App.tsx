@@ -11,6 +11,7 @@ import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
 import { GlobalLessonConfirmationModal } from "@/components/aula/GlobalLessonConfirmationModal";
 import { GlobalLessonFinalizationModal } from "@/components/aula/GlobalLessonFinalizationModal";
 import { GlobalInstructorQRScanner } from "@/components/aula/GlobalInstructorQRScanner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Critical pages - load immediately
 import Index from "./pages/Index";
@@ -83,6 +84,7 @@ const TermosUso = lazy(() => import("./pages/TermosUso"));
 const Status = lazy(() => import("./pages/Status"));
 
 const App = () => (
+  <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -362,6 +364,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
