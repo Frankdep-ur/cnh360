@@ -116,7 +116,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
         aceitaCarroProprio: true,
         tags: inst.bio ? [inst.bio.slice(0, 20)] : ["Experiente"],
         email: null,
-        cidade: (inst as any).cidade || null,
+        cidade: inst.cidade || null,
       };
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, AlertTriangle, MessageCircle } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, AlertTriangle, MessageCircle, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +16,7 @@ interface ProfileData {
   full_name: string;
   cpf: string;
   phone: string;
+  cidade: string;
   avatar_url: string | null;
   is_test_account: boolean;
 }
@@ -41,6 +42,7 @@ export default function AlunoPerfil() {
     full_name: "",
     cpf: "",
     phone: "",
+    cidade: "",
     avatar_url: null,
     is_test_account: false,
   });
@@ -68,6 +70,7 @@ export default function AlunoPerfil() {
           full_name: profileData.full_name || "",
           cpf: profileData.cpf || "",
           phone: profileData.phone || "",
+          cidade: profileData.cidade || "",
           avatar_url: profileData.avatar_url,
           is_test_account: isTest,
         });
@@ -144,6 +147,7 @@ export default function AlunoPerfil() {
           full_name: profile.full_name,
           cpf: profile.cpf,
           phone: profile.phone,
+          cidade: profile.cidade,
         })
         .eq("id", user!.id);
 
@@ -347,6 +351,22 @@ export default function AlunoPerfil() {
                     disabled={!editing}
                     maxLength={15}
                     placeholder="(00) 00000-0000"
+                    className="h-12 pl-12 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Cidade
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    value={profile.cidade}
+                    onChange={(e) => setProfile({ ...profile, cidade: e.target.value })}
+                    disabled={!editing}
+                    placeholder="Sua cidade"
                     className="h-12 pl-12 rounded-xl"
                   />
                 </div>
