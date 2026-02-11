@@ -218,33 +218,25 @@ serve(async (req) => {
     const simplifiedStatus = mapStatus(chargeStatus);
 
     // If payment is successful and we have aulaId, update lesson status
+    // ATOMIC: only update if payment_confirmed is still false to prevent race conditions
     if (simplifiedStatus === "succeeded" && aulaId) {
-      // Check if payment was already confirmed to avoid duplicate notifications
-      const { data: currentAula } = await supabase
-        .from("aulas")
-        .select("payment_confirmed")
-        .eq("id", aulaId)
-        .single();
-
-      const wasAlreadyConfirmed = currentAula?.payment_confirmed === true;
-
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("aulas")
         .update({ 
           status: "confirmada",
           payment_confirmed: true 
         })
-        .eq("id", aulaId);
+        .eq("id", aulaId)
+        .eq("payment_confirmed", false)  // atomic lock - only first caller wins
+        .select("id");
 
-      if (!updateError) {
-        logStep("Lesson status and payment_confirmed updated");
-        
-        // Send WhatsApp notification only if this is the first time payment is confirmed
-        if (!wasAlreadyConfirmed) {
-          await sendWhatsAppNotification(supabase, aulaId);
-        } else {
-          logStep("Payment was already confirmed, skipping WhatsApp notification");
-        }
+      if (!updateError && updatedRows && updatedRows.length > 0) {
+        logStep("Atomic update succeeded - first confirmation", { aulaId });
+        await sendWhatsAppNotification(supabase, aulaId);
+      } else if (updateError) {
+        logStep("Update error", { error: updateError, aulaId });
+      } else {
+        logStep("Already confirmed by another call, skipping WhatsApp", { aulaId });
       }
     }
 
