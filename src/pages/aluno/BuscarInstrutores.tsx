@@ -211,27 +211,30 @@ export default function BuscarInstrutores() {
   }, [instructors, searchQuery, activeFilters]);
 
   // Split by city
-  const { sameCityInstructors, otherCitiesGrouped } = useMemo(() => {
+  const { sameCityInstructors, otherCitiesGrouped, noCityInstructors } = useMemo(() => {
     if (!studentCity) {
-      return { sameCityInstructors: filteredInstructors, otherCitiesGrouped: new Map<string, InstructorData[]>() };
+      return { sameCityInstructors: filteredInstructors, otherCitiesGrouped: new Map<string, InstructorData[]>(), noCityInstructors: [] as InstructorData[] };
     }
     const normalizedStudentCity = studentCity.toLowerCase().trim();
     const sameCity: InstructorData[] = [];
     const othersMap = new Map<string, InstructorData[]>();
+    const noCity: InstructorData[] = [];
 
     filteredInstructors.forEach((inst) => {
       const instCity = inst.cidade?.toLowerCase().trim();
-      if (!instCity || instCity === normalizedStudentCity) {
+      if (instCity && instCity === normalizedStudentCity) {
         sameCity.push(inst);
-      } else {
+      } else if (instCity) {
         const cityKey = inst.cidade!;
         const group = othersMap.get(cityKey) || [];
         group.push(inst);
         othersMap.set(cityKey, group);
+      } else {
+        noCity.push(inst);
       }
     });
 
-    return { sameCityInstructors: sameCity, otherCitiesGrouped: othersMap };
+    return { sameCityInstructors: sameCity, otherCitiesGrouped: othersMap, noCityInstructors: noCity };
   }, [filteredInstructors, studentCity]);
 
   return (
@@ -323,12 +326,21 @@ export default function BuscarInstrutores() {
 
               {studentCity && sameCityInstructors.length > 0 && (
                 <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MapPin className="w-4 h-4 text-primary" />
-                    <h2 className="font-semibold text-foreground">
-                      Na sua cidade ({sameCityInstructors.length})
-                    </h2>
-                    <span className="text-xs text-muted-foreground">{studentCity}</span>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
+                        <MapPin className="w-4 h-4 text-primary" />
+                      </div>
+                      <h2 className="font-bold text-lg text-foreground">
+                        Na sua cidade
+                      </h2>
+                      <span className="ml-auto inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
+                        {studentCity} · {sameCityInstructors.length}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground ml-10">
+                      Instrutores disponíveis perto de você
+                    </p>
                   </div>
                   <div className="space-y-4">
                     {sameCityInstructors.map((instructor) => (
@@ -344,15 +356,18 @@ export default function BuscarInstrutores() {
                 </div>
               )}
 
-              {studentCity && otherCitiesGrouped.size > 0 && (
+              {studentCity && (otherCitiesGrouped.size > 0 || noCityInstructors.length > 0) && (
                 <div>
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-2">
                     <div className="h-px flex-1 bg-border" />
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Outras regiões
                     </span>
                     <div className="h-px flex-1 bg-border" />
                   </div>
+                  <p className="text-sm text-muted-foreground mb-4 text-center">
+                    Também temos instrutores nestas cidades
+                  </p>
                   {Array.from(otherCitiesGrouped.entries()).map(([city, cityInstructors]) => (
                     <div key={city} className="mb-5">
                       <div className="flex items-center gap-2 mb-3">
@@ -376,6 +391,18 @@ export default function BuscarInstrutores() {
                       </div>
                     </div>
                   ))}
+                  {noCityInstructors.length > 0 && (
+                    <div className="space-y-4 mt-4">
+                      {noCityInstructors.map((instructor) => (
+                        <InstructorCard
+                          key={instructor.id}
+                          {...instructor}
+                          showMEIBadge={instructor.isMEI}
+                          showCarroProprio={instructor.aceitaCarroProprio}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
