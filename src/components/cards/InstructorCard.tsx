@@ -98,14 +98,22 @@ function InstructorCardComponent({
 
             {/* Details */}
             <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              {cityLabel && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-primary" />
+                  <span className="font-medium text-foreground">{cityLabel}</span>
+                </div>
+              )}
               <div className="flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
-                <span>{cityLabel || distance}</span>
+                <span>{distance}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Car className="w-3 h-3" />
-                {carType && <span>{carType}</span>}
-              </div>
+              {carType && (
+                <div className="flex items-center gap-1">
+                  <Car className="w-3 h-3" />
+                  <span>{carType}</span>
+                </div>
+              )}
             </div>
 
             {/* Tags */}
