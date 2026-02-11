@@ -27,10 +27,10 @@ export default function AutoescolaProvas() {
 
   // Mock provas
   const provas: Prova[] = [
-    { id: "1", aluno: "Maria Silva", tipo: "pratica", data: new Date(Date.now() + 86400000), horario: "09:00", local: "DETRAN Araçatuba", trajeto: "Trajeto Centro-Norte", status: "agendada" },
-    { id: "2", aluno: "João Santos", tipo: "teorica", data: new Date(Date.now() + 172800000), horario: "14:00", local: "DETRAN Araçatuba", trajeto: "-", status: "agendada" },
-    { id: "3", aluno: "Ana Oliveira", tipo: "pratica", data: new Date(), horario: "08:00", local: "DETRAN Araçatuba", trajeto: "Trajeto Bairro Sul", status: "aprovado" },
-    { id: "4", aluno: "Carlos Pereira", tipo: "pratica", data: new Date(Date.now() - 86400000), horario: "10:00", local: "DETRAN Araçatuba", trajeto: "Trajeto Centro-Norte", status: "reprovado" },
+    { id: "1", aluno: "Maria Silva", tipo: "pratica", data: new Date(Date.now() + 86400000), horario: "09:00", local: "DETRAN Regional", trajeto: "Trajeto Centro-Norte", status: "agendada" },
+    { id: "2", aluno: "João Santos", tipo: "teorica", data: new Date(Date.now() + 172800000), horario: "14:00", local: "DETRAN Regional", trajeto: "-", status: "agendada" },
+    { id: "3", aluno: "Ana Oliveira", tipo: "pratica", data: new Date(), horario: "08:00", local: "DETRAN Regional", trajeto: "Trajeto Bairro Sul", status: "aprovado" },
+    { id: "4", aluno: "Carlos Pereira", tipo: "pratica", data: new Date(Date.now() - 86400000), horario: "10:00", local: "DETRAN Regional", trajeto: "Trajeto Centro-Norte", status: "reprovado" },
   ];
 
   const filteredProvas = filterTipo === "todas" 

@@ -50,7 +50,7 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
         } else if (aula.ponto_encontro) {
           destination = aula.ponto_encontro;
         } else {
-          destination = "Araçatuba, SP";
+          destination = "Localização não informada";
         }
         
         await calculateRoute(
@@ -98,7 +98,7 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
   };
 
   const handleNavigate = () => {
-    let destination = aula.ponto_encontro || "Araçatuba, SP";
+    let destination = aula.ponto_encontro || "Localização não informada";
     
     if (aula.latitude_encontro && aula.longitude_encontro) {
       destination = `${aula.latitude_encontro},${aula.longitude_encontro}`;
@@ -126,7 +126,7 @@ export function NovaAulaPopupEnhanced({ aula, open, onClose }: NovaAulaPopupEnha
             </div>
             <div className="flex-1">
               <p className="font-bold text-lg text-foreground">{aula.aluno_nome || "Aluno"}</p>
-              <p className="text-sm text-muted-foreground">Araçatuba, SP</p>
+              <p className="text-sm text-muted-foreground">Localização não informada</p>
             </div>
           </div>
 

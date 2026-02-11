@@ -77,7 +77,7 @@ export function RideRequestNotification({ aula, open, onClose }: RideRequestNoti
         } else if (aula.ponto_encontro) {
           destination = aula.ponto_encontro;
         } else {
-          destination = "Araçatuba, SP";
+          destination = "Localização não informada";
         }
         
         await calculateRoute(
