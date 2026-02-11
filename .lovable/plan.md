@@ -1,92 +1,35 @@
 
 
-## Filtrar Instrutores por Cidade do Aluno
+## Corrigir: Separação por cidade não aparece
 
-### Como vai funcionar
+### O problema
+A implementação do código está correta. A separação não aparece porque **seu perfil de aluno não tem cidade cadastrada**. Quando a cidade do aluno é `null`, o sistema mostra todos os instrutores juntos (comportamento correto de fallback).
 
-A tela de busca de instrutores sera dividida em duas secoes:
+Dados atuais no banco:
+- Apenas 2 pessoas têm cidade: Frank Alexandre e Cleia Santos (ambos "Pereira Barreto")
+- Todos os outros perfis (incluindo o seu como aluno) têm `cidade = null`
 
-1. **"Instrutores na sua cidade"** - Instrutores que estao na mesma cidade do aluno (destaque principal)
-2. **"Outras regioes"** - Demais instrutores agrupados por cidade, com o nome da cidade exibido como separador
+### O que fazer
 
-Se o aluno nao tiver cidade cadastrada no perfil, todos os instrutores aparecem normalmente sem separacao.
+**1. Atualizar seu perfil de aluno com uma cidade para teste**
+- Executar um SQL para definir a cidade do seu perfil como "Pereira Barreto" (para testar a separação com os 2 instrutores que têm essa cidade)
 
-### Detalhes tecnicos
+**2. Corrigir o cast desnecessário no código**
+- Linha 119: trocar `(inst as any).cidade` por `inst.cidade` (o tipo já foi atualizado no schema)
 
-**1. Migracao SQL - Adicionar coluna `cidade` na cache publica**
-
-A tabela `instrutores_publico_cache` nao tem a coluna `cidade`. Precisamos:
-
-- Adicionar coluna `cidade` (text, nullable) na tabela `instrutores_publico_cache`
-- Atualizar a funcao `sync_instrutor_cache()` para incluir a cidade do perfil do instrutor
-- Atualizar a funcao `sync_profile_to_instrutor_cache()` para sincronizar cidade tambem
-- Popular dados existentes (os 2 instrutores de Pereira Barreto)
-
-```text
-instrutores_publico_cache
-+------------------+
-| id               |
-| nome             |
-| foto             |
-| cidade     (NEW) |  <-- vem de profiles.cidade do instrutor
-| preco_hora       |
-| nota_media       |
-| ...              |
-+------------------+
-```
-
-**2. Buscar cidade do aluno logado**
-
-No componente `BuscarInstrutores.tsx`:
-- Adicionar query para buscar `profiles.cidade` do usuario logado
-- Incluir `cidade` no mapeamento de dados dos instrutores
-
-**3. Separar instrutores em dois grupos**
-
-Logica de filtragem:
-- `instrutoresMesmaCidade` - onde `instrutor.cidade === aluno.cidade`
-- `instrutoresOutrasCidades` - agrupados por cidade, com header de separacao
-
-**4. Atualizar a interface**
-
-- Secao "Na sua cidade" com icone de localizacao e contagem
-- Secao "Outras regioes" com separadores visuais por cidade (ex: "-- Pereira Barreto --")
-- InstructorCard recebe nova prop `cidade` para exibir no card (substituindo o campo `distance` que hoje mostra raio de atendimento)
-
-**5. Atualizar InstructorCard**
-
-- Adicionar prop opcional `cityLabel` para exibir a cidade no card
-- Mostrar cidade ao lado do MapPin em vez do raio generico
+**3. Adicionar campo de cidade na tela de perfil do aluno**
+- Na tela `AlunoPerfil.tsx`, adicionar um campo para o aluno informar sua cidade
+- Isso garante que novos alunos possam definir a cidade e ver a separação automaticamente
 
 ### Arquivos modificados
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---------|-----------|
-| Migracao SQL | Adicionar coluna cidade, atualizar triggers |
-| `src/pages/aluno/BuscarInstrutores.tsx` | Buscar cidade do aluno, separar em secoes |
-| `src/components/cards/InstructorCard.tsx` | Adicionar prop `cityLabel` |
+| SQL (update direto) | Definir cidade do seu perfil para teste |
+| `src/pages/aluno/BuscarInstrutores.tsx` | Remover cast `(inst as any)` na linha 119 |
+| `src/pages/aluno/AlunoPerfil.tsx` | Adicionar campo "Cidade" no formulário de perfil |
 
-### Resultado visual esperado
-
-```text
-+----------------------------------+
-| Encontre seu instrutor           |
-| [Buscar...]              [filtro]|
-+----------------------------------+
-|                                  |
-| Na sua cidade (2)                |
-| Pereira Barreto                  |
-|                                  |
-| [Card Instrutor A]               |
-| [Card Instrutor B]               |
-|                                  |
-| ── Outras regioes ──             |
-|                                  |
-| Sao Paulo                        |
-| [Card Instrutor C - Sao Paulo]   |
-|                                  |
-| Campinas                         |
-| [Card Instrutor D - Campinas]    |
-|                                  |
-+----------------------------------+
-```
+### Resultado
+Após definir a cidade no perfil, a tela de busca vai mostrar:
+- Seção "Na sua cidade" com instrutores da mesma cidade
+- Seção "Outras regiões" com os demais agrupados por cidade
