@@ -1,36 +1,76 @@
 
 
-## Remover Aulas de Exemplo do Dashboard do Instrutor
+## Corrigir Sistema de Avaliações - Tornar Real e Funcional
 
-### O que sera feito
+### Problema Identificado
 
-Remover toda a secao "Solicitacoes e Aulas" do dashboard do instrutor, incluindo:
+As avaliacoes estao sendo salvas na tabela `avaliacoes` (2 registros existentes, ambos nota 5), porem a atualizacao de `nota_media` e `total_avaliacoes` na tabela `instrutores` **falha silenciosamente** porque:
 
-1. **Aula de demonstracao estatica** (`aulaDemostracao`) - o objeto mock com "Joao Silva"
-2. **Card de alerta** "Exemplo de solicitacao" / "Nova(s) solicitacao(oes)"
-3. **Secao "Solicitacoes e Aulas"** completa (linhas 339-458) com os cards de aula, botoes Aceitar/Recusar
-4. **Funcao `handleDemoAction`** e logica relacionada (`aulasParaExibir`, `temAulasReais`, etc.)
+- A RLS do `instrutores` so permite UPDATE quando `auth.uid() = user_id` (apenas o proprio instrutor)
+- Quem envia a avaliacao e o **aluno**, que nao tem permissao para atualizar a tabela do instrutor
+- Resultado: `nota_media = 5.00` mas `total_avaliacoes = 0` (inconsistente)
 
-### O que permanece
+### Solucao
 
-- Header com foto, nome e avaliacao
-- Toggle "Estou disponivel"
-- Banner de aula ativa (quando houver aula em andamento)
-- Premium upsell
-- Quick Stats (4 cards)
-- Meta do Mes
-- Resumo da Semana
-- Ranking
-- Notificacao popup Uber-style (RideRequestNotification) para novas aulas reais
+Criar um **database trigger** que atualiza automaticamente `nota_media` e `total_avaliacoes` do instrutor sempre que uma avaliacao e inserida. Isso elimina a dependencia de RLS e garante consistencia.
 
-### Detalhes tecnicos
+### Detalhes Tecnicos
 
-**Arquivo:** `src/pages/instrutor/InstrutorDashboard.tsx`
+**1. Migracao SQL - Criar funcao e trigger**
 
-- Remover o objeto `aulaDemostracao` (linhas 41-55)
-- Remover estados e funcoes: `processingId`, `handleDemoAction`, `handleAceitarAula`, `handleRecusarAula`, `aulasParaExibir`, `temAulasReais`, `formatDateTime`
-- Remover o card de alerta "Pending Lessons Alert" (linhas 227-245)
-- Remover a secao "Solicitacoes e Aulas" (linhas 339-458)
-- Remover imports nao utilizados: `X`, `Check`, `Loader2`, `AlertCircle`, `Clock` (se nao usado em outro lugar), `MapPin`
-- Manter o hook `useAulasPendentes` apenas se necessario para o badge na nav; caso contrario, remover tambem
+```sql
+CREATE OR REPLACE FUNCTION public.update_instrutor_rating_stats()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.instrutores
+  SET
+    nota_media = (
+      SELECT ROUND(AVG(nota)::numeric, 2)
+      FROM public.avaliacoes
+      WHERE instrutor_id = NEW.instrutor_id
+    ),
+    total_avaliacoes = (
+      SELECT COUNT(*)
+      FROM public.avaliacoes
+      WHERE instrutor_id = NEW.instrutor_id
+    )
+  WHERE id = NEW.instrutor_id;
 
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trigger_update_instrutor_rating
+AFTER INSERT ON public.avaliacoes
+FOR EACH ROW
+EXECUTE FUNCTION public.update_instrutor_rating_stats();
+```
+
+A funcao usa `SECURITY DEFINER` para executar com permissoes elevadas, contornando a RLS.
+
+**2. Corrigir dados existentes** (na mesma migracao)
+
+```sql
+UPDATE public.instrutores i
+SET
+  nota_media = sub.avg_nota,
+  total_avaliacoes = sub.count_avaliacoes
+FROM (
+  SELECT instrutor_id, ROUND(AVG(nota)::numeric, 2) as avg_nota, COUNT(*) as count_avaliacoes
+  FROM public.avaliacoes
+  GROUP BY instrutor_id
+) sub
+WHERE i.id = sub.instrutor_id;
+```
+
+Isso corrige o instrutor que ja tem 2 avaliacoes mas mostra `total_avaliacoes = 0`.
+
+**3. Simplificar o hook `useAulaRating.ts`**
+
+Remover o bloco de codigo que faz UPDATE manual na tabela `instrutores` apos inserir a avaliacao (linhas 127-145), pois o trigger agora cuida disso automaticamente.
+
+### Resultado
+
+- Avaliacoes do aluno serao refletidas imediatamente no perfil do instrutor
+- `nota_media` e `total_avaliacoes` sempre consistentes
+- Dados existentes corrigidos (2 avaliacoes, nota media 5.0, total 2)
