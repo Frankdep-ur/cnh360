@@ -122,7 +122,7 @@ serve(async (req) => {
           taxa_plataforma: taxaPlataforma,
           valor_instrutor: valorInstrutor,
           metodo: "pix",
-          status: "aprovado",
+          status: "pendente",
           pago_em: new Date().toISOString(),
         });
 
@@ -199,7 +199,7 @@ serve(async (req) => {
           taxa_plataforma: taxaPlataforma,
           valor_instrutor: valorInstrutor,
           metodo: "cartao_credito",
-          status: "aprovado",
+          status: "pendente",
           external_id: transactionId,
           pago_em: new Date().toISOString(),
         });
@@ -272,11 +272,11 @@ serve(async (req) => {
         valor_bruto: valorBruto,
         taxa_plataforma: taxaPlataforma,
         valor_instrutor: valorInstrutor,
-        metodo: "cartao_credito",
-        status: "aprovado",
-        external_id: transactionId,
-        pago_em: new Date().toISOString(),
-      });
+          metodo: "cartao_credito",
+          status: "pendente",
+          external_id: transactionId,
+          pago_em: new Date().toISOString(),
+        });
 
     if (pagamentoError) {
       logStep("Error recording payment", pagamentoError);
