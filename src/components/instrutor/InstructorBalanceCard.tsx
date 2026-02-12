@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, CheckCircle2, Banknote, Smartphone, Check } from "lucide-react";
+import { Wallet, RefreshCw, TrendingUp, Clock, ArrowUpRight, AlertCircle, Hourglass, Camera, Loader2, Building2, CheckCircle2, Banknote, Smartphone, Check, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,6 +34,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [recipientStatus, setRecipientStatus] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [settlementMessage, setSettlementMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [recentWithdrawal, setRecentWithdrawal] = useState(false);
@@ -82,6 +83,12 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
 
       if (data?.message) {
         setStatusMessage(data.message);
+      }
+
+      if (data?.settlementMessage) {
+        setSettlementMessage(data.settlementMessage);
+      } else {
+        setSettlementMessage(null);
       }
     } catch (err: any) {
       console.error("[InstructorBalanceCard] Error:", err);
@@ -554,6 +561,15 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
             <div className="text-2xl font-bold text-secondary">
               {formatCurrency(balance.available, balance.currency)}
             </div>
+            {/* Settlement info when available=0 but has pending funds */}
+            {balance.available === 0 && balance.waitingFunds > 0 && settlementMessage && (
+              <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Seus ganhos de {formatCurrency(balance.waitingFunds, balance.currency)} estão em processamento (prazo: 14-30 dias úteis)
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Secondary Stats */}
