@@ -196,7 +196,7 @@ export function WithdrawModal({
       }
 
       setStatus("success");
-      const net = (data.amount || availableBalance) - WITHDRAWAL_FEE;
+      const net = data.amount ?? (availableBalance - WITHDRAWAL_FEE);
       toast.success("Saque solicitado com sucesso!", {
         description: `${formatCurrency(net > 0 ? net : 0)} será creditado em até 1 dia útil (taxa: ${formatCurrency(WITHDRAWAL_FEE)}).`,
       });
