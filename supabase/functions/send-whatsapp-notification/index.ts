@@ -120,16 +120,7 @@ serve(async (req) => {
   }
 
   try {
-    const payload: WhatsAppPayload = await req.json();
-    const phoneMasked = payload.instrutorPhone
-      ? payload.instrutorPhone.substring(0, 2) + "****" + payload.instrutorPhone.slice(-4)
-      : "N/A";
-    logStep("Payload recebido", { 
-      aulaId: payload.aulaId, 
-      alunoNome: payload.alunoNome,
-      instrutorNome: payload.instrutorNome,
-      phone_masked: phoneMasked,
-    });
+    const rawPayload = await req.json();
 
     // Verificar se Z-API está configurado
     const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
@@ -146,6 +137,40 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // === FORMATO SIMPLES: { phone, message } - mensagem já formatada (usado pelo webhook) ===
+    if (rawPayload.phone && rawPayload.message) {
+      const phoneMasked = rawPayload.phone.substring(0, 2) + "****" + rawPayload.phone.slice(-4);
+      logStep("Formato simples detectado (webhook)", { phone_masked: phoneMasked });
+
+      const result = await sendWhatsAppViaZAPI(rawPayload.phone, rawPayload.message);
+
+      if (!result.success) {
+        logStep("Falha ao enviar WhatsApp (simples)", { error: result.error, phone_masked: phoneMasked });
+        return new Response(
+          JSON.stringify({ success: false, error: result.error }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+        );
+      }
+
+      logStep("WhatsApp enviado com sucesso (simples)", { messageId: result.messageId });
+      return new Response(
+        JSON.stringify({ success: true, messageId: result.messageId, provider: "zapi" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // === FORMATO ESTRUTURADO: WhatsAppPayload - monta mensagem internamente ===
+    const payload: WhatsAppPayload = rawPayload;
+    const phoneMasked = payload.instrutorPhone
+      ? payload.instrutorPhone.substring(0, 2) + "****" + payload.instrutorPhone.slice(-4)
+      : "N/A";
+    logStep("Formato estruturado detectado", { 
+      aulaId: payload.aulaId, 
+      alunoNome: payload.alunoNome,
+      instrutorNome: payload.instrutorNome,
+      phone_masked: phoneMasked,
+    });
 
     // Formatar data para exibição em português brasileiro
     const dataFormatada = new Date(payload.dataHora).toLocaleString("pt-BR", {
