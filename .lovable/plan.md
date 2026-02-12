@@ -1,32 +1,47 @@
 
 
-## Correção do Bug de Saque - Taxa R$ 3,67 não descontada
+## Correcao: Saque Falho + Valor Disponivel Nao Aparecendo
 
-### Problema Identificado
+### Problemas Identificados
 
-Na Edge Function `request-manual-transfer-pagarme`, o valor enviado para a API da Pagar.me esta errado:
+**1. Saque rejeitado registrado como "processado"**
+O saque da Cleia (transfer_id `532678205`, R$ 4,51) foi rejeitado pela Pagar.me (conforme email), mas na tabela `saques` consta como `status: processado`. Isso causa:
+- O frontend acha que ja houve saque e pode bloquear novos saques (cooldown de 2h)
+- O saldo "disponivel" na Pagar.me esta R$ 0,00 porque a transferencia falhou e o valor pode ter ficado retido
 
-- A funcao calcula `netAmountCents = availableAmount - 367` (linha 164)
-- Mas envia `availableAmount` (valor bruto) para a API da Pagar.me (linha ~195)
-- A Pagar.me cobra a taxa de R$ 3,67 por fora, entao o saldo nao e suficiente para cobrir transferencia + taxa
+**2. Toast de sucesso subtrai taxa duas vezes**
+Na `WithdrawModal.tsx` linha 199, apos o fix da edge function:
+- `data.amount` agora ja vem como valor liquido (ex: R$ 0,84)
+- O codigo faz `(data.amount || availableBalance) - WITHDRAWAL_FEE` — subtraindo a taxa novamente
+- Resultado: toast mostraria R$ -2,83 em vez de R$ 0,84
 
-No caso da Cleia: saldo de R$ 4,51, a funcao pediu transferencia de R$ 4,51, mas a Pagar.me precisava de R$ 4,51 + R$ 3,67 = R$ 8,18.
+### Correcoes
 
-### Correcao
+**Arquivo 1: Correcao de dados — Marcar saque falho como "rejeitado"**
+- Executar SQL para atualizar o saque `fef9b48c-dec3-43ec-95ce-cad944c4ac09` de `processado` para `rejeitado`
+- Isso desbloqueia novos saques para a Cleia
 
-Alterar a Edge Function para enviar `netAmountCents` (valor apos desconto da taxa) como o valor da transferencia na API da Pagar.me, em vez de `availableAmount`.
+**Arquivo 2: `src/components/instrutor/WithdrawModal.tsx`**
+- Linha 199: Usar `data.amount` diretamente (ja e o valor liquido) em vez de subtrair a taxa novamente
+- A edge function agora retorna `amount` (liquido), `gross_amount` (bruto) e `fee` separados
 
-### Mudancas Tecnicas
+**Arquivo 3: `src/components/instrutor/InstructorBalanceCard.tsx`**
+- Adicionar invalidacao do cache (React Query) apos saque com sucesso, conforme recomendado
+- Atualmente usa `useState` local, o que funciona, mas garantir que `fetchBalance()` no `handleWithdrawSuccess` efetivamente atualiza a UI
 
-**Arquivo**: `supabase/functions/request-manual-transfer-pagarme/index.ts`
+### Secao Tecnica
 
-1. Na chamada `POST /transfers`, trocar `amount: availableAmount` por `amount: netAmountCents`
-2. Atualizar o registro na tabela `saques` para gravar o valor liquido (`netAmountCents`) em vez do bruto, ou manter o bruto mas ajustar a resposta
-3. Atualizar a resposta de sucesso para refletir o valor correto transferido
-4. Adicionar log com o valor exato enviado para a API para facilitar debug futuro
+**SQL para corrigir o saque falho:**
+```sql
+UPDATE saques SET status = 'rejeitado' WHERE id = 'fef9b48c-dec3-43ec-95ce-cad944c4ac09';
+```
 
-### Resultado Esperado
+**WithdrawModal.tsx — Linha 199:**
+Antes: `const net = (data.amount || availableBalance) - WITHDRAWAL_FEE;`
+Depois: `const net = data.amount ?? (availableBalance - WITHDRAWAL_FEE);`
 
-- Saque da Cleia (saldo R$ 4,51): transferencia de R$ 0,84 (451 - 367 centavos) -- sucesso
-- A Pagar.me debita R$ 3,67 de taxa + R$ 0,84 de transferencia = R$ 4,51 total do saldo
-- Frontend ja mostra o breakdown correto (saldo, taxa, valor liquido) -- nenhuma mudanca necessaria no frontend
+Isso usa o valor liquido retornado pela API (que ja tem a taxa descontada), e so faz o calculo local como fallback.
+
+**Sobre o saldo R$ 0,00 da Cleia na Pagar.me:**
+O log mais recente mostra `available_amount: 0` e `transferred_amount: 168` (R$ 1,68). Como a Pagar.me rejeitou o saque, o valor pode ter sido devolvido ao saldo mas ainda nao aparece. Apos corrigir o status local, a Cleia pode tentar um novo saque — desta vez com a correcao do `netAmountCents`, o valor enviado sera correto.
+
