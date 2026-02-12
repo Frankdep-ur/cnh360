@@ -183,8 +183,8 @@ serve(async (req) => {
     const saqueId = saqueRecord.id;
     logStep("Saque record created", { saqueId, amount: availableAmount });
 
-    // Create transfer (Pagar.me V5)
-    logStep("Creating transfer", { recipientId, amount: availableAmount });
+    // Create transfer (Pagar.me V5) - send net amount (after fee deduction)
+    logStep("Creating transfer", { recipientId, grossAmount: availableAmount, fee: WITHDRAWAL_FEE_CENTS, netAmount: netAmountCents });
 
     const transferRes = await fetch("https://api.pagar.me/core/v5/transfers", {
       method: "POST",
@@ -194,7 +194,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         recipient_id: recipientId,
-        amount: availableAmount,
+        amount: netAmountCents,
       }),
     });
 
@@ -235,7 +235,9 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         transfer_id: transferData.id,
-        amount: availableAmount / 100,
+        amount: netAmountCents / 100,
+        gross_amount: availableAmount / 100,
+        fee: WITHDRAWAL_FEE_CENTS / 100,
         status: transferData.status,
         message: "Saque solicitado com sucesso",
       }),
