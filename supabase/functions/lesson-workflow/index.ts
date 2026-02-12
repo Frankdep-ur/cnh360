@@ -814,7 +814,7 @@ Deno.serve(async (req) => {
                 taxa_plataforma: taxaPlataforma,
                 valor_instrutor: valorInstrutor,
                 metodo: "pix",
-                status: "aprovado",
+                status: "pendente",
                 pago_em: new Date().toISOString(),
               });
 
@@ -826,6 +826,18 @@ Deno.serve(async (req) => {
           } else {
             console.log("Payment already exists for aula:", aula_id);
           }
+        }
+
+        // Liberar pagamento: atualizar status para aprovado (saldo disponível para saque)
+        const { error: liberarError } = await supabase
+          .from("pagamentos")
+          .update({ status: "aprovado", pago_em: new Date().toISOString() })
+          .eq("aula_id", aula_id);
+
+        if (liberarError) {
+          console.error("Error updating payment status to aprovado:", liberarError);
+        } else {
+          console.log("Payment status updated to aprovado for aula:", aula_id);
         }
 
         // Send WhatsApp notification for payment
