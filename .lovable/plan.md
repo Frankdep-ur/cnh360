@@ -1,48 +1,51 @@
 
+## Correcao: WhatsApp do Frank Alexandre nao foi enviado
 
-## Correcao: Exibir Saldo Real para Saque
+### Problema
 
-### Situacao Atual
+O webhook `pagarme-payment-webhook` chama `send-whatsapp-notification` com o payload:
+```
+{ phone: "...", message: "mensagem ja formatada" }
+```
 
-A Pagar.me retorna `available_amount: 0` para a Cleia. O sistema de fallback local encontra R$ 9,04 em pagamentos aprovados, mas coloca esse valor em `waitingFunds` ("A receber"), nao em `available` ("Disponivel para saque").
+Porem, `send-whatsapp-notification` espera o formato `WhatsAppPayload`:
+```
+{ instrutorPhone: "...", valor: number, alunoNome: string, ... }
+```
 
-Isso esta tecnicamente correto: o dinheiro nao esta disponivel na Pagar.me ainda (prazo D+14 a D+30). Porem, a experiencia do usuario fica confusa ao ver R$ 0,00 disponivel.
+Como `instrutorPhone` e `valor` chegam `undefined`, o codigo quebra em `payload.valor.toFixed(2)`.
 
-### Problemas Identificados
+### Solucao
 
-1. **Saldo da Pagar.me zerado**: A transferencia falha anterior (R$ 4,51) pode ter consumido o saldo disponivel. Como a Pagar.me rejeitou mas o sistema registrou como "processado", o saldo pode nao ter sido devolvido corretamente.
+Modificar `send-whatsapp-notification` para aceitar **dois formatos de payload**:
 
-2. **Fallback local so alimenta waitingFunds**: A edge function `get-instructor-balance-pagarme` (linhas 127-148) coloca os ganhos locais em `waitingFunds`, nunca em `available`. Isso e correto para o fluxo de saque, mas o usuario nao entende por que o saldo "disponivel" e zero.
+1. **Formato simples** (usado pelo webhook): `{ phone, message }` - mensagem ja pronta, envia direto
+2. **Formato estruturado** (usado pelo `check-payment-status-pagarme`): `WhatsAppPayload` com campos separados - monta a mensagem internamente
 
-3. **UI nao explica a situacao**: Quando `available = 0` e `waitingFunds > 0`, a UI mostra o valor em "A receber" com um link de "Duvidas? Fale conosco", mas a secao principal "Disponivel para saque: R$ 0,00" fica proeminente e confusa.
+### Arquivo a alterar
 
-### Correcoes Propostas
+**`supabase/functions/send-whatsapp-notification/index.ts`**
 
-**Arquivo 1: `supabase/functions/get-instructor-balance-pagarme/index.ts`**
-- Adicionar um campo `localPendingEarnings` na resposta para que o frontend saiba separar ganhos locais pendentes do saldo real da Pagar.me
-- Adicionar campo `settlementInfo` com mensagem explicativa sobre o prazo de liquidacao
+Na secao do handler (linha 122+), adicionar deteccao do formato do payload:
 
-**Arquivo 2: `src/components/instrutor/InstructorBalanceCard.tsx`**
-- Quando `available = 0` e `waitingFunds > 0`, mostrar uma mensagem explicativa na secao "Disponivel para saque" em vez de apenas "R$ 0,00"
-- Exemplo: "R$ 0,00 - Seus ganhos de R$ 9,04 estao em processamento (prazo: 14-30 dias uteis)"
-- Adicionar icone informativo com tooltip explicando o ciclo de liquidacao da Pagar.me
+```typescript
+const rawPayload = await req.json();
+
+// Formato simples: { phone, message } - mensagem ja formatada
+if (rawPayload.phone && rawPayload.message) {
+  const result = await sendWhatsAppViaZAPI(rawPayload.phone, rawPayload.message);
+  // retornar resultado...
+}
+
+// Formato estruturado: WhatsAppPayload - montar mensagem
+const payload: WhatsAppPayload = rawPayload;
+// codigo existente continua...
+```
 
 ### Secao Tecnica
 
-**Edge Function - Novo campo na resposta:**
-```typescript
-// Adicionar na resposta de sucesso:
-localPendingEarnings: ganhosPendentes > 0 ? ganhosPendentes : undefined,
-settlementMessage: (balance.available === 0 && ganhosPendentes > 0) 
-  ? "Seus ganhos estão em processamento. Prazo de liberação: 14 a 30 dias úteis após a aula."
-  : null,
-```
-
-**InstructorBalanceCard.tsx - Secao "Disponivel para saque":**
-Quando `balance.available === 0` e `balance.waitingFunds > 0`:
-- Manter "R$ 0,00" como valor principal
-- Adicionar texto explicativo abaixo: "Seus ganhos de [valor] estao em processamento"
-- Mudar a cor do badge para amarelo/amber em vez de verde para indicar estado pendente
-
-Isso mantem a precisao financeira (o saldo realmente nao esta disponivel para saque ainda) mas comunica claramente ao instrutor que ele tem ganhos a caminho.
-
+- Detectar o formato pelo campo `phone` + `message` (exclusivo do webhook)
+- Se presente, chamar `sendWhatsAppViaZAPI(rawPayload.phone, rawPayload.message)` diretamente
+- Manter o fluxo existente para o formato `WhatsAppPayload` intacto
+- Adicionar log diferenciado para cada formato
+- Nenhum outro arquivo precisa ser alterado
