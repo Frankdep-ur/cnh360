@@ -183,12 +183,6 @@ serve(async (req) => {
       message = "Sua conta está suspensa. Entre em contato com o suporte.";
     }
 
-    // Determine settlement message
-    let settlementMessage: string | null = null;
-    if (balance.available === 0 && balance.waitingFunds > 0) {
-      settlementMessage = "Seus ganhos estão em processamento. Prazo de liberação: 14 a 30 dias úteis após a aula.";
-    }
-
     return new Response(
       JSON.stringify({
         success: true,
@@ -196,7 +190,6 @@ serve(async (req) => {
         recipientId,
         recipientStatus,
         message,
-        settlementMessage,
       }),
       { 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
