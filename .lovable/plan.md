@@ -1,55 +1,61 @@
 
-# Plano de Correção de Segurança
 
-## Problemas Identificados (3 itens)
+# Correcao: Quiz nao aparece nas aulas
 
-### 1. XSS no Conteudo do Curso (warn)
-O arquivo `AulaConteudo.tsx` usa `dangerouslySetInnerHTML` sem sanitização. Vamos adicionar o DOMPurify (já instalado como dependência) para sanitizar o HTML antes de renderizar.
+## Problema Identificado
 
-**Arquivo:** `src/pages/aluno/AulaConteudo.tsx`
-- Importar DOMPurify
-- Envolver todo o HTML gerado pelas regex em `DOMPurify.sanitize()` com tags e atributos permitidos
+A causa raiz e um conflito entre duas correcoes de seguranca aplicadas anteriormente:
 
-### 2. Quiz RLS - Finding desatualizado (error)
-A política `"Block direct access to quiz questions"` já está ativa. O finding `rls_curso_tables` está desatualizado e será removido do tracker.
+1. A politica RLS `"Block direct access to quiz questions"` bloqueia **todo** SELECT na tabela `curso_quiz_perguntas` com `USING (false)`
+2. A view `curso_quiz_perguntas_publico` foi recriada com `security_invoker = true`, o que faz com que ela respeite as politicas RLS do usuario
 
-### 3. Security Definer View (error - linter do banco)
-A view `curso_quiz_perguntas_publico` foi criada com owner `postgres`, o que a torna uma Security Definer view. Isso significa que queries na view ignoram as políticas RLS do usuário que faz a query.
+Resultado: quando a view tenta ler a tabela base, a RLS bloqueia a leitura, retornando 0 perguntas. O frontend interpreta isso como "aula sem quiz" e marca a aula como concluida automaticamente.
 
-**Correção via migração:**
-- Recriar a view com `SECURITY INVOKER` para que respeite as permissões do usuário que consulta
+**Todas as 84 aulas possuem quiz no banco de dados** -- o problema e apenas de acesso.
 
----
+## Solucao
 
-## Detalhes Técnicos
+### 1. Ajustar a politica RLS para permitir leitura via view
 
-### AulaConteudo.tsx - Sanitização XSS
-```typescript
-import DOMPurify from 'dompurify';
+Substituir a politica `"Block direct access to quiz questions"` por uma que permita leitura autenticada, ja que a view ja filtra as colunas sensiveis (exclui `resposta_correta`):
 
-// Na renderização:
-const sanitizedHtml = DOMPurify.sanitize(
-  aula.conteudo_texto
-    .replace(/* regex existentes */),
-  {
-    ALLOWED_TAGS: ['h1','h2','h3','p','strong','li','ul','ol','table','tr','td','th','div'],
-    ALLOWED_ATTR: ['class']
-  }
-);
-```
-
-### Migração SQL - Corrigir Security Definer View
 ```sql
-DROP VIEW IF EXISTS public.curso_quiz_perguntas_publico;
-CREATE VIEW public.curso_quiz_perguntas_publico
-  WITH (security_invoker = true) AS
-  SELECT id, aula_id, ordem, pergunta, opcoes, created_at
-  FROM public.curso_quiz_perguntas;
-GRANT SELECT ON public.curso_quiz_perguntas_publico TO authenticated;
+DROP POLICY IF EXISTS "Block direct access to quiz questions" ON public.curso_quiz_perguntas;
+CREATE POLICY "Authenticated can read quiz questions"
+  ON public.curso_quiz_perguntas
+  FOR SELECT
+  TO authenticated
+  USING (true);
 ```
 
-### Atualizar Security Tracker
-- Deletar `rls_curso_tables` (já corrigido)
-- Deletar `xss_aula_conteudo` (após fix)
-- Deletar `SUPA_security_definer_view` (após fix)
-- Ignorar `webhook_no_signature` (a pedido do usuário, para depois)
+Isso e seguro porque:
+- A view `curso_quiz_perguntas_publico` ja exclui a coluna `resposta_correta`
+- A validacao do quiz acontece server-side na Edge Function `validate-quiz` (que usa service role)
+- Usuarios anonimos continuam sem acesso (apenas `authenticated`)
+
+### 2. Remover o fallback de "sem quiz" no frontend
+
+Alterar `AulaConteudo.tsx` para que, quando `quiz.length === 0`, mostre uma mensagem de carregamento/erro em vez de marcar como concluida:
+
+- Trocar o icone de CheckCircle por AlertCircle
+- Texto: "Erro ao carregar quiz. Tente novamente."
+- Botao para recarregar em vez de ir para proxima aula
+
+Isso impede que qualquer falha de rede ou RLS permita pular o quiz.
+
+## Detalhes Tecnicos
+
+**Migracao SQL:**
+```sql
+DROP POLICY IF EXISTS "Block direct access to quiz questions" 
+  ON public.curso_quiz_perguntas;
+
+CREATE POLICY "Authenticated can read quiz questions"
+  ON public.curso_quiz_perguntas
+  FOR SELECT
+  TO authenticated
+  USING (true);
+```
+
+**AulaConteudo.tsx** (linhas 502-512): Substituir o bloco `quiz.length === 0` por mensagem de erro com botao de retry, impedindo que o aluno avance sem completar o quiz.
+
