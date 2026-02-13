@@ -501,13 +501,13 @@ export default function AulaConteudo() {
         <div className="p-4">
           {quiz.length === 0 ? (
             <div className="text-center py-8">
-              <CheckCircle2 className="w-16 h-16 text-[#00c853] mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Aula Concluída!</h3>
+              <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Erro ao carregar quiz</h3>
               <p className="text-muted-foreground mb-4">
-                Esta aula não possui quiz obrigatório.
+                Não foi possível carregar as perguntas do quiz. Todas as aulas possuem quiz obrigatório.
               </p>
-              <Button onClick={irParaProximaAula} className="bg-[#00c853] hover:bg-[#00a843]">
-                Próxima Aula
+              <Button onClick={() => window.location.reload()} variant="outline">
+                Tentar novamente
               </Button>
             </div>
           ) : resultado?.aprovado ? (
