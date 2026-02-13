@@ -118,18 +118,21 @@ export function GPSValidationMap({ eventos, pontoEncontro, className }: GPSValid
             font-weight: bold;
             font-size: 12px;
           `;
-          el.innerHTML = String(index + 1);
+          el.textContent = String(index + 1);
 
-          // Add popup
-          const popup = new mapboxgl.default.Popup({ offset: 25 }).setHTML(`
-            <div style="padding: 8px;">
-              <strong>${point.label}</strong>
-              <br/>
-              <small style="color: #666;">
-                ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
-              </small>
-            </div>
-          `);
+          // Add popup with safe DOM construction
+          const popupContent = document.createElement('div');
+          popupContent.style.padding = '8px';
+          const strong = document.createElement('strong');
+          strong.textContent = point.label;
+          popupContent.appendChild(strong);
+          popupContent.appendChild(document.createElement('br'));
+          const small = document.createElement('small');
+          small.style.color = '#666';
+          small.textContent = `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+          popupContent.appendChild(small);
+
+          const popup = new mapboxgl.default.Popup({ offset: 25 }).setDOMContent(popupContent);
 
           new mapboxgl.default.Marker(el)
             .setLngLat([point.lng, point.lat])

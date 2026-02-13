@@ -82,25 +82,26 @@ export function RealtimeMap({
     if (instructorLocation) {
       const el = document.createElement('div');
       el.className = 'instructor-marker';
-      el.innerHTML = `
-        <div style="
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
-            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
-            <circle cx="7" cy="17" r="2"/>
-            <circle cx="17" cy="17" r="2"/>
-          </svg>
-        </div>
-      `;
+      const markerDiv = document.createElement('div');
+      markerDiv.style.cssText = 'width:40px;height:40px;background:linear-gradient(135deg,hsl(var(--primary)),hsl(var(--primary)/0.8));border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'white');
+      svg.setAttribute('stroke', 'white');
+      svg.setAttribute('stroke-width', '2');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2');
+      svg.appendChild(path);
+      const c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c1.setAttribute('cx', '7'); c1.setAttribute('cy', '17'); c1.setAttribute('r', '2');
+      svg.appendChild(c1);
+      const c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c2.setAttribute('cx', '17'); c2.setAttribute('cy', '17'); c2.setAttribute('r', '2');
+      svg.appendChild(c2);
+      markerDiv.appendChild(svg);
+      el.appendChild(markerDiv);
 
       if (instructorMarker.current) {
         instructorMarker.current.setLngLat([instructorLocation.longitude, instructorLocation.latitude]);
@@ -125,24 +126,23 @@ export function RealtimeMap({
     if (studentLocation) {
       const el = document.createElement('div');
       el.className = 'student-marker';
-      el.innerHTML = `
-        <div style="
-          width: 36px;
-          height: 36px;
-          background: hsl(var(--accent));
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
-            <circle cx="12" cy="8" r="5"/>
-            <path d="M20 21a8 8 0 0 0-16 0"/>
-          </svg>
-        </div>
-      `;
+      const sDiv = document.createElement('div');
+      sDiv.style.cssText = 'width:36px;height:36px;background:hsl(var(--accent));border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;';
+      const sSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sSvg.setAttribute('width', '18');
+      sSvg.setAttribute('height', '18');
+      sSvg.setAttribute('viewBox', '0 0 24 24');
+      sSvg.setAttribute('fill', 'white');
+      sSvg.setAttribute('stroke', 'white');
+      sSvg.setAttribute('stroke-width', '2');
+      const sCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      sCircle.setAttribute('cx', '12'); sCircle.setAttribute('cy', '8'); sCircle.setAttribute('r', '5');
+      sSvg.appendChild(sCircle);
+      const sPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      sPath.setAttribute('d', 'M20 21a8 8 0 0 0-16 0');
+      sSvg.appendChild(sPath);
+      sDiv.appendChild(sSvg);
+      el.appendChild(sDiv);
 
       if (studentMarker.current) {
         studentMarker.current.setLngLat([studentLocation.longitude, studentLocation.latitude]);
@@ -161,27 +161,12 @@ export function RealtimeMap({
     if (destinationLocation) {
       const el = document.createElement('div');
       el.className = 'destination-marker';
-      el.innerHTML = `
-        <div style="
-          width: 32px;
-          height: 32px;
-          background: #ef4444;
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          border: 3px solid white;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <div style="
-            width: 10px;
-            height: 10px;
-            background: white;
-            border-radius: 50%;
-          "></div>
-        </div>
-      `;
+      const dDiv = document.createElement('div');
+      dDiv.style.cssText = 'width:32px;height:32px;background:#ef4444;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;';
+      const innerDot = document.createElement('div');
+      innerDot.style.cssText = 'width:10px;height:10px;background:white;border-radius:50%;';
+      dDiv.appendChild(innerDot);
+      el.appendChild(dDiv);
 
       if (destinationMarker.current) {
         destinationMarker.current.setLngLat([destinationLocation.longitude, destinationLocation.latitude]);
