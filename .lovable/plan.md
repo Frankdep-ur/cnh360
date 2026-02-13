@@ -1,75 +1,55 @@
 
+# Plano de Correção de Segurança
 
-## Correção: Saldo Disponível Antes da Aula Finalizada
+## Problemas Identificados (3 itens)
 
-### Problema Identificado
+### 1. XSS no Conteudo do Curso (warn)
+O arquivo `AulaConteudo.tsx` usa `dangerouslySetInnerHTML` sem sanitização. Vamos adicionar o DOMPurify (já instalado como dependência) para sanitizar o HTML antes de renderizar.
 
-Atualmente, o registro de pagamento (`pagamentos`) é criado com status `"aprovado"` no momento em que o instrutor **aceita** a aula (antes mesmo de começar). A consulta de saldo soma TODOS os pagamentos com status `"aprovado"`, independente de a aula ter sido finalizada ou não.
+**Arquivo:** `src/pages/aluno/AulaConteudo.tsx`
+- Importar DOMPurify
+- Envolver todo o HTML gerado pelas regex em `DOMPurify.sanitize()` com tags e atributos permitidos
 
-Isso faz com que o instrutor veja saldo disponível para saque antes de concluir a aula com o aluno via QR Code.
+### 2. Quiz RLS - Finding desatualizado (error)
+A política `"Block direct access to quiz questions"` já está ativa. O finding `rls_curso_tables` está desatualizado e será removido do tracker.
 
-### Fluxo Atual (com problema)
+### 3. Security Definer View (error - linter do banco)
+A view `curso_quiz_perguntas_publico` foi criada com owner `postgres`, o que a torna uma Security Definer view. Isso significa que queries na view ignoram as políticas RLS do usuário que faz a query.
 
-```text
-Aluno paga (PIX) → Webhook confirma → Instrutor aceita aula
-→ pagamentos.insert(status: "aprovado")   ← AQUI o saldo já aparece!
-→ Instrutor inicia aula → QR Code → Finaliza aula
-```
+**Correção via migração:**
+- Recriar a view com `SECURITY INVOKER` para que respeite as permissões do usuário que consulta
 
-### Fluxo Correto (após correção)
+---
 
-```text
-Aluno paga (PIX) → Webhook confirma → Instrutor aceita aula
-→ pagamentos.insert(status: "pendente")   ← Saldo NÃO aparece ainda
-→ Instrutor inicia aula → QR Code → Finaliza aula
-→ pagamentos.update(status: "aprovado")   ← Agora sim, saldo disponível!
-```
+## Detalhes Técnicos
 
-### Solução
-
-Introduzir dois estados no campo `status` da tabela `pagamentos`:
-- **`"pendente"`**: pagamento capturado, aula ainda em andamento
-- **`"aprovado"`**: aula finalizada, saldo liberado para saque
-
-### Arquivos a Alterar
-
-#### 1. `supabase/functions/capture-payment-pagarme/index.ts`
-- Mudar os `insert` de `pagamentos` para usar `status: "pendente"` em vez de `"aprovado"`
-- Isso se aplica a todas as 3 inserções no arquivo (PIX sem transaction, cartão, e fallback)
-
-#### 2. `src/hooks/useAulasPendentes.ts`
-- O `capture-payment-pagarme` chamado ao aceitar a aula já vai inserir com `"pendente"` (via alteração acima)
-- Nenhuma mudança necessária neste arquivo
-
-#### 3. `supabase/functions/lesson-workflow/index.ts`
-- Na ação de **finalização da aula** (quando o QR Code final é validado):
-  - Após chamar `capture-payment-pagarme`, atualizar o registro em `pagamentos` para `status: "aprovado"`
-  - Se o registro já foi criado com `"pendente"` (caminho sem gateway), também atualizar para `"aprovado"`
-
-#### 4. `supabase/functions/get-instructor-balance-pagarme/index.ts`
-- Nenhuma mudança necessária: a query já filtra por `status: "aprovado"`, então pagamentos `"pendente"` serão automaticamente excluídos do saldo
-
-### Detalhes Técnicos
-
-**`capture-payment-pagarme/index.ts`** (3 locais de insert):
-- Linha ~117-127: Caso sem `transaction_id` → mudar `status: "aprovado"` para `status: "pendente"`
-- Linha ~194-202: Caso cartão de crédito → mudar para `status: "pendente"`
-- Linha ~270-276: Caso fallback → mudar para `status: "pendente"`
-
-**`lesson-workflow/index.ts`** (na ação de finalização):
-- Após o bloco que chama `capture-payment-pagarme` (linhas ~780-828), adicionar:
+### AulaConteudo.tsx - Sanitização XSS
 ```typescript
-// Liberar pagamento: atualizar status para aprovado
-await supabase
-  .from("pagamentos")
-  .update({ status: "aprovado" })
-  .eq("aula_id", aula_id);
+import DOMPurify from 'dompurify';
+
+// Na renderização:
+const sanitizedHtml = DOMPurify.sanitize(
+  aula.conteudo_texto
+    .replace(/* regex existentes */),
+  {
+    ALLOWED_TAGS: ['h1','h2','h3','p','strong','li','ul','ol','table','tr','td','th','div'],
+    ALLOWED_ATTR: ['class']
+  }
+);
 ```
 
-Isso garante que, independente do caminho (gateway ou direto), o pagamento só será contabilizado no saldo após a validação completa da aula.
+### Migração SQL - Corrigir Security Definer View
+```sql
+DROP VIEW IF EXISTS public.curso_quiz_perguntas_publico;
+CREATE VIEW public.curso_quiz_perguntas_publico
+  WITH (security_invoker = true) AS
+  SELECT id, aula_id, ordem, pergunta, opcoes, created_at
+  FROM public.curso_quiz_perguntas;
+GRANT SELECT ON public.curso_quiz_perguntas_publico TO authenticated;
+```
 
-### Impacto
-- Saldo do instrutor só aparece após finalizar a aula com QR Code
-- Saques só podem ser feitos com saldo de aulas concluídas
-- Pagamentos de aulas em andamento ficam "invisíveis" no saldo até conclusão
-- Nenhuma mudança na interface do usuário necessária
+### Atualizar Security Tracker
+- Deletar `rls_curso_tables` (já corrigido)
+- Deletar `xss_aula_conteudo` (após fix)
+- Deletar `SUPA_security_definer_view` (após fix)
+- Ignorar `webhook_no_signature` (a pedido do usuário, para depois)
