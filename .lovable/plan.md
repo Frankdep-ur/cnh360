@@ -1,61 +1,62 @@
 
 
-# Correcao: Quiz nao aparece nas aulas
+# Correcao: Card "A receber" com valor incorreto
 
-## Problema Identificado
+## Problema
 
-A causa raiz e um conflito entre duas correcoes de seguranca aplicadas anteriormente:
-
-1. A politica RLS `"Block direct access to quiz questions"` bloqueia **todo** SELECT na tabela `curso_quiz_perguntas` com `USING (false)`
-2. A view `curso_quiz_perguntas_publico` foi recriada com `security_invoker = true`, o que faz com que ela respeite as politicas RLS do usuario
-
-Resultado: quando a view tenta ler a tabela base, a RLS bloqueia a leitura, retornando 0 perguntas. O frontend interpreta isso como "aula sem quiz" e marca a aula como concluida automaticamente.
-
-**Todas as 84 aulas possuem quiz no banco de dados** -- o problema e apenas de acesso.
+O card "A receber" no saldo do instrutor exibe R$ 4,52 com "Aguardando liberacao" mesmo apos o instrutor ja ter sacado. Esse valor vem do campo `waiting_funds` da API Pagar.me, que pode representar centavos residuais pos-transferencia e nao um valor real a ser recebido.
 
 ## Solucao
 
-### 1. Ajustar a politica RLS para permitir leitura via view
+Ajustar a logica de exibicao em dois arquivos:
 
-Substituir a politica `"Block direct access to quiz questions"` por uma que permita leitura autenticada, ja que a view ja filtra as colunas sensiveis (exclui `resposta_correta`):
+### 1. InstructorBalanceCard.tsx (linhas 560-583)
 
-```sql
-DROP POLICY IF EXISTS "Block direct access to quiz questions" ON public.curso_quiz_perguntas;
-CREATE POLICY "Authenticated can read quiz questions"
-  ON public.curso_quiz_perguntas
-  FOR SELECT
-  TO authenticated
-  USING (true);
-```
+- Se `waitingFunds > 0` e `waitingFunds > WITHDRAWAL_FEE (R$ 3,67)`: mostrar o valor liquido que o instrutor recebera (waitingFunds - R$ 3,67) com texto "Liquido apos taxa de saque"
+- Se `waitingFunds > 0` mas `waitingFunds <= WITHDRAWAL_FEE`: mostrar R$ 0,00 com texto "Valor insuficiente para saque" (a taxa consumiria tudo)
+- Se `waitingFunds === 0`: mostrar R$ 0,00 sem subtexto
+- Remover o texto "Aguardando liberacao" e o link de WhatsApp que confunde o instrutor quando o valor e residual
 
-Isso e seguro porque:
-- A view `curso_quiz_perguntas_publico` ja exclui a coluna `resposta_correta`
-- A validacao do quiz acontece server-side na Edge Function `validate-quiz` (que usa service role)
-- Usuarios anonimos continuam sem acesso (apenas `authenticated`)
+### 2. InstrutorGanhos.tsx (linhas 294-307)
 
-### 2. Remover o fallback de "sem quiz" no frontend
-
-Alterar `AulaConteudo.tsx` para que, quando `quiz.length === 0`, mostre uma mensagem de carregamento/erro em vez de marcar como concluida:
-
-- Trocar o icone de CheckCircle por AlertCircle
-- Texto: "Erro ao carregar quiz. Tente novamente."
-- Botao para recarregar em vez de ir para proxima aula
-
-Isso impede que qualquer falha de rede ou RLS permita pular o quiz.
+Aplicar a mesma logica no card "Pendente":
+- Calcular o valor liquido (pendente - taxa)
+- Se o liquido for <= 0, mostrar R$ 0,00
+- Remover "Liberacao em 24h" que e impreciso
 
 ## Detalhes Tecnicos
 
-**Migracao SQL:**
-```sql
-DROP POLICY IF EXISTS "Block direct access to quiz questions" 
-  ON public.curso_quiz_perguntas;
+**InstructorBalanceCard.tsx** - Substituir bloco "A receber" (linhas 560-583):
 
-CREATE POLICY "Authenticated can read quiz questions"
-  ON public.curso_quiz_perguntas
-  FOR SELECT
-  TO authenticated
-  USING (true);
+```typescript
+<div className="bg-muted/50 rounded-xl p-3">
+  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+    <Clock className="w-3 h-3" />
+    A receber
+  </div>
+  <div className="font-semibold text-foreground">
+    {balance.waitingFunds > WITHDRAWAL_FEE
+      ? formatCurrency(balance.waitingFunds - WITHDRAWAL_FEE, balance.currency)
+      : formatCurrency(0, balance.currency)}
+  </div>
+  {balance.waitingFunds > WITHDRAWAL_FEE && (
+    <p className="text-xs text-muted-foreground mt-1">
+      Liquido (taxa de saque: R$ 3,67)
+    </p>
+  )}
+  {balance.waitingFunds > 0 && balance.waitingFunds <= WITHDRAWAL_FEE && (
+    <p className="text-xs text-muted-foreground mt-1">
+      Valor insuficiente para saque
+    </p>
+  )}
+</div>
 ```
 
-**AulaConteudo.tsx** (linhas 502-512): Substituir o bloco `quiz.length === 0` por mensagem de erro com botao de retry, impedindo que o aluno avance sem completar o quiz.
+**InstrutorGanhos.tsx** - Substituir card "Pendente" (linhas 294-307):
+
+```typescript
+const pendenteLiquido = saldo.pendente > 3.67 ? saldo.pendente - 3.67 : 0;
+```
+
+Mostrar `pendenteLiquido` em vez de `saldo.pendente`, com contexto adequado.
 
