@@ -294,16 +294,20 @@ export default function InstrutorGanhos() {
           <Card className="p-4 shadow-card">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-amber-500" />
-              <span className="text-sm text-muted-foreground">Pendente</span>
+              <span className="text-sm text-muted-foreground">A receber</span>
             </div>
             <p className="text-xl font-bold text-foreground">
               {loadingBalance ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `R$ ${saldo.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                `R$ ${(saldo.pendente > 3.67 ? saldo.pendente - 3.67 : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
               )}
             </p>
-            <p className="text-xs text-muted-foreground">Liberação em 24h</p>
+            {saldo.pendente > 3.67 ? (
+              <p className="text-xs text-muted-foreground">Líquido (taxa: R$ 3,67)</p>
+            ) : saldo.pendente > 0 ? (
+              <p className="text-xs text-muted-foreground">Valor insuficiente para saque</p>
+            ) : null}
           </Card>
           
           <Card className="p-4 shadow-card">

@@ -561,24 +561,22 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
             <div className="bg-muted/50 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <Clock className="w-3 h-3" />
-                {recipientStatus === "affiliation" ? "Pendente (ativação)" : "A receber"}
+                A receber
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.waitingFunds, balance.currency)}
+                {balance.waitingFunds > 3.67
+                  ? formatCurrency(balance.waitingFunds - 3.67, balance.currency)
+                  : formatCurrency(0, balance.currency)}
               </div>
-              {recipientStatus === "affiliation" && balance.waitingFunds > 0 && (
-                <p className="text-xs text-amber-600 mt-1">Liberação em 48h</p>
+              {balance.waitingFunds > 3.67 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Líquido (taxa: R$ 3,67)
+                </p>
               )}
-              {recipientStatus === "active" && balance.waitingFunds > 0 && balance.available === 0 && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  <p>Aguardando liberação</p>
-                  <button 
-                    className="text-primary underline text-left"
-                    onClick={() => window.open('https://wa.me/5518981288372?text=Olá, gostaria de saber sobre o prazo de liberação do meu saldo', '_blank')}
-                  >
-                    Dúvidas? Fale conosco
-                  </button>
-                </div>
+              {balance.waitingFunds > 0 && balance.waitingFunds <= 3.67 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor insuficiente para saque
+                </p>
               )}
             </div>
             
