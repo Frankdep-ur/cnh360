@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, BookOpen, HelpCircle, Trophy, AlertCircle, ExternalLink, Upload } from 'lucide-react';
@@ -462,17 +463,23 @@ export default function AulaConteudo() {
           <div 
             className="prose prose-sm dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ 
-              __html: aula.conteudo_texto
-                .replace(/^# (.*$)/gm, '<h1 class="text-xl font-bold mt-6 mb-3 text-foreground">$1</h1>')
-                .replace(/^## (.*$)/gm, '<h2 class="text-lg font-semibold mt-5 mb-2 text-foreground">$1</h2>')
-                .replace(/^### (.*$)/gm, '<h3 class="text-base font-medium mt-4 mb-2 text-foreground">$1</h3>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
-                .replace(/\n\n/g, '</p><p class="mb-3 text-muted-foreground">')
-                .replace(/^- (.*$)/gm, '<li class="ml-4 text-muted-foreground">$1</li>')
-                .replace(/^\d+\. (.*$)/gm, '<li class="ml-4 text-muted-foreground">$1</li>')
-                .replace(/\|(.+)\|/g, (match) => {
-                  return `<div class="overflow-x-auto my-3"><table class="min-w-full text-sm border">${match}</table></div>`;
-                })
+              __html: DOMPurify.sanitize(
+                aula.conteudo_texto
+                  .replace(/^# (.*$)/gm, '<h1 class="text-xl font-bold mt-6 mb-3 text-foreground">$1</h1>')
+                  .replace(/^## (.*$)/gm, '<h2 class="text-lg font-semibold mt-5 mb-2 text-foreground">$1</h2>')
+                  .replace(/^### (.*$)/gm, '<h3 class="text-base font-medium mt-4 mb-2 text-foreground">$1</h3>')
+                  .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
+                  .replace(/\n\n/g, '</p><p class="mb-3 text-muted-foreground">')
+                  .replace(/^- (.*$)/gm, '<li class="ml-4 text-muted-foreground">$1</li>')
+                  .replace(/^\d+\. (.*$)/gm, '<li class="ml-4 text-muted-foreground">$1</li>')
+                  .replace(/\|(.+)\|/g, (match) => {
+                    return `<div class="overflow-x-auto my-3"><table class="min-w-full text-sm border">${match}</table></div>`;
+                  }),
+                {
+                  ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'strong', 'li', 'ul', 'ol', 'table', 'tr', 'td', 'th', 'div'],
+                  ALLOWED_ATTR: ['class']
+                }
+              )
             }}
           />
           
