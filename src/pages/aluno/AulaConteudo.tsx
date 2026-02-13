@@ -18,8 +18,13 @@ interface QuizPergunta {
   ordem: number;
   pergunta: string;
   opcoes: any;
+}
+
+interface QuizDetalhe {
+  perguntaId: string;
   resposta_correta: string;
   explicacao: string | null;
+  acertou: boolean;
 }
 
 export default function AulaConteudo() {
@@ -35,7 +40,7 @@ export default function AulaConteudo() {
   // Estado do Quiz
   const [respostas, setRespostas] = useState<{ [key: string]: string }>({});
   const [quizEnviado, setQuizEnviado] = useState(false);
-  const [resultado, setResultado] = useState<{ aprovado: boolean; nota: number; acertos?: number; total?: number } | null>(null);
+  const [resultado, setResultado] = useState<{ aprovado: boolean; nota: number; acertos?: number; total?: number; detalhes?: QuizDetalhe[] } | null>(null);
   const [mostrarExplicacoes, setMostrarExplicacoes] = useState(false);
 
   // Estado da tela de conclusão
@@ -62,7 +67,7 @@ export default function AulaConteudo() {
       try {
         const dados = await buscarAulaComQuiz(aulaId);
         setAula(dados);
-        setQuiz(dados.quiz || []);
+        setQuiz((dados.quiz || []) as unknown as QuizPergunta[]);
         
         // Registrar início da aula
         await iniciarAula(aulaId);
@@ -527,7 +532,8 @@ export default function AulaConteudo() {
               <div className="space-y-6">
                 {quiz.map((pergunta, index) => {
                   const respostaUsuario = respostas[pergunta.id];
-                  const estaCorreta = respostaUsuario === pergunta.resposta_correta;
+                  const detalhe = resultado?.detalhes?.find(d => d.perguntaId === pergunta.id);
+                  const estaCorreta = detalhe?.acertou ?? false;
                   
                   return (
                     <div key={pergunta.id} className="bg-card rounded-xl p-4 border">
@@ -550,7 +556,7 @@ export default function AulaConteudo() {
                       >
                         {pergunta.opcoes.map((opcao) => {
                           const isSelected = respostaUsuario === opcao.letra;
-                          const isCorrect = opcao.letra === pergunta.resposta_correta;
+                          const isCorrect = detalhe ? opcao.letra === detalhe.resposta_correta : false;
                           
                           let optionClass = '';
                           if (mostrarExplicacoes) {
@@ -612,10 +618,10 @@ export default function AulaConteudo() {
                         })}
                       </RadioGroup>
                       
-                      {mostrarExplicacoes && pergunta.explicacao && (
+                      {mostrarExplicacoes && detalhe?.explicacao && (
                         <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
                           <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Explicação:</p>
-                          <p className="text-blue-600 dark:text-blue-400">{pergunta.explicacao}</p>
+                          <p className="text-blue-600 dark:text-blue-400">{detalhe.explicacao}</p>
                         </div>
                       )}
                     </div>

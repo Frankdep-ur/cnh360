@@ -1407,6 +1407,41 @@ export type Database = {
         }
         Relationships: []
       }
+      curso_quiz_perguntas_publico: {
+        Row: {
+          aula_id: string | null
+          created_at: string | null
+          id: string | null
+          opcoes: Json | null
+          ordem: number | null
+          pergunta: string | null
+        }
+        Insert: {
+          aula_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          opcoes?: Json | null
+          ordem?: number | null
+          pergunta?: string | null
+        }
+        Update: {
+          aula_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          opcoes?: Json | null
+          ordem?: number | null
+          pergunta?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curso_quiz_perguntas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "curso_aulas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instrutores_seguros: {
         Row: {
           ativo: boolean | null

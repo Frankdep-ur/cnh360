@@ -241,7 +241,7 @@ export function useCursoTeorico() {
     if (aulaError) throw aulaError;
 
     const { data: quiz } = await supabase
-      .from('curso_quiz_perguntas')
+      .from('curso_quiz_perguntas_publico' as any)
       .select('*')
       .eq('aula_id', aulaId)
       .order('ordem');
@@ -322,62 +322,36 @@ export function useCursoTeorico() {
 
     if (!currentAlunoId) {
       toast.error('Faça login para responder o quiz');
-      return { aprovado: false, nota: 0, acertos: 0, total: 0 };
+      return { aprovado: false, nota: 0, acertos: 0, total: 0, detalhes: [] };
     }
 
-    // Buscar respostas corretas
-    const { data: perguntas } = await supabase
-      .from('curso_quiz_perguntas')
-      .select('id, resposta_correta')
-      .eq('aula_id', aulaId);
+    // Validar quiz no servidor (respostas corretas nunca chegam ao cliente)
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
 
-    if (!perguntas || perguntas.length === 0) {
-      return { aprovado: true, nota: 100, acertos: 0, total: 0 };
+    if (!token) {
+      toast.error('Sessão expirada. Faça login novamente.');
+      return { aprovado: false, nota: 0, acertos: 0, total: 0, detalhes: [] };
     }
 
-    // Calcular nota
-    let acertos = 0;
-    for (const pergunta of perguntas) {
-      const resposta = respostas.find(r => r.perguntaId === pergunta.id);
-      if (resposta?.resposta === pergunta.resposta_correta) {
-        acertos++;
-      }
+    const response = await supabase.functions.invoke('validate-quiz', {
+      body: { aulaId, respostas }
+    });
+
+    if (response.error) {
+      console.error('Erro ao validar quiz:', response.error);
+      toast.error('Erro ao enviar quiz. Tente novamente.');
+      return { aprovado: false, nota: 0, acertos: 0, total: 0, detalhes: [] };
     }
 
-    const nota = Math.round((acertos / perguntas.length) * 100);
-    const aprovado = nota >= 70;
-
-    // Buscar tentativas anteriores
-    const { data: progressoAtual } = await supabase
-      .from('progresso_aulas')
-      .select('tentativas_quiz')
-      .eq('aluno_id', currentAlunoId)
-      .eq('aula_id', aulaId)
-      .maybeSingle();
-
-    const tentativas = (progressoAtual?.tentativas_quiz || 0) + 1;
-
-    // UPSERT em vez de UPDATE - garante que o registro seja criado se não existir
-    await supabase
-      .from('progresso_aulas')
-      .upsert({
-        aluno_id: currentAlunoId,
-        aula_id: aulaId,
-        quiz_nota: nota,
-        quiz_aprovado: aprovado,
-        tentativas_quiz: tentativas,
-        concluida_em: aprovado ? new Date().toISOString() : null,
-        iniciada_em: new Date().toISOString()
-      }, {
-        onConflict: 'aluno_id,aula_id'
-      });
+    const result = response.data;
 
     // Recarregar módulos para atualizar progresso geral
-    if (aprovado) {
+    if (result.aprovado) {
       await carregarTudo();
     }
 
-    return { aprovado, nota, acertos, total: perguntas.length };
+    return result;
   };
 
   // Verificar se pode agendar aulas práticas
