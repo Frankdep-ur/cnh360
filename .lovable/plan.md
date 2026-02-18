@@ -1,17 +1,30 @@
 
 
-# Alterar preco do instrutor Igor Gramulha para R$ 10,00
+# Remover botoes de carteira digital (Apple Pay / Google Pay)
 
-## O que sera feito
+## Problema
 
-Atualizar o valor da hora do instrutor **Igor Nascimento Gramulha** (ID: `605145b0-1dd0-4ddc-80cf-fcf069f333fc`) de R$ 80,00 para **R$ 10,00** para fins de teste de pagamento.
+O botao Apple Pay aparece no iPhone mas a funcionalidade nao esta implementada. O codigo atual e apenas um stub que sempre retorna erro "Apple Pay requer configuracao de merchant no servidor". Isso confunde o usuario.
 
-## Detalhes tecnicos
+O Google Pay tambem depende de uma chave publica da Pagar.me (`VITE_PAGARME_PUBLIC_KEY`) que nao esta configurada no `.env`.
 
-Duas atualizacoes SQL necessarias:
+## Solucao
 
-1. **Tabela `instrutores`**: `UPDATE instrutores SET preco_hora = 10.00 WHERE id = '605145b0-1dd0-4ddc-80cf-fcf069f333fc'`
-2. **Tabela `instrutores_publico_cache`**: `UPDATE instrutores_publico_cache SET preco_hora = 10.00 WHERE id = '605145b0-1dd0-4ddc-80cf-fcf069f333fc'`
+Desabilitar completamente os botoes de carteira digital ate que a integracao real seja implementada.
 
-A segunda atualizacao garante que o valor apareca corretamente na busca de instrutores pelo aluno. O trigger `sync_instrutor_cache` tambem sera disparado pela primeira query, mas a atualizacao explicita do cache garante consistencia imediata.
+### Alteracoes
+
+**1. `src/hooks/useWalletPayments.ts`**
+- Forcar `applePayReady` e `googlePayReady` a sempre retornarem `false`
+- Alternativa mais limpa: fazer o hook retornar tudo como `false`/desabilitado diretamente, sem carregar scripts nem verificar disponibilidade
+
+**2. `src/components/payment/PaymentCheckout.tsx`**
+- Remover a secao condicional que renderiza os botoes Apple Pay e Google Pay (linhas ~767-783 para Apple Pay e o bloco equivalente para Google Pay)
+- Manter o hook importado mas sem uso visual, para facilitar reativacao futura
+
+### Resultado
+
+- O usuario vera apenas as opcoes **PIX** e **Cartao**, que estao funcionais
+- Nenhum erro sera exibido ao usuario
+- O codigo do hook permanece no projeto para reativacao futura quando a integracao real for feita
 
