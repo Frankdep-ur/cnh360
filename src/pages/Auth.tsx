@@ -212,7 +212,7 @@ export default function Auth() {
             toast({
               variant: "destructive",
               title: "Senha não aceita",
-              description: "Tente usar uma senha diferente, com pelo menos 6 caracteres misturando letras e números.",
+              description: "A senha precisa ter no mínimo 6 caracteres.",
             });
           } else {
             toast({
