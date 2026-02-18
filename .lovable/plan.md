@@ -1,24 +1,42 @@
 
 
-# Permitir qualquer senha no cadastro
+# Resolver erro persistente de "senha fraca" no cadastro
 
 ## Problema
 
-Atualmente o sistema exige senha forte (minimo 6 caracteres com letras e numeros). O usuario quer remover essa restricao e permitir qualquer senha.
+O backend de autenticacao possui uma verificacao chamada **Pwned Passwords** que bloqueia senhas encontradas em vazamentos de dados conhecidos (ex: "123456", "senha123", "abc123"). Mesmo com a verificacao de senha forte desativada, essa checagem continua ativa e rejeita senhas comuns, retornando erro 422 com mensagem de "weak password".
 
 ## Solucao
 
-A validacao de senha forte vem do backend (autenticacao). Para desabilitar, preciso alterar a configuracao de autenticacao para aceitar senhas de qualquer complexidade, mantendo apenas o minimo de 6 caracteres (exigencia do sistema de autenticacao).
+Duas alteracoes:
 
-Alem disso, remover a mensagem de erro traduzida de "senha fraca" que acabamos de adicionar, ja que nao sera mais necessaria.
+### 1. Desabilitar a checagem de senhas vazadas no backend
+- Usar a ferramenta de configuracao de autenticacao para desabilitar o **Pwned Passwords check** (hibp_enabled = false)
+- Manter o comprimento minimo de 6 caracteres (exigencia do sistema)
+- Com isso, qualquer senha com 6+ caracteres sera aceita
 
-## Alteracoes
+### 2. Melhorar o tratamento de erro no frontend (`src/pages/Auth.tsx`)
+- Manter o bloco de traducao de erro de senha como fallback de seguranca
+- Alterar a mensagem para ser mais simples e direta: "A senha precisa ter no minimo 6 caracteres"
+- Assim, se por qualquer motivo o backend ainda rejeitar, o usuario recebe uma orientacao clara em portugues
 
-### 1. Configuracao de autenticacao
-- Desabilitar a verificacao de senha forte no backend usando a ferramenta de configuracao de auth
-- Definir o comprimento minimo de senha para 6 (minimo permitido pelo sistema)
+## Detalhes tecnicos
 
-### 2. `src/pages/Auth.tsx`
-- Remover o bloco `else if` de tratamento de senha fraca que foi adicionado, ja que o erro nao vai mais ocorrer
-- Manter o tratamento generico de erros para outros casos
+### Configuracao de Auth
+- `min_password_length`: 6
+- `password_requirements`: nenhum (sem exigencia de letras/numeros/simbolos)
+- `hibp_enabled`: false (desativa checagem de senhas vazadas)
 
+### `src/pages/Auth.tsx` (linha 211-216)
+Simplificar a mensagem do else if existente:
+```
+} else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password")) {
+  toast({
+    variant: "destructive",
+    title: "Senha nao aceita",
+    description: "A senha precisa ter no minimo 6 caracteres.",
+  });
+}
+```
+
+Isso garante que o cadastro funcione com qualquer senha de 6+ caracteres sem bloqueios.
