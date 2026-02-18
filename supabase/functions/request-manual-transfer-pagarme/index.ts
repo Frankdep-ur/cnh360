@@ -59,6 +59,36 @@ serve(async (req) => {
     const instrutorId = instrutor.id;
     logStep("Recipient found", { recipientId, instrutorId });
 
+    // ========== CAMADA 1.5: Bloquear saque se houver aulas pagas não finalizadas ==========
+    const { data: unfinishedLessons, error: unfinishedError } = await supabase
+      .from("aulas")
+      .select("id, status")
+      .eq("instrutor_id", instrutorId)
+      .eq("payment_confirmed", true)
+      .not("status", "in", '("finalizada","cancelada","concluida")');
+
+    if (unfinishedError) {
+      logStep("Error checking unfinished lessons", unfinishedError);
+    }
+
+    if (unfinishedLessons && unfinishedLessons.length > 0) {
+      logStep("Unfinished lessons found, blocking withdrawal", { 
+        count: unfinishedLessons.length,
+        lessons: unfinishedLessons.map(l => ({ id: l.id, status: l.status }))
+      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Você tem aula(s) em andamento ou aguardando validação. Finalize a aula com o aluno antes de sacar.",
+          hasUnfinishedLessons: true,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
     // ========== CAMADA 2: Verificar saque pendente nos últimos 10 minutos ==========
     const { data: pendingSaques, error: pendingError } = await supabase
       .from("saques")

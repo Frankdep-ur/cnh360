@@ -173,6 +173,18 @@ serve(async (req) => {
       }
     }
 
+    // Check for unfinished lessons (paid but not finalized)
+    const { data: unfinishedLessons, error: unfinishedError } = await supabase
+      .from("aulas")
+      .select("id")
+      .eq("instrutor_id", instrutorData.id)
+      .eq("payment_confirmed", true)
+      .not("status", "in", '("finalizada","cancelada","concluida")')
+      .limit(1);
+
+    const hasUnfinishedLessons = !unfinishedError && unfinishedLessons && unfinishedLessons.length > 0;
+    logStep("Unfinished lessons check", { hasUnfinishedLessons });
+
     // Determine message based on status
     let message: string | null = null;
     if (recipientStatus === "affiliation") {
@@ -189,6 +201,7 @@ serve(async (req) => {
         balance,
         recipientId,
         recipientStatus,
+        hasUnfinishedLessons,
         message,
       }),
       { 
