@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield, MapPin, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Upload, Car, Shield, MapPin, Loader2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,8 @@ import {
 type FormErrors = {
   name?: string;
   cpf?: string;
+  whatsapp?: string;
+  cidade?: string;
   cep?: string;
   streetNumber?: string;
   detranCredential?: string;
@@ -35,6 +37,7 @@ export default function InstrutorOnboarding() {
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
   const [name, setName] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   
   // Step 2 - Address
   const [cep, setCep] = useState("");
@@ -99,6 +102,14 @@ export default function InstrutorOnboarding() {
       .replace(/(-\d{2})\d+?$/, "$1");
   };
 
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    return numbers
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .replace(/(-\d{4})\d+?$/, "$1");
+  };
+
   const formatCEP = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     return numbers.replace(/(\d{5})(\d)/, "$1-$2").slice(0, 9);
@@ -153,7 +164,7 @@ export default function InstrutorOnboarding() {
     
     try {
       if (currentStep === 1) {
-        instrutorStep1Schema.parse({ name, cpf });
+        instrutorStep1Schema.parse({ name, cpf, whatsapp, cidade: city });
       } else if (currentStep === 2) {
         // Validate address
         if (cep.replace(/\D/g, "").length !== 8) {
@@ -188,7 +199,7 @@ export default function InstrutorOnboarding() {
   };
 
   const canProceed = () => {
-    if (step === 1) return cpf.length === 14 && name.length > 2;
+    if (step === 1) return cpf.length === 14 && name.length > 2 && whatsapp.length >= 14 && city.length > 1;
     if (step === 2) return cep.replace(/\D/g, "").length === 8 && city.length > 0 && streetNumber.length > 0;
     if (step === 3) return detranCredential.length > 0 && cnh.length > 0;
     if (step === 4) return carModel.length > 0 && carPlate.length > 0 && transmission !== null;
@@ -228,6 +239,7 @@ export default function InstrutorOnboarding() {
           .update({ 
             cpf: cpf.replace(/\D/g, ""), 
             full_name: name.trim(),
+            phone: whatsapp.replace(/\D/g, ""),
             cidade: city.trim(),
             estado: state.trim().toUpperCase()
           })
@@ -392,6 +404,43 @@ export default function InstrutorOnboarding() {
                     className={cn("h-14 text-lg rounded-xl tracking-wide", errors.cpf && "border-destructive")}
                   />
                   {errors.cpf && <p className="text-sm text-destructive mt-1">{errors.cpf}</p>}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      placeholder="(00) 00000-0000"
+                      value={whatsapp}
+                      onChange={(e) => {
+                        setWhatsapp(formatPhone(e.target.value));
+                        if (errors.whatsapp) setErrors({ ...errors, whatsapp: undefined });
+                      }}
+                      maxLength={15}
+                      className={cn("h-14 text-lg rounded-xl pl-12 tracking-wide", errors.whatsapp && "border-destructive")}
+                    />
+                  </div>
+                  {errors.whatsapp && <p className="text-sm text-destructive mt-1">{errors.whatsapp}</p>}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Cidade
+                  </label>
+                  <Input
+                    placeholder="Ex: São Paulo"
+                    value={city}
+                    maxLength={100}
+                    onChange={(e) => {
+                      setCity(e.target.value);
+                      if (errors.cidade) setErrors({ ...errors, cidade: undefined });
+                    }}
+                    className={cn("h-14 text-lg rounded-xl", errors.cidade && "border-destructive")}
+                  />
+                  {errors.cidade && <p className="text-sm text-destructive mt-1">{errors.cidade}</p>}
                 </div>
               </div>
             </div>
