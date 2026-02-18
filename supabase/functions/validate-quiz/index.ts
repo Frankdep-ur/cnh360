@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, rateLimitResponse } from "../_shared/rateLimit.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -34,6 +35,14 @@ Deno.serve(async (req) => {
     const userId = userData.user.id;
 
     const { aulaId, respostas } = await req.json();
+
+    // Rate limit: 3 attempts per 5 minutes per user per quiz
+    if (aulaId) {
+      const { allowed } = checkRateLimit(`quiz:${userId}:${aulaId}`, 3, 300000);
+      if (!allowed) {
+        return rateLimitResponse(corsHeaders);
+      }
+    }
 
     if (!aulaId || !Array.isArray(respostas)) {
       return new Response(JSON.stringify({ error: "Missing aulaId or respostas" }), {
