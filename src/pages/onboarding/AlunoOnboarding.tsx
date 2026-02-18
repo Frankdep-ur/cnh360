@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Car, Bike, Truck, Shield } from "lucide-react";
+import { ArrowLeft, Check, Car, Bike, Truck, Shield, Phone, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
@@ -47,6 +47,8 @@ const goals = [
 type FormErrors = {
   name?: string;
   cpf?: string;
+  whatsapp?: string;
+  city?: string;
 };
 
 export default function AlunoOnboarding() {
@@ -56,6 +58,8 @@ export default function AlunoOnboarding() {
   const [step, setStep] = useState(1);
   const [cpf, setCpf] = useState("");
   const [name, setName] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [city, setCity] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoriaAtual, setCategoriaAtual] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
@@ -123,18 +127,30 @@ export default function AlunoOnboarding() {
     if (errors.cpf) setErrors({ ...errors, cpf: undefined });
   };
 
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    return numbers
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .replace(/(-\d{4})\d+?$/, "$1");
+  };
+
   const validateStep1 = (): boolean => {
     setErrors({});
     
     try {
-      alunoStep1Schema.parse({ name, cpf });
+      alunoStep1Schema.parse({ name, cpf, whatsapp, cidade: city });
       return true;
     } catch (error: any) {
       if (error.errors) {
         const newErrors: FormErrors = {};
         error.errors.forEach((err: any) => {
-          const field = err.path[0] as keyof FormErrors;
-          newErrors[field] = err.message;
+          const field = err.path[0] as string;
+          if (field === 'cidade') {
+            newErrors.city = err.message;
+          } else {
+            (newErrors as any)[field] = err.message;
+          }
         });
         setErrors(newErrors);
       }
@@ -150,7 +166,7 @@ export default function AlunoOnboarding() {
   };
 
   const canProceed = () => {
-    if (step === 1) return cpf.length === 14 && name.length > 2;
+    if (step === 1) return cpf.length === 14 && name.length > 2 && whatsapp.length >= 14 && city.length > 1;
     if (step === 2) return selectedGoal !== null;
     
     // Step 3: depende do objetivo
@@ -227,7 +243,12 @@ export default function AlunoOnboarding() {
       // Update profile with CPF
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ cpf: cpf.replace(/\D/g, ""), full_name: name.trim() })
+        .update({ 
+          cpf: cpf.replace(/\D/g, ""), 
+          full_name: name.trim(),
+          phone: whatsapp.replace(/\D/g, ""),
+          cidade: city.trim(),
+        })
         .eq("id", user.id);
 
       if (profileError) throw profileError;
@@ -653,6 +674,45 @@ export default function AlunoOnboarding() {
                     className={cn("h-14 text-lg rounded-xl tracking-wide", errors.cpf && "border-destructive")}
                   />
                   {errors.cpf && <p className="text-sm text-destructive mt-1">{errors.cpf}</p>}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      placeholder="(00) 00000-0000"
+                      value={whatsapp}
+                      onChange={(e) => {
+                        setWhatsapp(formatPhone(e.target.value));
+                        if (errors.whatsapp) setErrors({ ...errors, whatsapp: undefined });
+                      }}
+                      maxLength={15}
+                      className={cn("h-14 text-lg rounded-xl pl-12", errors.whatsapp && "border-destructive")}
+                    />
+                  </div>
+                  {errors.whatsapp && <p className="text-sm text-destructive mt-1">{errors.whatsapp}</p>}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Cidade
+                  </label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      placeholder="Sua cidade"
+                      value={city}
+                      onChange={(e) => {
+                        setCity(e.target.value);
+                        if (errors.city) setErrors({ ...errors, city: undefined });
+                      }}
+                      className={cn("h-14 text-lg rounded-xl pl-12", errors.city && "border-destructive")}
+                    />
+                  </div>
+                  {errors.city && <p className="text-sm text-destructive mt-1">{errors.city}</p>}
                 </div>
               </div>
             </div>
