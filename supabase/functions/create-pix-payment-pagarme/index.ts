@@ -42,10 +42,10 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 2)
 }
 
 // Return 200 with error in body (so supabase client puts it in data, not error)
-function businessError(message: string, errorCode: string, details?: string) {
-  logStep("Business error", { error_code: errorCode, message, details });
+function businessError(message: string, errorCode: string, internalDetails?: string) {
+  logStep("Business error", { error_code: errorCode, message, details: internalDetails });
   return new Response(
-    JSON.stringify({ error: message, error_code: errorCode, details }),
+    JSON.stringify({ error: message, error_code: errorCode }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
   );
 }
@@ -274,22 +274,22 @@ serve(async (req) => {
     const orderData = await orderResponse.json();
 
     if (!orderResponse.ok) {
-      logStep("Pagar.me PIX HTTP error", {
-        httpStatus: orderResponse.status, response: orderData, payment_method: "pix",
-      });
       const rawMsg = orderData.message || orderData.errors?.[0]?.message || "Erro no gateway";
+      logStep("Pagar.me PIX HTTP error", {
+        httpStatus: orderResponse.status, rawMsg, payment_method: "pix",
+      });
       const lower = rawMsg.toLowerCase();
 
       if (lower.includes("charge_remainder_fee") || lower.includes("split")) {
-        return businessError("Erro de configuração do split. Contate o suporte.", "SPLIT_CONFIG_ERROR", rawMsg);
+        return businessError("Erro ao processar pagamento. Entre em contato com o suporte.", "SPLIT_CONFIG_ERROR");
       }
       if (lower.includes("recipient")) {
-        return businessError("Instrutor não habilitado para receber pagamentos.", "RECIPIENT_INACTIVE", rawMsg);
+        return businessError("Instrutor não habilitado para receber pagamentos.", "RECIPIENT_INACTIVE");
       }
       if (lower.includes("document") || lower.includes("cpf")) {
-        return businessError("CPF inválido ou incompleto. Atualize seu perfil.", "VALIDATION_ERROR", rawMsg);
+        return businessError("CPF inválido ou incompleto. Atualize seu perfil.", "VALIDATION_ERROR");
       }
-      return businessError(rawMsg, "GATEWAY_ERROR", JSON.stringify(orderData));
+      return businessError("Serviço de pagamento temporariamente indisponível. Tente novamente.", "GATEWAY_ERROR");
     }
 
     logStep("PIX order created", {
@@ -377,7 +377,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: error.message || "Erro interno", error_code: "INTERNAL_ERROR" }),
+      JSON.stringify({ error: "Erro interno do servidor. Tente novamente.", error_code: "INTERNAL_ERROR" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
