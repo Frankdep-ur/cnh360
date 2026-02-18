@@ -208,6 +208,12 @@ export default function Auth() {
               title: "Email já cadastrado",
               description: "Tente fazer login ou use outro email.",
             });
+          } else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password")) {
+            toast({
+              variant: "destructive",
+              title: "Senha não aceita",
+              description: "Tente usar uma senha diferente, com pelo menos 6 caracteres misturando letras e números.",
+            });
           } else {
             toast({
               variant: "destructive",
