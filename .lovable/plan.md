@@ -1,30 +1,70 @@
 
 
-# Remover botoes de carteira digital (Apple Pay / Google Pay)
+# Adicionar campos WhatsApp e Cidade no cadastro do Instrutor
 
-## Problema
+## Resumo
 
-O botao Apple Pay aparece no iPhone mas a funcionalidade nao esta implementada. O codigo atual e apenas um stub que sempre retorna erro "Apple Pay requer configuracao de merchant no servidor". Isso confunde o usuario.
+Adicionar dois novos campos obrigatorios no Step 1 (Dados Pessoais) do onboarding do instrutor:
+1. **WhatsApp** - numero de telefone com mascara brasileira (DDD + numero)
+2. **Cidade** - campo de texto livre para a cidade do instrutor
 
-O Google Pay tambem depende de uma chave publica da Pagar.me (`VITE_PAGARME_PUBLIC_KEY`) que nao esta configurada no `.env`.
+Atualmente o Step 1 tem apenas Nome e CPF. A cidade ja e capturada no Step 2 via CEP, mas o usuario quer que ela tambem apareca explicitamente no inicio.
 
-## Solucao
+## Alteracoes
 
-Desabilitar completamente os botoes de carteira digital ate que a integracao real seja implementada.
+### 1. `src/lib/validations.ts`
+- Atualizar `instrutorStep1Schema` para incluir os campos `whatsapp` (usando o `phoneSchema` ja existente) e `cidade` (string obrigatoria, min 2 caracteres)
 
-### Alteracoes
+### 2. `src/pages/onboarding/InstrutorOnboarding.tsx`
 
-**1. `src/hooks/useWalletPayments.ts`**
-- Forcar `applePayReady` e `googlePayReady` a sempre retornarem `false`
-- Alternativa mais limpa: fazer o hook retornar tudo como `false`/desabilitado diretamente, sem carregar scripts nem verificar disponibilidade
+**Novos estados:**
+- `whatsapp` - string para o numero de telefone
+- Reutilizar o estado `city` ja existente, preenchido no Step 1
 
-**2. `src/components/payment/PaymentCheckout.tsx`**
-- Remover a secao condicional que renderiza os botoes Apple Pay e Google Pay (linhas ~767-783 para Apple Pay e o bloco equivalente para Google Pay)
-- Manter o hook importado mas sem uso visual, para facilitar reativacao futura
+**Tipo FormErrors:**
+- Adicionar `whatsapp?: string` e `city?: string`
 
-### Resultado
+**Step 1 - UI:**
+- Adicionar campo WhatsApp com mascara `(00) 00000-0000` abaixo do CPF
+- Adicionar campo Cidade abaixo do WhatsApp
+- Icone de telefone (Phone) do lucide-react
 
-- O usuario vera apenas as opcoes **PIX** e **Cartao**, que estao funcionais
-- Nenhum erro sera exibido ao usuario
-- O codigo do hook permanece no projeto para reativacao futura quando a integracao real for feita
+**Validacao (validateStep):**
+- Step 1: incluir `whatsapp` e `cidade` na validacao via schema
+
+**canProceed():**
+- Step 1: adicionar verificacao de `whatsapp.length >= 14` e `city.length > 1`
+
+**Salvamento no banco (handleNext):**
+- No update do `profiles`, incluir `phone: whatsapp.replace(/\D/g, "")` junto com os dados ja salvos
+- A cidade ja e salva no profile; sera preenchida no Step 1 e tambem atualizada no Step 2 se o CEP for de outra cidade
+
+### 3. Formato do telefone
+
+Mascara brasileira: `(XX) XXXXX-XXXX`
+- Funcao `formatPhone` para aplicar mascara automaticamente
+- Validacao minima de 14 caracteres (com mascara) = 10 digitos
+
+## Fluxo resultante do Step 1
+
+```text
++----------------------------------+
+|  Seja um instrutor!              |
+|  Aumente sua renda...            |
+|                                  |
+|  [Nome completo        ]         |
+|  [CPF: 000.000.000-00  ]         |
+|  [WhatsApp: (00) 00000-0000]     |
+|  [Cidade               ]         |
+|                                  |
+|  [ Continuar >>> ]               |
++----------------------------------+
+```
+
+## Detalhes tecnicos
+
+- O campo `phone` ja existe na tabela `profiles` (tipo text, nullable) - nao precisa de migracao
+- O campo `cidade` ja existe na tabela `profiles` - nao precisa de migracao
+- O `phoneSchema` ja existe em `validations.ts` e sera reutilizado
+- A cidade preenchida no Step 1 sera usada como valor inicial no Step 2 (endereco), mantendo consistencia
 
