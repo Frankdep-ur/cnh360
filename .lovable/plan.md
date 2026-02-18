@@ -1,42 +1,60 @@
 
 
-# Resolver erro persistente de "senha fraca" no cadastro
+# Bloquear saque antes da finalização da aula
 
 ## Problema
 
-O backend de autenticacao possui uma verificacao chamada **Pwned Passwords** que bloqueia senhas encontradas em vazamentos de dados conhecidos (ex: "123456", "senha123", "abc123"). Mesmo com a verificacao de senha forte desativada, essa checagem continua ativa e rejeita senhas comuns, retornando erro 422 com mensagem de "weak password".
+O split de pagamento na Pagar.me acontece no momento em que o aluno paga (PIX ou cartão). Isso significa que o saldo já aparece na conta do instrutor no gateway **antes** da aula ser iniciada ou finalizada com QR Code. O instrutor consegue sacar o dinheiro sem nunca ter dado a aula.
 
-## Solucao
+## Causa raiz
 
-Duas alteracoes:
+O fluxo atual:
+1. Aluno paga --> Pagar.me faz o split 50/50 imediatamente
+2. Saldo aparece como "disponível" no receptor do instrutor
+3. Instrutor pode sacar a qualquer momento
+4. Aula pode nem ter acontecido ainda
 
-### 1. Desabilitar a checagem de senhas vazadas no backend
-- Usar a ferramenta de configuracao de autenticacao para desabilitar o **Pwned Passwords check** (hibp_enabled = false)
-- Manter o comprimento minimo de 6 caracteres (exigencia do sistema)
-- Com isso, qualquer senha com 6+ caracteres sera aceita
+## Solução
 
-### 2. Melhorar o tratamento de erro no frontend (`src/pages/Auth.tsx`)
-- Manter o bloco de traducao de erro de senha como fallback de seguranca
-- Alterar a mensagem para ser mais simples e direta: "A senha precisa ter no minimo 6 caracteres"
-- Assim, se por qualquer motivo o backend ainda rejeitar, o usuario recebe uma orientacao clara em portugues
+Adicionar uma verificação no backend de saque (`request-manual-transfer-pagarme`) que bloqueia a transferência se o instrutor tiver aulas pagas mas ainda não finalizadas (validadas por QR Code). Também ajustar a UI para informar o instrutor.
 
-## Detalhes tecnicos
+## Alterações
 
-### Configuracao de Auth
-- `min_password_length`: 6
-- `password_requirements`: nenhum (sem exigencia de letras/numeros/simbolos)
-- `hibp_enabled`: false (desativa checagem de senhas vazadas)
+### 1. Edge Function `request-manual-transfer-pagarme/index.ts`
 
-### `src/pages/Auth.tsx` (linha 211-216)
-Simplificar a mensagem do else if existente:
-```
-} else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password")) {
-  toast({
-    variant: "destructive",
-    title: "Senha nao aceita",
-    description: "A senha precisa ter no minimo 6 caracteres.",
-  });
-}
+Antes de consultar o saldo e criar a transferência, adicionar uma verificação que:
+- Busca todas as aulas do instrutor com `payment_confirmed = true` mas que **não** foram validadas por QR Code (`qr_validado = false` ou `status` diferente de `finalizada`)
+- Se houver aulas pendentes de finalização, retorna erro claro bloqueando o saque
+- Mensagem: "Você tem aula(s) em andamento ou aguardando validação. Finalize a aula com o aluno antes de sacar."
+
+A query seria algo como:
+```sql
+SELECT id, status FROM aulas 
+WHERE instrutor_id = :instrutorId 
+AND payment_confirmed = true
+AND status NOT IN ('finalizada', 'cancelada')
 ```
 
-Isso garante que o cadastro funcione com qualquer senha de 6+ caracteres sem bloqueios.
+Se retornar alguma linha, o saque é bloqueado.
+
+### 2. UI `InstructorBalanceCard.tsx`
+
+Quando o botão de saque for clicado e houver aulas não finalizadas, exibir um toast informativo ao invés de abrir o modal de saque. Para isso:
+- Adicionar uma verificação local antes de abrir o modal
+- Consultar aulas ativas do instrutor (status em `confirmada`, `em_rota`, `aguardando_confirmacao`, `em_andamento`, `aguardando_qr`)
+- Se houver, mostrar toast: "Finalize suas aulas em andamento antes de sacar"
+
+### 3. Edge Function `get-instructor-balance-pagarme/index.ts`
+
+Adicionar um campo `hasUnfinishedLessons` na resposta do saldo, para que a UI possa usar essa informação sem precisar fazer query separada. A edge function já tem acesso ao `instrutorData.id`, então basta:
+- Contar aulas com `payment_confirmed = true` e `status NOT IN ('finalizada', 'cancelada')`
+- Retornar `hasUnfinishedLessons: true/false` no response
+
+## Resumo das mudanças
+
+| Arquivo | O que muda |
+|---------|-----------|
+| `supabase/functions/request-manual-transfer-pagarme/index.ts` | Bloqueia saque se houver aulas não finalizadas |
+| `supabase/functions/get-instructor-balance-pagarme/index.ts` | Retorna flag `hasUnfinishedLessons` |
+| `src/components/instrutor/InstructorBalanceCard.tsx` | Usa a flag para desabilitar botão de saque e mostrar aviso |
+
