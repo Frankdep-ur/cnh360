@@ -37,6 +37,7 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [recentWithdrawal, setRecentWithdrawal] = useState(false);
+  const [hasUnfinishedLessons, setHasUnfinishedLessons] = useState(false);
   // Local KYC status from database - used to prevent showing KYC banner for refused accounts
   const [localKycStatus, setLocalKycStatus] = useState<string | null>(null);
 
@@ -79,6 +80,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
       if (data?.recipientStatus) {
         setRecipientStatus(data.recipientStatus);
       }
+
+      setHasUnfinishedLessons(!!data?.hasUnfinishedLessons);
 
       if (data?.message) {
         setStatusMessage(data.message);
@@ -245,6 +248,14 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
         variant: "destructive",
         title: "Verificação necessária",
         description: "Complete a verificação de identidade antes de fazer saques.",
+      });
+      return;
+    }
+    if (hasUnfinishedLessons) {
+      toast({
+        variant: "destructive",
+        title: "Aulas em andamento",
+        description: "Finalize suas aulas em andamento antes de sacar.",
       });
       return;
     }
@@ -591,23 +602,40 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
             </div>
           </div>
 
+          {/* Unfinished Lessons Warning */}
+          {hasUnfinishedLessons && recipientStatus === "active" && (
+            <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-900/20">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <AlertDescription className="text-amber-700 dark:text-amber-300">
+                Finalize suas aulas em andamento para liberar o saque.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Withdraw Button */}
           <Button
             onClick={handleWithdrawClick}
-            disabled={balance.available <= 0 || recentWithdrawal}
+            disabled={balance.available <= 0 || recentWithdrawal || hasUnfinishedLessons}
             className={cn(
               "w-full",
               recentWithdrawal
                 ? "bg-emerald-600 text-white cursor-not-allowed opacity-80"
-                : recipientStatus === "active" && balance.available > 0
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-muted text-muted-foreground"
+                : hasUnfinishedLessons
+                  ? "bg-muted text-muted-foreground"
+                  : recipientStatus === "active" && balance.available > 0
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-muted text-muted-foreground"
             )}
           >
             {recentWithdrawal ? (
               <>
                 <Check className="w-4 h-4 mr-2" />
                 Saque realizado — aguarde crédito
+              </>
+            ) : hasUnfinishedLessons ? (
+              <>
+                <Clock className="w-4 h-4 mr-2" />
+                Saque bloqueado — finalize aulas
               </>
             ) : (
               <>
