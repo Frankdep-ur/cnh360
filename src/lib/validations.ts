@@ -126,6 +126,8 @@ export const autoescolaStep3Schema = z.object({
 export const instrutorStep1Schema = z.object({
   name: nameSchema,
   cpf: cpfSchema,
+  whatsapp: phoneSchema,
+  cidade: z.string().min(2, "Cidade deve ter pelo menos 2 caracteres"),
 });
 
 export const instrutorStep2Schema = z.object({
