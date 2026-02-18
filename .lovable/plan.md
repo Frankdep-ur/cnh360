@@ -1,69 +1,38 @@
 
 
-# Adicionar campos WhatsApp e Cidade no cadastro do Aluno
+# Traduzir mensagem de erro de senha fraca no cadastro
 
-## Situacao atual
+## Problema
 
-O Step 1 do onboarding do aluno coleta apenas:
-- Nome completo
-- CPF
-
-Nao ha campo de WhatsApp nem Cidade no cadastro. Esses dados so podem ser preenchidos depois, editando o perfil.
+Quando o usuario tenta se cadastrar com uma senha fraca, o erro vindo do backend e exibido sem traducao. A mensagem aparece em ingles ou de forma generica ("Password should be at least...").
 
 ## Solucao
 
-Adicionar dois campos obrigatorios no Step 1 do onboarding do aluno, seguindo o mesmo padrao ja implementado no cadastro do instrutor.
+Adicionar uma verificacao especifica para erros de senha fraca no bloco de tratamento de erros do signup em `src/pages/Auth.tsx`, similar ao que ja existe para "already registered".
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/lib/validations.ts`
-- Atualizar `alunoStep1Schema` para incluir `whatsapp` (usando `phoneSchema`) e `cidade` (min 2 caracteres)
+### `src/pages/Auth.tsx` (linhas 204-217)
 
-### 2. `src/pages/onboarding/AlunoOnboarding.tsx`
+Adicionar um `else if` para capturar mensagens relacionadas a senha fraca (ex: "weak", "password") e exibir uma mensagem traduzida:
 
-**Novos estados:**
-- `whatsapp` (string) para o numero de telefone
-- `city` (string) para a cidade
-
-**Tipo FormErrors:**
-- Adicionar `whatsapp?: string` e `city?: string`
-
-**Imports:**
-- Adicionar `Phone` e `MapPin` do lucide-react
-
-**Step 1 - UI:**
-- Adicionar campo WhatsApp com mascara `(00) 00000-0000` abaixo do CPF
-- Adicionar campo Cidade abaixo do WhatsApp
-
-**Funcao `formatPhone`:**
-- Adicionar funcao de mascara de telefone (mesma usada no instrutor)
-
-**Validacao (`validateStep1`):**
-- Incluir `whatsapp` e `cidade` no parse do schema
-
-**`canProceed()`:**
-- Step 1: adicionar `whatsapp.length >= 14 && city.length > 1`
-
-**Salvamento (`saveToDatabase`):**
-- No update do `profiles`, incluir `phone: whatsapp.replace(/\D/g, "")` e `cidade: city.trim()`
-
-## Fluxo resultante do Step 1
-
-```text
-+----------------------------------+
-|  Comece sua jornada!             |
-|                                  |
-|  [Nome completo        ]         |
-|  [CPF: 000.000.000-00  ]         |
-|  [WhatsApp: (00) 00000-0000]     |
-|  [Cidade               ]         |
-|                                  |
-|  [ Continuar >>> ]               |
-+----------------------------------+
+```
+if (error.message.includes("already registered")) {
+  // ... ja existe
+} else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password should")) {
+  toast({
+    variant: "destructive",
+    title: "Senha fraca",
+    description: "Use uma senha com no minimo 6 caracteres, incluindo letras e numeros.",
+  });
+} else {
+  toast({
+    variant: "destructive",
+    title: "Erro ao criar conta",
+    description: error.message,
+  });
+}
 ```
 
-## Detalhes tecnicos
+Apenas uma linha de codigo extra no arquivo Auth.tsx, sem impacto em outros arquivos.
 
-- Os campos `phone` e `cidade` ja existem na tabela `profiles` -- nenhuma migracao necessaria
-- O `phoneSchema` ja existe em `validations.ts` e sera reutilizado
-- O padrao e identico ao que foi feito no onboarding do instrutor
