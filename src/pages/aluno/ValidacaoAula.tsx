@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface LessonStatus {
   gpsValidated: boolean;
@@ -149,10 +150,7 @@ export default function ValidacaoAula() {
                 className="w-12 h-12 rounded-xl object-cover"
               />
             ) : (
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold"
-                style={{ backgroundColor: (() => { let h=0; const n=instructor.name; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
-                {instructor.name.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase() || '?'}
-              </div>
+              <InitialsAvatar name={instructor.name} size="w-12 h-12" />
             )}
             <div className="flex-1">
               <h3 className="font-semibold text-foreground">{instructor.name}</h3>

@@ -21,6 +21,7 @@ import { TripChat } from "@/components/maps/TripChat";
 import { useProximityAlert } from "@/hooks/useProximityAlert";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface AulaData {
   id: string;
@@ -312,13 +313,11 @@ export default function RastrearInstrutor() {
           {/* Instructor Info */}
           <Card className="p-4">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center overflow-hidden">
-                {aula.instrutor_foto ? (
-                  <img src={aula.instrutor_foto} alt={aula.instrutor_nome} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-2xl">👨‍🏫</span>
-                )}
-              </div>
+              {aula.instrutor_foto ? (
+                <img src={aula.instrutor_foto} alt={aula.instrutor_nome} className="w-14 h-14 rounded-xl object-cover" />
+              ) : (
+                <InitialsAvatar name={aula.instrutor_nome || 'Instrutor'} size="w-14 h-14" textSize="text-lg" />
+              )}
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">{aula.instrutor_nome}</h3>
                 <p className="text-sm text-muted-foreground">Seu instrutor</p>

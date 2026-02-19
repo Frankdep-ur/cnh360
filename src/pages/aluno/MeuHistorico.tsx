@@ -32,6 +32,7 @@ import { LessonRatingDisplay } from "@/components/history/LessonRatingDisplay";
 import { generateAulaReportPDF, generateCertificadoHorasPDF } from "@/lib/aulaReportPDF";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 export default function MeuHistorico() {
   const { user } = useAuth();
@@ -236,11 +237,7 @@ export default function MeuHistorico() {
                           className="w-10 h-10 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                          <span className="text-sm font-semibold text-muted-foreground">
-                            {(aula.instrutor_nome || "I").charAt(0)}
-                          </span>
-                        </div>
+                        <InitialsAvatar name={aula.instrutor_nome || 'Instrutor'} size="w-10 h-10" className="rounded-full" textSize="text-sm" />
                       )}
 
                       {/* Info */}

@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChatView } from "@/components/chat/ChatView";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface Conversa {
   aula_id: string;
@@ -265,11 +266,7 @@ export default function AlunoChat() {
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <span className="text-lg font-semibold text-muted-foreground">
-                          {(conversa.instrutor_nome || 'I').charAt(0)}
-                        </span>
-                      </div>
+                      <InitialsAvatar name={conversa.instrutor_nome || 'Instrutor'} size="w-12 h-12" className="rounded-full" />
                     )}
                     {conversa.status === 'em_andamento' && (
                       <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-card" />

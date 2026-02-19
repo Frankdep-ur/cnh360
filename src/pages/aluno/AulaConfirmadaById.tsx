@@ -28,6 +28,7 @@ import { AulaTimer } from "@/components/aula/AulaTimer";
 import { QRCodeDisplay } from "@/components/qr/QRCodeDisplay";
 import { LessonStartConfirmationModal } from "@/components/aula/LessonStartConfirmationModal";
 import { toast } from "sonner";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface AulaData {
   id: string;
@@ -373,9 +374,7 @@ export default function AulaConfirmadaById() {
                   className="w-14 h-14 rounded-xl object-cover"
                 />
               ) : (
-                <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center">
-                  <User className="w-6 h-6 text-muted-foreground" />
-                </div>
+                <InitialsAvatar name={aula.instrutor_nome || 'Instrutor'} size="w-14 h-14" textSize="text-lg" />
               )}
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">{aula.instrutor_nome}</h3>
