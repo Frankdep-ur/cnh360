@@ -1,61 +1,42 @@
 
 
-# Criar Edge Function temporaria test-whatsapp
+# Remover opcao "Usar meu proprio carro" do fluxo do aluno
 
 ## Resumo
 
-Criar uma Edge Function temporaria `test-whatsapp` que envia uma mensagem de teste para Frank Alexandre (18997427195) usando o novo formato com dados ficticios de aula. Apos confirmar que funciona, a funcao sera removida.
+Remover a opcao de carro proprio do aluno em todas as telas relevantes. O aluno sempre usara o carro do instrutor por enquanto.
 
-## Implementacao
+## Alteracoes
 
-### 1. Criar `supabase/functions/test-whatsapp/index.ts`
+### 1. `src/pages/aluno/AgendarAula.tsx`
+- Remover o estado `useOwnCar` (linha 170) -- ou forcar como `false`
+- Remover o bloco do botao "Usar meu proprio carro" (linhas 586-620)
+- Remover o calculo de `carDiscount` -- fica sempre 0
+- Remover a prop `carDiscount` do componente `PaymentStepContent` e a exibicao condicional do desconto (linhas 87-92)
+- Remover o import `Car` e `Check` do lucide-react (se nao usados em outro lugar do arquivo)
+- Na insercao da aula no banco, enviar `usa_carro_aluno: false` fixo
 
-A funcao vai:
-- Chamar diretamente a funcao `sendWhatsAppViaZAPI` com o telefone do Frank
-- Usar dados ficticios de aula (data amanha as 14:00, 50 min, R$ 120.00)
-- Formatar a data em pt-BR com timezone America/Sao_Paulo
-- Enviar a mensagem no formato identico ao webhook de PIX
+### 2. `src/pages/aluno/AlunoPerfil.tsx`
+- Remover a linha que exibe "Carro proprio: Sim/Nao" (linhas 409-414)
 
-Dados ficticios:
-- Aluno: "Maria Silva (TESTE)"
-- Data: amanha as 14:00
-- Duracao: 50 min
-- Valor: R$ 120.00
-- Telefone: 18997427195
+### 3. `src/pages/aluno/BuscarInstrutores.tsx`
+- Remover o campo `aceitaCarroProprio` do mapeamento de instrutores (linha 116)
+- Remover a prop `showCarroProprio` do `InstructorCard` (linha 351)
 
-### 2. Adicionar ao `supabase/config.toml`
+### 4. `src/components/cards/InstructorCard.tsx`
+- Remover a badge "Aceita carro proprio" (linhas 121-125)
+- Remover a prop `showCarroProprio`
 
-```text
-[functions.test-whatsapp]
-verify_jwt = false
-```
+### 5. `src/pages/aluno/AulaSolicitada.tsx`
+- Remover a exibicao "Seu proprio carro / Carro do instrutor" (linhas 340-343) ou deixar fixo "Carro do instrutor"
 
-### 3. Mensagem enviada
+### 6. `src/components/payment/PixPaymentModal.tsx`
+- Remover a prop `useOwnCar` e sempre enviar `false` no payload
 
-```text
-🚀 *Parabéns! Você tem uma nova aula confirmada!*
+### 7. Edge Function `create-lesson-payment-pagarme`
+- Remover `useOwnCar` do destructuring do body e forcar `usa_carro_aluno: false`
 
-Seu aluno acabou de pagar via PIX.
-
-👤 Maria Silva (TESTE)
-📅 {data de amanha formatada}
-⏱ 50 min
-💰 R$ 120.00
-
-💬 Envie um "Oi" agora mesmo e confirme o ponto de encontro.
-
-👉 Clique aqui para abrir o chat:
-https://cnh360.com/instrutor/chat
-```
-
-### 4. Apos o teste
-
-Remover a funcao `test-whatsapp` e sua entrada no config.toml.
-
-## Detalhes tecnicos
-
-- A funcao usa as mesmas credenciais Z-API (ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN) ja configuradas nos secrets
-- Nao requer autenticacao (verify_jwt = false) para facilitar o teste
-- Sera chamada via curl/invoke imediatamente apos o deploy
-- A funcao e autonoma -- nao depende de `send-whatsapp-notification`, faz a chamada Z-API diretamente
+## O que NAO sera alterado
+- Colunas do banco de dados (`usa_carro_aluno`, `possui_carro_proprio`, `aceita_carro_proprio`) permanecem -- apenas a UI e remove. Isso facilita reativar no futuro.
+- Telas do instrutor que exibem `usa_carro_aluno` em aulas existentes continuam funcionando normalmente (novas aulas sempre terao `false`).
 
