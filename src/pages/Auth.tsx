@@ -202,7 +202,14 @@ export default function Auth() {
         const { error } = await signUp(email, password, name);
         
         if (error) {
-          if (error.message.includes("already registered")) {
+          // Rate limit
+          if (error.message.includes("429") || error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("too many")) {
+            toast({
+              variant: "destructive",
+              title: "Muitas tentativas",
+              description: "Aguarde alguns segundos antes de tentar novamente.",
+            });
+          } else if (error.message.includes("already registered")) {
             toast({
               variant: "destructive",
               title: "Email já cadastrado",
@@ -213,6 +220,12 @@ export default function Auth() {
               variant: "destructive",
               title: "Senha muito comum",
               description: "Essa senha é muito usada e não é segura. Tente adicionar números ou caracteres diferentes. Ex: MinhaSenh@123",
+            });
+          } else if (error.message.toLowerCase().includes("not confirmed")) {
+            toast({
+              variant: "destructive",
+              title: "Email não confirmado",
+              description: "Seu email ainda não foi confirmado. Tente criar a conta novamente.",
             });
           } else {
             toast({
@@ -229,7 +242,12 @@ export default function Auth() {
           description: "Redirecionando para o cadastro...",
         });
         
-        // Will redirect via useEffect when user state updates
+        // Fallback redirect: if useEffect doesn't fire due to timing, force redirect after delay
+        setTimeout(() => {
+          if (userType) {
+            navigate(`/onboarding/${userType}`, { replace: true });
+          }
+        }, 1500);
       } else {
         const { error } = await signIn(email, password);
         
@@ -239,6 +257,12 @@ export default function Auth() {
               variant: "destructive",
               title: "Credenciais inválidas",
               description: "Verifique seu email e senha.",
+            });
+          } else if (error.message.toLowerCase().includes("not confirmed")) {
+            toast({
+              variant: "destructive",
+              title: "Email não confirmado",
+              description: "Seu email ainda não foi confirmado. Tente criar a conta novamente.",
             });
           } else {
             toast({
