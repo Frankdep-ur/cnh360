@@ -72,7 +72,7 @@ export default function AulaSolicitada() {
       setAula({
         ...aulaData,
         instrutor_nome: instrutorCache?.nome || "Instrutor",
-        instrutor_foto: instrutorCache?.foto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+        instrutor_foto: instrutorCache?.foto || null,
       });
       setShowContent(true);
     } catch (err) {
@@ -257,11 +257,18 @@ export default function AulaSolicitada() {
             )}
           >
             <div className="flex items-center gap-4">
-              <img
-                src={aula.instrutor_foto}
-                alt={aula.instrutor_nome}
-                className="w-16 h-16 rounded-xl object-cover"
-              />
+              {aula.instrutor_foto ? (
+                <img
+                  src={aula.instrutor_foto}
+                  alt={aula.instrutor_nome}
+                  className="w-16 h-16 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-xl"
+                  style={{ backgroundColor: (() => { let h=0; const n=aula.instrutor_nome||''; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
+                  {(aula.instrutor_nome||'?').split(' ').filter(Boolean).map((p: string)=>p[0]).slice(0,2).join('').toUpperCase()}
+                </div>
+              )}
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground text-lg">
                   {aula.instrutor_nome}

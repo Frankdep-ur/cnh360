@@ -59,7 +59,7 @@ export function ProfilePhotoUpload({
   const buttonSizes = { sm: "w-6 h-6", md: "w-8 h-8", lg: "w-10 h-10" };
   const initialsFontSize = { sm: "text-lg", md: "text-xl", lg: "text-2xl" };
 
-  const hasRealPhoto = previewUrl && !previewUrl.includes("placeholder") && !previewUrl.includes("avatar");
+  const hasRealPhoto = previewUrl && !previewUrl.includes("placeholder") && !previewUrl.includes("unsplash.com");
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
