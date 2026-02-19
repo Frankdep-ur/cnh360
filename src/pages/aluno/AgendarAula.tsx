@@ -4,7 +4,6 @@ import {
   ArrowLeft, 
   MapPin, 
   Clock, 
-  Car, 
   Check,
   ChevronRight,
   Loader2,
@@ -43,7 +42,6 @@ interface InstructorData {
 interface PaymentStepContentProps {
   duration: number;
   basePrice: number;
-  carDiscount: number;
   paymentDiscount: number;
   totalPrice: number;
   selectedPayment: string | null;
@@ -53,7 +51,6 @@ interface PaymentStepContentProps {
 function PaymentStepContent({
   duration,
   basePrice,
-  carDiscount,
   paymentDiscount,
   totalPrice,
   selectedPayment,
@@ -84,12 +81,6 @@ function PaymentStepContent({
           <span className="text-muted-foreground">Aula ({duration}h)</span>
           <span className="font-medium">R$ {basePrice.toFixed(2)}</span>
         </div>
-        {carDiscount > 0 && (
-          <div className="flex justify-between text-primary">
-            <span>Desconto (carro próprio)</span>
-            <span>-R$ {carDiscount.toFixed(2)}</span>
-          </div>
-        )}
         {paymentDiscount > 0 && (
           <div className="flex justify-between text-primary">
             <span>Desconto PIX (5%)</span>
@@ -167,7 +158,6 @@ export default function AgendarAula() {
 
   const [step, setStep] = useState(1);
   const [duration, setDuration] = useState(1);
-  const [useOwnCar, setUseOwnCar] = useState(false);
   const [meetingPoint, setMeetingPoint] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<string | null>("credit");
   const [loading, setLoading] = useState(false);
@@ -251,9 +241,8 @@ export default function AgendarAula() {
   }
 
   const basePrice = instructor.price * duration;
-  const carDiscount = useOwnCar ? basePrice * 0.15 : 0;
-  const paymentDiscount = selectedPayment === "pix" ? (basePrice - carDiscount) * 0.05 : 0;
-  const totalPrice = basePrice - carDiscount - paymentDiscount;
+  const paymentDiscount = selectedPayment === "pix" ? basePrice * 0.05 : 0;
+  const totalPrice = basePrice - paymentDiscount;
 
   const canProceed = () => {
     if (step === 1) return meetingPoint.length > 5;
@@ -424,7 +413,7 @@ export default function AgendarAula() {
             data_hora: calculatedScheduledDate,
             duracao_minutos: duration * 60,
             valor: totalPrice,
-            usa_carro_aluno: useOwnCar,
+            usa_carro_aluno: false,
             ponto_encontro: meetingPoint,
             latitude_aluno: studentLat,
             longitude_aluno: studentLng,
@@ -583,42 +572,6 @@ export default function AgendarAula() {
                 </div>
               </div>
 
-              {/* Own Car Option */}
-              <div>
-                <button
-                  onClick={() => setUseOwnCar(!useOwnCar)}
-                  className={cn(
-                    "w-full p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
-                    useOwnCar
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  )}
-                >
-                  <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center",
-                    useOwnCar ? "bg-primary text-primary-foreground" : "bg-muted"
-                  )}>
-                    <Car className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <h3 className="font-semibold text-foreground">Usar meu próprio carro</h3>
-                    <p className="text-sm text-muted-foreground">Economize 15% na aula</p>
-                  </div>
-                  <div className={cn(
-                    "w-6 h-6 rounded-full border-2 flex items-center justify-center",
-                    useOwnCar ? "border-primary bg-primary" : "border-muted-foreground"
-                  )}>
-                    {useOwnCar && <Check className="w-4 h-4 text-primary-foreground" />}
-                  </div>
-                </button>
-                {!useOwnCar && (
-                  <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                    <Car className="w-3 h-3" />
-                    Veículo do instrutor: {instructor.car}
-                  </p>
-                )}
-              </div>
-
               {/* Meeting Point */}
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
@@ -693,7 +646,6 @@ export default function AgendarAula() {
             <PaymentStepContent
               duration={duration}
               basePrice={basePrice}
-              carDiscount={carDiscount}
               paymentDiscount={paymentDiscount}
               totalPrice={totalPrice}
               selectedPayment={selectedPayment}
@@ -733,7 +685,7 @@ export default function AgendarAula() {
         instructorName={instructor.name}
         instructorId={instructor.id}
         duration={duration}
-        useOwnCar={useOwnCar}
+        
         meetingPoint={meetingPoint}
         scheduledDate={scheduledDate || calculateScheduledDate()}
         studentLat={studentLocation?.lat || null}

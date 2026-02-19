@@ -34,7 +34,7 @@ interface InstructorData {
   available: boolean;
   verified: boolean;
   isMEI: boolean;
-  aceitaCarroProprio: boolean;
+  
   tags: string[];
   email: string | null;
   cidade: string | null;
@@ -113,7 +113,7 @@ async function fetchInstructorsWithVehicles(): Promise<InstructorData[]> {
         available: true,
         verified: true,
         isMEI: true,
-        aceitaCarroProprio: true,
+        
         tags: inst.cidade ? [inst.cidade] : (inst.bio ? [inst.bio.slice(0, 20)] : []),
         email: null,
         cidade: inst.cidade || null,
@@ -348,7 +348,6 @@ export default function BuscarInstrutores() {
                         key={instructor.id}
                         {...instructor}
                         showMEIBadge={instructor.isMEI}
-                        showCarroProprio={instructor.aceitaCarroProprio}
                         cityLabel={instructor.cidade || undefined}
                       />
                     ))}
@@ -384,7 +383,6 @@ export default function BuscarInstrutores() {
                             key={instructor.id}
                             {...instructor}
                             showMEIBadge={instructor.isMEI}
-                            showCarroProprio={instructor.aceitaCarroProprio}
                             cityLabel={instructor.cidade || undefined}
                           />
                         ))}
@@ -398,7 +396,6 @@ export default function BuscarInstrutores() {
                           key={instructor.id}
                           {...instructor}
                           showMEIBadge={instructor.isMEI}
-                          showCarroProprio={instructor.aceitaCarroProprio}
                         />
                       ))}
                     </div>
@@ -413,7 +410,6 @@ export default function BuscarInstrutores() {
                       key={instructor.id}
                       {...instructor}
                       showMEIBadge={instructor.isMEI}
-                      showCarroProprio={instructor.aceitaCarroProprio}
                       cityLabel={instructor.cidade || undefined}
                     />
                   ))}

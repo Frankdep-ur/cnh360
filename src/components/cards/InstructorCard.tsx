@@ -18,7 +18,7 @@ interface InstructorCardProps {
   verified: boolean;
   tags?: string[];
   showMEIBadge?: boolean;
-  showCarroProprio?: boolean;
+  
   cityLabel?: string;
 }
 
@@ -35,7 +35,7 @@ function InstructorCardComponent({
   verified,
   tags = [],
   showMEIBadge = false,
-  showCarroProprio = false,
+  
   cityLabel,
 }: InstructorCardProps) {
   return (
@@ -118,12 +118,7 @@ function InstructorCardComponent({
 
             {/* Tags */}
             <div className="flex flex-wrap gap-1 mt-2">
-              {showCarroProprio && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0 border-primary/30 text-primary">
-                  Aceita carro próprio
-                </Badge>
-              )}
-              {tags.slice(0, showCarroProprio ? 2 : 3).map((tag) => (
+              {tags.slice(0, 3).map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0">
                   {tag}
                 </Badge>
