@@ -48,7 +48,7 @@ serve(async (req) => {
     // Find lesson by transaction_id
     const { data: aula, error: aulaError } = await supabase
       .from("aulas")
-      .select("id, status, payment_confirmed, aluno_id, instrutor_id, valor, duracao_minutos")
+      .select("id, status, payment_confirmed, aluno_id, instrutor_id, valor, duracao_minutos, data_hora")
       .eq("transaction_id", orderId)
       .single();
 
@@ -120,10 +120,20 @@ serve(async (req) => {
         }
 
         if (instrutorProfile?.phone) {
+          const dataFormatada = new Date(aula.data_hora).toLocaleString("pt-BR", {
+            weekday: "long",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "America/Sao_Paulo",
+          });
+
           await supabase.functions.invoke("send-whatsapp-notification", {
             body: {
               phone: instrutorProfile.phone,
-              message: `🚀 *Parabéns! Você tem uma nova aula confirmada!*\n\nSeu aluno acabou de pagar via PIX.\n\n👤 ${alunoName}\n⏱ ${aula.duracao_minutos} min\n💰 R$ ${Number(aula.valor).toFixed(2)}\n\n💬 Envie um "Oi" agora mesmo e alinhe local e horário.\n\n👉 Clique aqui para abrir o chat:\nhttps://cnh360.com/instrutor/chat`,
+              message: `🚀 *Parabéns! Você tem uma nova aula confirmada!*\n\nSeu aluno acabou de pagar via PIX.\n\n👤 ${alunoName}\n📅 ${dataFormatada}\n⏱ ${aula.duracao_minutos} min\n💰 R$ ${Number(aula.valor).toFixed(2)}\n\n💬 Envie um "Oi" agora mesmo e confirme o ponto de encontro.\n\n👉 Clique aqui para abrir o chat:\nhttps://cnh360.com/instrutor/chat`,
             },
           });
           logStep("WhatsApp sent to instructor", { phone: instrutorProfile.phone });
