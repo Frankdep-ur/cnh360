@@ -139,7 +139,7 @@ export function PixPaymentModal({
           amount: originalAmount,
           duration,
           instructorId,
-          useOwnCar: false,
+          
           meetingPoint,
           scheduledDate,
           studentLat,
