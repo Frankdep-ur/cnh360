@@ -21,6 +21,7 @@ import { toast as sonnerToast } from "sonner";
 import { PixPaymentModal } from "@/components/payment/PixPaymentModal";
 import { PaymentCheckout } from "@/components/payment/PaymentCheckout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 const paymentMethods = [
   { id: "credit", label: "Cartão de Crédito/Débito", icon: "💳", discount: 0 },
@@ -522,11 +523,15 @@ export default function AgendarAula() {
 
           {/* Instructor Summary */}
           <div className="flex items-center gap-3">
-            <img
-              src={instructor.photo}
-              alt={instructor.name}
-              className="w-12 h-12 rounded-xl object-cover"
-            />
+            {instructor.photo ? (
+              <img
+                src={instructor.photo}
+                alt={instructor.name}
+                className="w-12 h-12 rounded-xl object-cover"
+              />
+            ) : (
+              <InitialsAvatar name={instructor.name} size="w-12 h-12" />
+            )}
             <div className="flex-1">
               <h2 className="font-semibold text-foreground">{instructor.name}</h2>
               <p className="text-sm text-muted-foreground">{day} às {time}</p>

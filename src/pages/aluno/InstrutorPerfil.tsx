@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { PageSkeleton } from "@/components/skeletons/PageSkeleton";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -142,9 +143,7 @@ export default function InstrutorPerfil() {
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-            <span className="text-6xl font-bold text-primary">
-              {instructor.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
-            </span>
+            <InitialsAvatar name={instructor.name} size="w-24 h-24" textSize="text-4xl" className="rounded-full" />
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />

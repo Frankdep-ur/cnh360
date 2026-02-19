@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface AulaData {
   id: string;
@@ -264,10 +265,7 @@ export default function AulaSolicitada() {
                   className="w-16 h-16 rounded-xl object-cover"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-xl"
-                  style={{ backgroundColor: (() => { let h=0; const n=aula.instrutor_nome||''; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
-                  {(aula.instrutor_nome||'?').split(' ').filter(Boolean).map((p: string)=>p[0]).slice(0,2).join('').toUpperCase()}
-                </div>
+                <InitialsAvatar name={aula.instrutor_nome || '?'} size="w-16 h-16" textSize="text-xl" />
               )}
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground text-lg">

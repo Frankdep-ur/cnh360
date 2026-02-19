@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format, startOfWeek, addDays, isSameDay, addWeeks, subWeeks } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 
 interface Aula {
   id: string;
@@ -275,11 +276,7 @@ export default function AlunoAgenda() {
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <span className="text-lg font-semibold text-muted-foreground">
-                          {(aula.instrutor_nome || 'I').charAt(0)}
-                        </span>
-                      </div>
+                      <InitialsAvatar name={aula.instrutor_nome || 'Instrutor'} size="w-12 h-12" className="rounded-full" />
                     )}
                   </div>
                   
