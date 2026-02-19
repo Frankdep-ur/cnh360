@@ -47,7 +47,7 @@ export default function ValidacaoAula() {
   // TODO: Fetch real instructor data from database based on lesson ID
   const [instructor, setInstructor] = useState({
     name: "Instrutor",
-    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+    photo: null as string | null,
     car: "Veículo do instrutor",
   });
 
@@ -142,11 +142,18 @@ export default function ValidacaoAula() {
 
           {/* Instructor Info */}
           <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
-            <img
-              src={instructor.photo}
-              alt={instructor.name}
-              className="w-12 h-12 rounded-xl object-cover"
-            />
+            {instructor.photo ? (
+              <img
+                src={instructor.photo}
+                alt={instructor.name}
+                className="w-12 h-12 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold"
+                style={{ backgroundColor: (() => { let h=0; const n=instructor.name; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
+                {instructor.name.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase() || '?'}
+              </div>
+            )}
             <div className="flex-1">
               <h3 className="font-semibold text-foreground">{instructor.name}</h3>
               <p className="text-xs text-muted-foreground flex items-center gap-1">

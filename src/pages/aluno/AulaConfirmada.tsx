@@ -181,11 +181,18 @@ export default function AulaConfirmada() {
           {paymentData?.lesson && (
             <>
               <div className="flex items-center gap-4 mb-6">
-                <img
-                  src={paymentData.lesson.instrutorFoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"}
-                  alt={paymentData.lesson.instrutorNome}
-                  className="w-14 h-14 rounded-xl object-cover"
-                />
+                {paymentData.lesson.instrutorFoto ? (
+                  <img
+                    src={paymentData.lesson.instrutorFoto}
+                    alt={paymentData.lesson.instrutorNome}
+                    className="w-14 h-14 rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                    style={{ backgroundColor: (() => { let h=0; const n=paymentData.lesson.instrutorNome||''; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
+                    {(paymentData.lesson.instrutorNome||'?').split(' ').filter(Boolean).map((p: string)=>p[0]).slice(0,2).join('').toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h3 className="font-semibold text-foreground">{paymentData.lesson.instrutorNome}</h3>
                   <p className="text-sm text-muted-foreground">Instrutor de direção</p>

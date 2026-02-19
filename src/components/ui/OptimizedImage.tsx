@@ -12,23 +12,29 @@ function OptimizedImageComponent({
   src,
   alt,
   className,
-  fallbackSrc = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+  fallbackSrc,
   ...props
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Optimize Unsplash URLs with WebP format and quality
-  const optimizedSrc = (() => {
-    if (hasError) return fallbackSrc;
-    if (!src) return fallbackSrc;
-    
-    if (src.includes("unsplash.com")) {
-      const separator = src.includes("?") ? "&" : "?";
-      return `${src}${separator}fm=webp&q=80&w=400`;
-    }
+  const resolvedSrc = (() => {
+    if (hasError || !src) return fallbackSrc || "";
     return src;
   })();
+
+  if (!resolvedSrc) {
+    // No image available — render initials fallback
+    const initials = alt?.split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase() || '?';
+    let hash = 0;
+    for (let i = 0; i < alt.length; i++) hash = alt.charCodeAt(i) + ((hash << 5) - hash);
+    const bgColor = `hsl(${Math.abs(hash) % 360}, 55%, 45%)`;
+    return (
+      <div className={cn("flex items-center justify-center text-white font-bold", className)} style={{ backgroundColor: bgColor }}>
+        {initials}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative overflow-hidden", className)}>
@@ -36,7 +42,7 @@ function OptimizedImageComponent({
         <Skeleton className={cn("absolute inset-0", className)} />
       )}
       <img
-        src={optimizedSrc}
+        src={resolvedSrc}
         alt={alt}
         loading="lazy"
         decoding="async"

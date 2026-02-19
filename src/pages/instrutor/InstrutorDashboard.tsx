@@ -74,7 +74,7 @@ export default function InstrutorDashboard() {
 
   const instrutor = {
     nome: profile?.full_name || "Instrutor",
-    foto: profile?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    foto: profile?.avatar_url || null,
     nota: 4.9,
     totalAvaliacoes: 127,
     aulasCompletadas: 89,
@@ -104,11 +104,18 @@ export default function InstrutorDashboard() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <img 
-                src={instrutor.foto} 
-                alt={instrutor.nome}
-                className="w-14 h-14 rounded-full object-cover border-2 border-primary"
-              />
+              {instrutor.foto ? (
+                <img 
+                  src={instrutor.foto} 
+                  alt={instrutor.nome}
+                  className="w-14 h-14 rounded-full object-cover border-2 border-primary"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full border-2 border-primary flex items-center justify-center text-white font-bold text-lg"
+                  style={{ backgroundColor: (() => { let h=0; const n=instrutor.nome; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return `hsl(${Math.abs(h)%360},55%,45%)`; })() }}>
+                  {instrutor.nome.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase() || '?'}
+                </div>
+              )}
               {instrutor.isPremium && (
                 <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-1">
                   <Crown className="w-3 h-3 text-white" />
