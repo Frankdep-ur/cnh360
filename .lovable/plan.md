@@ -1,69 +1,46 @@
 
 
-# Adicionar data e horário na mensagem WhatsApp do PIX
+# Criar Edge Function temporaria test-whatsapp
 
 ## Resumo
 
-A mensagem WhatsApp enviada ao instrutor apos confirmacao de pagamento PIX vai passar a incluir o dia e horario da aula agendada, para que o instrutor saiba imediatamente quando sera a aula.
+Criar uma Edge Function temporaria `test-whatsapp` que envia uma mensagem de teste para Frank Alexandre (18997427195) usando o novo formato com dados ficticios de aula. Apos confirmar que funciona, a funcao sera removida.
 
-## Alteracao
+## Implementacao
 
-Apenas 1 arquivo: **`supabase/functions/pagarme-payment-webhook/index.ts`**
+### 1. Criar `supabase/functions/test-whatsapp/index.ts`
 
-### 1. Adicionar `data_hora` ao SELECT (linha 51)
+A funcao vai:
+- Chamar diretamente a funcao `sendWhatsAppViaZAPI` com o telefone do Frank
+- Usar dados ficticios de aula (data amanha as 14:00, 50 min, R$ 120.00)
+- Formatar a data em pt-BR com timezone America/Sao_Paulo
+- Enviar a mensagem no formato identico ao webhook de PIX
+
+Dados ficticios:
+- Aluno: "Maria Silva (TESTE)"
+- Data: amanha as 14:00
+- Duracao: 50 min
+- Valor: R$ 120.00
+- Telefone: 18997427195
+
+### 2. Adicionar ao `supabase/config.toml`
 
 ```text
-ANTES:
-.select("id, status, payment_confirmed, aluno_id, instrutor_id, valor, duracao_minutos")
-
-DEPOIS:
-.select("id, status, payment_confirmed, aluno_id, instrutor_id, valor, duracao_minutos, data_hora")
+[functions.test-whatsapp]
+verify_jwt = false
 ```
 
-### 2. Formatar a data em portugues brasileiro
-
-Adicionar formatacao antes do envio da mensagem:
+### 3. Mensagem enviada
 
 ```text
-const dataFormatada = new Date(aula.data_hora).toLocaleString("pt-BR", {
-  weekday: "long",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "America/Sao_Paulo",
-});
-```
-
-Exemplo de saida: `segunda-feira, 24/02/2026, 14:30`
-
-### 3. Atualizar a mensagem WhatsApp
-
-```text
-ANTES:
 🚀 *Parabéns! Você tem uma nova aula confirmada!*
 
 Seu aluno acabou de pagar via PIX.
 
-👤 {nome}
-⏱ {duracao} min
-💰 R$ {valor}
-
-💬 Envie um "Oi" agora mesmo e alinhe local e horário.
-
-👉 Clique aqui para abrir o chat:
-https://cnh360.com/instrutor/chat
-
-DEPOIS:
-🚀 *Parabéns! Você tem uma nova aula confirmada!*
-
-Seu aluno acabou de pagar via PIX.
-
-👤 {nome}
-📅 {data formatada em pt-BR}
-⏱ {duracao} min
-💰 R$ {valor}
+👤 Maria Silva (TESTE)
+📅 {data de amanha formatada}
+⏱ 50 min
+💰 R$ 120.00
 
 💬 Envie um "Oi" agora mesmo e confirme o ponto de encontro.
 
@@ -71,11 +48,14 @@ Seu aluno acabou de pagar via PIX.
 https://cnh360.com/instrutor/chat
 ```
 
-O texto "alinhe local e horário" muda para "confirme o ponto de encontro" ja que o horario agora esta na mensagem.
+### 4. Apos o teste
+
+Remover a funcao `test-whatsapp` e sua entrada no config.toml.
 
 ## Detalhes tecnicos
 
-- O campo `data_hora` ja existe na tabela `aulas` (tipo `timestamp with time zone`)
-- A formatacao usa `toLocaleString` nativo do Deno com timezone `America/Sao_Paulo`
-- Nenhuma alteracao de banco de dados necessaria
-- A Edge Function sera reimplantada automaticamente
+- A funcao usa as mesmas credenciais Z-API (ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN) ja configuradas nos secrets
+- Nao requer autenticacao (verify_jwt = false) para facilitar o teste
+- Sera chamada via curl/invoke imediatamente apos o deploy
+- A funcao e autonoma -- nao depende de `send-whatsapp-notification`, faz a chamada Z-API diretamente
+
