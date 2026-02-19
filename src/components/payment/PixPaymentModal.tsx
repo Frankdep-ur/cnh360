@@ -16,7 +16,7 @@ interface PixPaymentModalProps {
   instructorName: string;
   instructorId: string;
   duration: number;
-  useOwnCar: boolean;
+  
   meetingPoint: string;
   scheduledDate: string;
   studentLat: number | null;
@@ -40,7 +40,6 @@ export function PixPaymentModal({
   instructorName,
   instructorId,
   duration,
-  useOwnCar,
   meetingPoint,
   scheduledDate,
   studentLat,
@@ -140,7 +139,7 @@ export function PixPaymentModal({
           amount: originalAmount,
           duration,
           instructorId,
-          useOwnCar,
+          useOwnCar: false,
           meetingPoint,
           scheduledDate,
           studentLat,

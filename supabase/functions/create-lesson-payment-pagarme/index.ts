@@ -50,14 +50,13 @@ serve(async (req) => {
       amount, 
       duration, 
       instructorId, 
-      useOwnCar, 
       meetingPoint, 
       scheduledDate,
       studentLat,
       studentLng,
     } = await req.json();
 
-    logStep("Request data", { amount, duration, instructorId, useOwnCar });
+    logStep("Request data", { amount, duration, instructorId });
 
     // Get aluno_id
     const { data: alunoData, error: alunoError } = await supabase
@@ -253,7 +252,7 @@ serve(async (req) => {
         data_hora: scheduledDate,
         duracao_minutos: duration * 60,
         valor: amount,
-        usa_carro_aluno: useOwnCar,
+        usa_carro_aluno: false,
         ponto_encontro: meetingPoint,
         latitude_aluno: studentLat,
         longitude_aluno: studentLng,

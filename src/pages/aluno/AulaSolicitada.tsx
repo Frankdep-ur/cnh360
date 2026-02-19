@@ -339,7 +339,7 @@ export default function AulaSolicitada() {
               <div>
                 <p className="font-medium text-foreground">Veículo</p>
                 <p className="text-sm text-muted-foreground">
-                  {aula.usa_carro_aluno ? "Seu próprio carro" : "Carro do instrutor"}
+                  Carro do instrutor
                 </p>
               </div>
             </div>

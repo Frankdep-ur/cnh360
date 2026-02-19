@@ -406,12 +406,6 @@ export default function AlunoPerfil() {
                   <span className="text-sm text-muted-foreground">Categoria</span>
                   <span className="font-medium text-foreground">{alunoData.categoria_pretendida}</span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Carro próprio</span>
-                  <span className="font-medium text-foreground">
-                    {alunoData.possui_carro_proprio ? "Sim" : "Não"}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-muted-foreground">Horas práticas</span>
                   <span className="font-medium text-primary">
