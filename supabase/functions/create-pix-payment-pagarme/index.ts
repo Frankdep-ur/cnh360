@@ -94,7 +94,7 @@ serve(async (req) => {
 
     const {
       amount, duration, instructorId, aulaId,
-      useOwnCar, meetingPoint, scheduledDate,
+      meetingPoint, scheduledDate,
       studentLat, studentLng,
     } = await req.json();
 
@@ -338,7 +338,7 @@ serve(async (req) => {
         .insert({
           aluno_id: alunoData.id, instrutor_id: instructorId,
           data_hora: scheduledDate, duracao_minutos: duration * 60,
-          valor: discountedAmount, usa_carro_aluno: useOwnCar,
+          valor: discountedAmount, usa_carro_aluno: false,
           ponto_encontro: meetingPoint, latitude_aluno: studentLat,
           longitude_aluno: studentLng, status: "pendente", transaction_id: transactionId,
         })
