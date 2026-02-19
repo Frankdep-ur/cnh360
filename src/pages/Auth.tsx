@@ -208,11 +208,11 @@ export default function Auth() {
               title: "Email já cadastrado",
               description: "Tente fazer login ou use outro email.",
             });
-          } else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password")) {
+          } else if (error.message.toLowerCase().includes("weak") || error.message.toLowerCase().includes("password") || error.message.toLowerCase().includes("guess")) {
             toast({
               variant: "destructive",
-              title: "Senha não aceita",
-              description: "A senha precisa ter no mínimo 6 caracteres.",
+              title: "Senha muito comum",
+              description: "Essa senha é muito usada e não é segura. Tente adicionar números ou caracteres diferentes. Ex: MinhaSenh@123",
             });
           } else {
             toast({
