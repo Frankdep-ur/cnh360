@@ -176,7 +176,7 @@ export default function AlunoPerfil() {
     }
   };
 
-  const handlePhotoUploaded = (url: string) => {
+  const handlePhotoUploaded = (url: string | null) => {
     setProfile(prev => ({ ...prev, avatar_url: url }));
   };
 
@@ -240,6 +240,7 @@ export default function AlunoPerfil() {
                 onPhotoUploaded={handlePhotoUploaded}
                 userType="aluno"
                 isTestAccount={profile.is_test_account}
+                userName={profile.full_name}
               />
               
               <h2 className="mt-4 text-xl font-bold text-foreground">
