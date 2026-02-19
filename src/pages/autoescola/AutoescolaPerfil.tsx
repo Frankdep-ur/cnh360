@@ -101,7 +101,7 @@ export default function AutoescolaPerfil() {
     }
   };
 
-  const handlePhotoUploaded = (url: string) => {
+  const handlePhotoUploaded = (url: string | null) => {
     setProfile(prev => ({ ...prev, avatar_url: url }));
   };
 
@@ -159,6 +159,7 @@ export default function AutoescolaPerfil() {
               userType="autoescola"
               isTestAccount={profile.is_test_account}
               size="md"
+              userName={profile.full_name}
             />
             <div>
               <h1 className="text-xl font-bold">{autoescola?.nome_fantasia || "Autoescola"}</h1>

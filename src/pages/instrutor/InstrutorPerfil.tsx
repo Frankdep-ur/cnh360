@@ -206,7 +206,7 @@ export default function InstrutorPerfil() {
     }
   };
 
-  const handlePhotoUploaded = (url: string) => {
+  const handlePhotoUploaded = (url: string | null) => {
     setProfile(prev => ({ ...prev, avatar_url: url }));
   };
 
@@ -270,6 +270,7 @@ export default function InstrutorPerfil() {
                 onPhotoUploaded={handlePhotoUploaded}
                 userType="instrutor"
                 isTestAccount={profile.is_test_account}
+                userName={profile.full_name}
               />
               
               <h2 className="mt-4 text-xl font-bold text-foreground">
