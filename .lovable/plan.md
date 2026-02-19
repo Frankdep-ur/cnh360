@@ -1,60 +1,43 @@
 
 
-# Bloquear saque antes da finalização da aula
+# Corrigir redirecionamento apos criar conta
 
 ## Problema
 
-O split de pagamento na Pagar.me acontece no momento em que o aluno paga (PIX ou cartão). Isso significa que o saldo já aparece na conta do instrutor no gateway **antes** da aula ser iniciada ou finalizada com QR Code. O instrutor consegue sacar o dinheiro sem nunca ter dado a aula.
+A confirmacao de email esta ativada no backend. Quando o usuario clica em "Criar conta", o sistema envia um email de confirmacao e **nao** autentica o usuario imediatamente. Por isso, o `useEffect` que faz o redirecionamento nunca dispara (ele depende de `user` estar preenchido).
 
-## Causa raiz
+O toast diz "Redirecionando para o cadastro..." mas nada acontece, porque o usuario precisa confirmar o email primeiro.
 
-O fluxo atual:
-1. Aluno paga --> Pagar.me faz o split 50/50 imediatamente
-2. Saldo aparece como "disponível" no receptor do instrutor
-3. Instrutor pode sacar a qualquer momento
-4. Aula pode nem ter acontecido ainda
+## Solucao
 
-## Solução
+Desabilitar a confirmacao de email (auto-confirm) para que o usuario seja autenticado imediatamente apos o signup, permitindo o redirecionamento automatico para o onboarding.
 
-Adicionar uma verificação no backend de saque (`request-manual-transfer-pagarme`) que bloqueia a transferência se o instrutor tiver aulas pagas mas ainda não finalizadas (validadas por QR Code). Também ajustar a UI para informar o instrutor.
+## Alteracoes
 
-## Alterações
+### 1. Configurar auto-confirm no backend
 
-### 1. Edge Function `request-manual-transfer-pagarme/index.ts`
+Usar a ferramenta `configure-auth` para habilitar auto-confirm de email signups. Isso fara com que o `signUp` retorne uma sessao valida imediatamente, sem necessidade de clicar em link no email.
 
-Antes de consultar o saldo e criar a transferência, adicionar uma verificação que:
-- Busca todas as aulas do instrutor com `payment_confirmed = true` mas que **não** foram validadas por QR Code (`qr_validado = false` ou `status` diferente de `finalizada`)
-- Se houver aulas pendentes de finalização, retorna erro claro bloqueando o saque
-- Mensagem: "Você tem aula(s) em andamento ou aguardando validação. Finalize a aula com o aluno antes de sacar."
+### 2. Melhorar tratamento de rate-limit no Auth.tsx
 
-A query seria algo como:
-```sql
-SELECT id, status FROM aulas 
-WHERE instrutor_id = :instrutorId 
-AND payment_confirmed = true
-AND status NOT IN ('finalizada', 'cancelada')
+Adicionar tratamento para o erro 429 que aparece quando o usuario tenta criar conta varias vezes seguidas. Exibir uma mensagem clara como "Aguarde alguns segundos antes de tentar novamente."
+
+### 3. Adicionar fallback de redirecionamento no handleSubmit
+
+Alem de depender do `useEffect`, adicionar um redirecionamento direto no `handleSubmit` apos o signup bem-sucedido, usando um pequeno delay para aguardar o estado de auth atualizar. Isso garante que, mesmo se o `useEffect` falhar por timing, o usuario sera redirecionado.
+
+```text
+Fluxo atual (quebrado):
+  Criar conta -> Email enviado -> Nada acontece na tela
+
+Fluxo corrigido:
+  Criar conta -> Auto-confirm -> Sessao criada -> useEffect detecta user -> Redireciona para onboarding
 ```
 
-Se retornar alguma linha, o saque é bloqueado.
+## Detalhes tecnicos
 
-### 2. UI `InstructorBalanceCard.tsx`
-
-Quando o botão de saque for clicado e houver aulas não finalizadas, exibir um toast informativo ao invés de abrir o modal de saque. Para isso:
-- Adicionar uma verificação local antes de abrir o modal
-- Consultar aulas ativas do instrutor (status em `confirmada`, `em_rota`, `aguardando_confirmacao`, `em_andamento`, `aguardando_qr`)
-- Se houver, mostrar toast: "Finalize suas aulas em andamento antes de sacar"
-
-### 3. Edge Function `get-instructor-balance-pagarme/index.ts`
-
-Adicionar um campo `hasUnfinishedLessons` na resposta do saldo, para que a UI possa usar essa informação sem precisar fazer query separada. A edge function já tem acesso ao `instrutorData.id`, então basta:
-- Contar aulas com `payment_confirmed = true` e `status NOT IN ('finalizada', 'cancelada')`
-- Retornar `hasUnfinishedLessons: true/false` no response
-
-## Resumo das mudanças
-
-| Arquivo | O que muda |
-|---------|-----------|
-| `supabase/functions/request-manual-transfer-pagarme/index.ts` | Bloqueia saque se houver aulas não finalizadas |
-| `supabase/functions/get-instructor-balance-pagarme/index.ts` | Retorna flag `hasUnfinishedLessons` |
-| `src/components/instrutor/InstructorBalanceCard.tsx` | Usa a flag para desabilitar botão de saque e mostrar aviso |
+| Arquivo | Mudanca |
+|---------|---------|
+| Backend (configure-auth) | Habilitar auto-confirm email |
+| `src/pages/Auth.tsx` | Adicionar tratamento de erro 429 e fallback de redirect no handleSubmit |
 
