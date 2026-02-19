@@ -123,7 +123,7 @@ serve(async (req) => {
           await supabase.functions.invoke("send-whatsapp-notification", {
             body: {
               phone: instrutorProfile.phone,
-              message: `🎉 *Nova aula confirmada via PIX!*\n\n👤 Aluno: ${alunoName}\n⏱ Duração: ${aula.duracao_minutos} min\n💰 Valor: R$ ${Number(aula.valor).toFixed(2)}\n\nAcesse o app para ver os detalhes.`,
+              message: `🚀 *Parabéns! Você tem uma nova aula confirmada!*\n\nSeu aluno acabou de pagar via PIX.\n\n👤 ${alunoName}\n⏱ ${aula.duracao_minutos} min\n💰 R$ ${Number(aula.valor).toFixed(2)}\n\n💬 Envie um "Oi" agora mesmo e alinhe local e horário.\n\n👉 Clique aqui para abrir o chat:\nhttps://cnh360.com/instrutor/chat`,
             },
           });
           logStep("WhatsApp sent to instructor", { phone: instrutorProfile.phone });
