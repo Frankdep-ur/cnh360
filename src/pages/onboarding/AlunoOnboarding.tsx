@@ -63,16 +63,16 @@ export default function AlunoOnboarding() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoriaAtual, setCategoriaAtual] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
-  const [useOwnCar, setUseOwnCar] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [checkingExisting, setCheckingExisting] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
 
   // Calcular total de steps baseado no objetivo
   const getTotalSteps = () => {
-    if (selectedGoal === 'renovacao') return 3; // Nome/CPF → Objetivo → Carro próprio
-    if (selectedGoal === 'adicao_categoria' || selectedGoal === 'mudanca_categoria') return 5; // 2 seleções de categoria
-    return 4; // Primeira habilitação: Nome/CPF → Objetivo → Categoria → Carro próprio
+    if (selectedGoal === 'renovacao') return 2; // Nome/CPF → Objetivo
+    if (selectedGoal === 'adicao_categoria' || selectedGoal === 'mudanca_categoria') return 4; // Nome/CPF → Objetivo → Cat atual → Cat pretendida
+    return 3; // Primeira habilitação: Nome/CPF → Objetivo → Categoria
   };
 
   // Resetar seleções quando objetivo muda
@@ -183,11 +183,7 @@ export default function AlunoOnboarding() {
       if (selectedGoal === 'adicao_categoria' || selectedGoal === 'mudanca_categoria') {
         return selectedCategory !== null;
       }
-      return true; // Para primeira_habilitacao é o step do carro próprio
     }
-    
-    // Step 5: carro próprio para adição/mudança
-    if (step === 5) return true;
     
     return false;
   };
@@ -212,11 +208,6 @@ export default function AlunoOnboarding() {
 
     const totalSteps = getTotalSteps();
 
-    // Navegação especial para Renovação: pula seleção de categoria
-    if (step === 2 && selectedGoal === 'renovacao') {
-      setStep(3); // Vai direto para carro próprio
-      return;
-    }
 
     if (step < totalSteps) {
       setStep(step + 1);
@@ -269,7 +260,7 @@ export default function AlunoOnboarding() {
           user_id: user.id,
           objetivo: selectedGoal as "primeira_habilitacao" | "adicao_categoria" | "renovacao" | "mudanca_categoria",
           categoria_pretendida: categoriaPretendida as "ACC" | "A" | "B" | "AB" | "C" | "D" | "E",
-          possui_carro_proprio: useOwnCar,
+          possui_carro_proprio: false,
         });
 
       if (alunoError) {
@@ -280,7 +271,7 @@ export default function AlunoOnboarding() {
             .update({
               objetivo: selectedGoal as "primeira_habilitacao" | "adicao_categoria" | "renovacao" | "mudanca_categoria",
               categoria_pretendida: categoriaPretendida as "ACC" | "A" | "B" | "AB" | "C" | "D" | "E",
-              possui_carro_proprio: useOwnCar,
+              possui_carro_proprio: false,
             })
             .eq("user_id", user.id);
           
@@ -476,101 +467,8 @@ export default function AlunoOnboarding() {
     </div>
   );
 
-  // Renderizar step de carro próprio
-  const renderCarroProprioStep = () => (
-    <div className="animate-fade-in">
-      <h1 className="text-2xl font-bold text-foreground mb-2">
-        Usar carro próprio? 🚙
-      </h1>
-      <p className="text-muted-foreground mb-8">
-        Nova lei permite usar seu veículo nas aulas práticas
-      </p>
-
-      <div className="space-y-4">
-        <button
-          onClick={() => setUseOwnCar(true)}
-          className={cn(
-            "w-full p-5 rounded-2xl border-2 transition-all duration-200",
-            useOwnCar
-              ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary/50"
-          )}
-        >
-          <div className="flex items-center gap-4">
-            <div className={cn(
-              "w-14 h-14 rounded-xl flex items-center justify-center",
-              useOwnCar ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-            )}>
-              <Car className="w-7 h-7" />
-            </div>
-            <div className="flex-1 text-left">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-foreground">Sim, usar meu carro</h3>
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                  20% OFF
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">Economize usando seu veículo</p>
-            </div>
-            <div className={cn(
-              "w-6 h-6 rounded-full border-2 flex items-center justify-center",
-              useOwnCar ? "border-primary bg-primary" : "border-muted-foreground"
-            )}>
-              {useOwnCar && <Check className="w-4 h-4 text-primary-foreground" />}
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setUseOwnCar(false)}
-          className={cn(
-            "w-full p-5 rounded-2xl border-2 transition-all duration-200",
-            !useOwnCar
-              ? "border-secondary bg-secondary/5"
-              : "border-border hover:border-secondary/50"
-          )}
-        >
-          <div className="flex items-center gap-4">
-            <div className={cn(
-              "w-14 h-14 rounded-xl flex items-center justify-center",
-              !useOwnCar ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
-            )}>
-              <Car className="w-7 h-7" />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-semibold text-foreground">Não, usar carro do instrutor</h3>
-              <p className="text-sm text-muted-foreground">Veículo adaptado para aulas</p>
-            </div>
-            <div className={cn(
-              "w-6 h-6 rounded-full border-2 flex items-center justify-center",
-              !useOwnCar ? "border-secondary bg-secondary" : "border-muted-foreground"
-            )}>
-              {!useOwnCar && <Check className="w-4 h-4 text-secondary-foreground" />}
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* Info Box */}
-      <div className="mt-6 p-4 bg-muted/50 rounded-xl">
-        <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-medium text-foreground text-sm">Res. CONTRAN 1.020/2025</h4>
-            <p className="text-xs text-muted-foreground mt-1">
-              A nova lei permite o uso do veículo próprio do aluno nas aulas práticas, com desconto de até 20%.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // Determinar conteúdo do step 3
   const renderStep3Content = () => {
-    if (selectedGoal === 'renovacao') {
-      return renderCarroProprioStep();
-    }
     if (selectedGoal === 'primeira_habilitacao') {
       return renderPrimeiraHabilitacaoCategoria();
     }
@@ -582,19 +480,8 @@ export default function AlunoOnboarding() {
 
   // Determinar conteúdo do step 4
   const renderStep4Content = () => {
-    if (selectedGoal === 'primeira_habilitacao') {
-      return renderCarroProprioStep();
-    }
     if (selectedGoal === 'adicao_categoria' || selectedGoal === 'mudanca_categoria') {
       return renderCategoriaPretendidaStep();
-    }
-    return null;
-  };
-
-  // Determinar conteúdo do step 5 (só para adição/mudança)
-  const renderStep5Content = () => {
-    if (selectedGoal === 'adicao_categoria' || selectedGoal === 'mudanca_categoria') {
-      return renderCarroProprioStep();
     }
     return null;
   };
@@ -765,9 +652,6 @@ export default function AlunoOnboarding() {
 
           {/* Step 4: Contextual */}
           {step === 4 && renderStep4Content()}
-
-          {/* Step 5: Own Car (for adição/mudança only) */}
-          {step === 5 && renderStep5Content()}
         </div>
       </div>
 
