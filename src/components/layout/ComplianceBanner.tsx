@@ -32,7 +32,7 @@ export function ComplianceBanner({
               100% Alinhado
             </p>
             <p className="text-sm font-medium">
-              Res. CONTRAN 1.020/2025: 2h Mínimas + Instrutores Autônomos + EAD Grátis!
+              Res. CONTRAN 1.020/2025: Mínimo 2h por aula + Instrutores Autônomos + EAD Grátis!
             </p>
           </div>
           {dismissible && (
@@ -56,7 +56,7 @@ export function ComplianceBanner({
       <div className="flex items-center gap-2">
         <Shield className="w-4 h-4 flex-shrink-0" />
         <p className="text-xs font-medium flex-1">
-          Res. CONTRAN 1.020/2025: 2h práticas + EAD grátis
+          Res. CONTRAN 1.020/2025: Mínimo 2h por aula + EAD grátis
         </p>
         <ChevronRight className="w-4 h-4 flex-shrink-0 opacity-50" />
       </div>
