@@ -1,75 +1,51 @@
 
 
-# Correcao do Trigger de Cadastro Incompleto
+# Fix: Authenticated Users Without Profile Get Stuck
 
-## Status Atual
+## Problem
 
-- **Edge Function `notify-admin-registration`**: FUNCIONANDO. Teste enviou mensagem com sucesso (messageId: 97780BEA825CDC68C791). Voce deve ter recebido a mensagem no WhatsApp agora mesmo.
-- **Onboarding (cadastro completo)**: Codigo integrado nos 3 onboardings (aluno, instrutor, autoescola). Funcionara quando um usuario completar o cadastro.
-- **Trigger de cadastro incompleto**: NAO FUNCIONA. O `app.settings.service_role_key` nao esta configurado no PostgreSQL, entao o trigger `pg_net` nao consegue autenticar na edge function.
+When a user creates an account but doesn't finish onboarding:
+1. They log in successfully via the "quick login" form
+2. The code checks alunos, instrutores, autoescolas tables - finds nothing
+3. It shows a toast "Selecione seu perfil" but the user stays on the same page seeing the login form again
+4. The user is authenticated but stuck - the login form is still shown instead of profile selection
 
-## Correcao Necessaria
+Additionally, if the user is already authenticated when arriving at `/auth` (e.g. redirected from Index.tsx), the page doesn't detect this and shows the login form unnecessarily.
 
-### Alternativa: Usar anon key no trigger (em vez de service_role_key)
+## Solution
 
-Como o `app.settings.service_role_key` nao esta disponivel no PostgreSQL e a edge function `notify-admin-registration` ja tem `verify_jwt = false`, podemos usar a **anon key** diretamente no trigger. Isso funciona porque:
+### 1. Auto-detect authenticated users on Auth page mount
 
-1. A edge function nao valida JWT (verify_jwt = false)
-2. A edge function chama `send-whatsapp-notification` usando o service_role_key que ela mesma obtem via `Deno.env`
-3. A anon key e publica e ja esta disponivel
+When Auth.tsx loads, if the user is already authenticated:
+- Check if they have a completed profile (aluno/instrutor/autoescola)
+- If YES: redirect to the correct dashboard
+- If NO: skip the login form and show the **profile type selection cards** so they can choose their type and proceed to onboarding
 
-### Migration SQL
+### 2. Fix quick login redirect when no profile exists
 
-Atualizar a funcao `notify_new_user_registration()` para:
-- Usar a anon key hardcoded (ja e publica, nao e segredo)
-- Remover a dependencia de `app.settings.service_role_key`
+After successful quick login finds no profile in any table:
+- Instead of just showing a toast, keep showing the profile selection cards below
+- The user can then tap a profile type, which sets `userType` and triggers `checkProfileAndRedirect` to send them to onboarding
 
-```sql
-CREATE OR REPLACE FUNCTION public.notify_new_user_registration()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-DECLARE
-  request_id bigint;
-  user_email text;
-  login_provider text;
-BEGIN
-  SELECT email INTO user_email FROM auth.users WHERE id = NEW.id;
+### Technical Details
 
-  SELECT COALESCE(
-    (SELECT raw_app_meta_data->>'provider' FROM auth.users WHERE id = NEW.id),
-    'email'
-  ) INTO login_provider;
+**File: `src/pages/Auth.tsx`**
 
-  SELECT net.http_post(
-    url := 'https://kyvtlmpkjjinhjelipvr.supabase.co/functions/v1/notify-admin-registration',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-    ),
-    body := jsonb_build_object(
-      'tipo', 'novo_usuario',
-      'dados', jsonb_build_object(
-        'nome', COALESCE(NEW.full_name, 'Sem nome'),
-        'email', COALESCE(user_email, 'N/A'),
-        'login_via', login_provider
-      )
-    )
-  ) INTO request_id;
+- Add a new `useEffect` that runs when `user` changes and `userType` is null (no type selected yet):
+  - If user is authenticated, check alunos/instrutores/autoescolas
+  - If profile found, redirect to dashboard
+  - If no profile found, ensure the page shows profile selection (set mode to show selection cards, hide login form)
 
-  RETURN NEW;
-END;
-$function$;
-```
+- Modify the `handleQuickLogin` success path (lines 355-364):
+  - After finding no profile, scroll to or highlight the profile selection cards
+  - The existing cards at lines 544-589 already handle `handleSelectType` which sets `userType` and triggers redirect to onboarding
 
-### Remover validacao de service_role_key na edge function
+- Add a state flag like `userAuthenticated` to track that the user is logged in but needs to pick a profile type, so the UI shows the selection cards prominently instead of the login form
 
-A edge function `notify-admin-registration` atualmente **nao valida** o caller (nao tem `validateInternalCall`), entao ja funciona com qualquer token. Nenhuma mudanca necessaria na edge function.
+**Expected flow after fix:**
+1. User opens `/auth` while already logged in (or logs in via quick login)
+2. System detects no profile exists
+3. Login form is hidden, profile selection cards are shown prominently with message "Selecione seu perfil para completar o cadastro"
+4. User taps "Sou Aluno" (or other type)
+5. `checkProfileAndRedirect` fires, finds no aluno record, redirects to `/onboarding/aluno`
 
-## Resultado Esperado
-
-Apos a correcao:
-1. **Novo usuario cria conta** -> trigger dispara -> WhatsApp enviado com "Aguardando completar cadastro"
-2. **Usuario completa onboarding** -> chamada do frontend -> WhatsApp enviado com "Cadastro finalizado"
