@@ -57,6 +57,8 @@ export default function Auth() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [needsProfileSelection, setNeedsProfileSelection] = useState(false);
+  const [checkingExistingProfile, setCheckingExistingProfile] = useState(false);
 
   // Get userType from query params if present
 
@@ -94,7 +96,37 @@ export default function Auth() {
     }
   }, [location.search]);
 
-  // Redirect after login/signup when user is authenticated
+  // Auto-detect authenticated users without a profile
+  useEffect(() => {
+    if (authLoading || !user || userType || isRedirecting || checkingExistingProfile) return;
+    
+    setCheckingExistingProfile(true);
+    
+    const checkExisting = async () => {
+      try {
+        const { data: aluno } = await supabase.from("alunos").select("id").eq("user_id", user.id).maybeSingle();
+        if (aluno) { navigate("/aluno", { replace: true }); return; }
+        
+        const { data: instrutor } = await supabase.from("instrutores").select("id").eq("user_id", user.id).maybeSingle();
+        if (instrutor) { navigate("/instrutor", { replace: true }); return; }
+        
+        const { data: autoescola } = await supabase.from("autoescolas").select("id").eq("user_id", user.id).maybeSingle();
+        if (autoescola) { navigate("/autoescola", { replace: true }); return; }
+        
+        // No profile found - show profile selection
+        setNeedsProfileSelection(true);
+      } catch (error) {
+        console.error("Error checking existing profile:", error);
+        setNeedsProfileSelection(true);
+      } finally {
+        setCheckingExistingProfile(false);
+      }
+    };
+    
+    checkExisting();
+  }, [user, authLoading, userType, isRedirecting]);
+
+  // Redirect after login/signup when user is authenticated and has selected a type
   useEffect(() => {
     if (user && !authLoading && userType && !isRedirecting) {
       checkProfileAndRedirect();
@@ -356,10 +388,11 @@ export default function Auth() {
           return;
         }
         
-        // No profile found, let user select type for onboarding
+        // No profile found, show profile selection cards
+        setNeedsProfileSelection(true);
         toast({
-          title: "Selecione seu perfil",
-          description: "Complete seu cadastro escolhendo seu perfil abaixo.",
+          title: "Complete seu cadastro",
+          description: "Selecione seu perfil abaixo para continuar.",
         });
       }
     } finally {
@@ -367,7 +400,7 @@ export default function Auth() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || checkingExistingProfile) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
@@ -397,8 +430,8 @@ export default function Auth() {
         <div className="flex-1 px-6 pb-8 overflow-y-auto">
           <div className="max-w-md mx-auto w-full">
             
-            {/* Quick Login Form - shown only in login mode */}
-            {mode === "login" && (
+            {/* Quick Login Form - shown only in login mode AND user is NOT already authenticated */}
+            {mode === "login" && !needsProfileSelection && (
               <div className="mb-8">
                 <div className="text-center mb-6">
                   <h2 className="text-2xl font-bold text-foreground mb-2">
@@ -520,8 +553,23 @@ export default function Auth() {
               </div>
             )}
 
-            {/* Profile Selection Title - shown only in signup mode or after separator */}
-            {mode === "signup" && (
+            {/* Profile Selection - prominent message when user is authenticated but has no profile */}
+            {needsProfileSelection && (
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <User className="w-8 h-8 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                  Complete seu cadastro
+                </h2>
+                <p className="text-muted-foreground">
+                  Selecione seu perfil para continuar
+                </p>
+              </div>
+            )}
+
+            {/* Profile Selection Title - shown only in signup mode */}
+            {mode === "signup" && !needsProfileSelection && (
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-foreground mb-2">
                   Selecione seu perfil
@@ -532,7 +580,7 @@ export default function Auth() {
               </div>
             )}
 
-            {mode === "login" && (
+            {mode === "login" && !needsProfileSelection && (
               <div className="text-center mb-6">
                 <p className="text-sm text-muted-foreground">
                   Selecione seu perfil para criar uma conta
@@ -588,25 +636,27 @@ export default function Auth() {
               </button>
             </div>
 
-            {/* Toggle Mode */}
-            <div className="mt-8 text-center pb-4">
-              <button
-                onClick={() => setMode(mode === "login" ? "signup" : "login")}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {mode === "login" ? (
-                  <>
-                    Primeira vez?{" "}
-                    <span className="font-semibold text-primary">Criar conta</span>
-                  </>
-                ) : (
-                  <>
-                    Já tem conta?{" "}
-                    <span className="font-semibold text-primary">Entrar</span>
-                  </>
-                )}
-              </button>
-            </div>
+            {/* Toggle Mode - hide when user is already authenticated without profile */}
+            {!needsProfileSelection && (
+              <div className="mt-8 text-center pb-4">
+                <button
+                  onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {mode === "login" ? (
+                    <>
+                      Primeira vez?{" "}
+                      <span className="font-semibold text-primary">Criar conta</span>
+                    </>
+                  ) : (
+                    <>
+                      Já tem conta?{" "}
+                      <span className="font-semibold text-primary">Entrar</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
