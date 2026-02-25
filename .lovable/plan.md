@@ -1,71 +1,58 @@
 
 
-# Fix: WhatsApp Notifications Not Arriving (Wrong Phone Format)
+# Correção: Notificação Admin Sempre com WhatsApp e Cidade
 
-## Problem Found
+## Problema
 
-Looking at the Z-API logs, the messages are being sent to phone number **`55351961395247`** which is WRONG.
+Os dados de WhatsApp e Cidade do aluno FRANCO LUIGE ANDERSON existem no banco de dados (phone: `18991591661`, cidade: `RIO PRETO`), mas a notificação WhatsApp mostrou "N/A" para ambos. Isso acontece porque a edge function `notify-admin-registration` depende exclusivamente dos dados enviados pelo frontend no payload. Se por qualquer motivo (race condition, re-trigger, chamada manual) esses campos chegarem vazios, a notificação sai incompleta.
 
-- Admin phone is `351961395247` (Portugal, country code +351)
-- The `send-whatsapp-notification` function automatically prepends `55` (Brazil code) to any number not starting with `55`
-- Result: `55` + `351961395247` = `55351961395247` -- an invalid number
-- Z-API accepts the request (returns success + messageId) but the message never arrives because the destination number doesn't exist
+## Solução
 
-## Root Cause
+Tornar a edge function `notify-admin-registration` **autossuficiente**: sempre buscar os dados atualizados diretamente do banco de dados como fallback, garantindo que WhatsApp e cidade nunca apareçam como "N/A" quando existem no perfil do usuário.
 
-In `supabase/functions/send-whatsapp-notification/index.ts`, line ~80:
+## Mudanças
 
-```typescript
-const phoneFormatted = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
+### Arquivo: `supabase/functions/notify-admin-registration/index.ts`
+
+1. **Adicionar lookup no banco de dados**: Quando `whatsapp` ou `cidade` estiverem vazios no payload, buscar da tabela `profiles` usando o email do usuário
+2. **Aceitar campo `user_id` opcional** no payload para busca mais precisa
+3. **Enriquecer os dados** antes de construir a mensagem
+
+### Lógica do enriquecimento:
+
+```text
+Payload recebido com dados do frontend
+         |
+   whatsapp ou cidade vazios?
+         |
+    SIM --> Buscar na tabela profiles (por user_id ou email)
+         |
+   Dados encontrados --> Preencher campos faltantes
+         |
+   Construir mensagem com dados completos
 ```
 
-This logic assumes ALL numbers are Brazilian. Portuguese numbers (or any international number) get incorrectly prefixed with `55`.
+### Arquivo: `src/pages/onboarding/AlunoOnboarding.tsx`
 
-## Solution
+Adicionar `user_id: user.id` ao payload da notificação para facilitar a busca no banco.
 
-### Option A (Recommended): Smart country code detection
+### Arquivo: `src/pages/onboarding/InstrutorOnboarding.tsx`
 
-Update the phone formatting logic to handle international numbers properly:
+Mesmo ajuste: adicionar `user_id` ao payload.
 
-- If number already starts with a known country code (e.g., `351` for Portugal, `55` for Brazil), use it as-is
-- If number starts with `55` (Brazil), keep as-is
-- If number has 10-11 digits (Brazilian format without country code), prepend `55`
-- Otherwise, use number as-is (assume it already includes country code)
+### Arquivo: `src/pages/onboarding/AutoescolaOnboarding.tsx`
 
-### Changes
+Mesmo ajuste: adicionar `user_id` ao payload.
 
-**File: `supabase/functions/send-whatsapp-notification/index.ts`**
+## Detalhes Técnicos
 
-Replace the phone formatting block with:
+Na edge function, após receber o payload:
 
-```typescript
-// Format phone: remove non-digits
-const phoneClean = phone.replace(/\D/g, "");
+1. Verificar se `dados.whatsapp` e `dados.cidade` estão preenchidos
+2. Se algum estiver vazio, usar o Supabase Admin Client (service role key) para buscar da tabela `profiles`:
+   - Por `user_id` se fornecido
+   - Por `email` como fallback
+3. Preencher os campos faltantes com os dados do banco
+4. Formatar o telefone para exibição na mensagem (ex: `(18) 99159-1661`)
 
-// Smart country code detection:
-// - If starts with "55" and has 12-13 digits: Brazilian number, keep as-is
-// - If has 10-11 digits (no country code): assume Brazilian, prepend "55"  
-// - Otherwise: international number, keep as-is (already has country code)
-let phoneFormatted: string;
-if (phoneClean.startsWith("55") && (phoneClean.length === 12 || phoneClean.length === 13)) {
-  phoneFormatted = phoneClean; // Brazilian with country code
-} else if (phoneClean.length === 10 || phoneClean.length === 11) {
-  phoneFormatted = `55${phoneClean}`; // Brazilian without country code
-} else {
-  phoneFormatted = phoneClean; // International or already formatted
-}
-```
-
-This ensures:
-- `351961395247` (Portugal) stays as `351961395247` (12 digits, not starting with 55)
-- `18997427195` (Brazil, 11 digits) becomes `5518997427195`
-- `5518997427195` (Brazil with code) stays as-is
-
-### Also update `notify-admin-registration/index.ts`
-
-The `ADMIN_PHONE` constant is already correct (`351961395247`), no change needed there.
-
-## Expected Result
-
-After this fix, the Z-API will send to `351961395247` instead of `55351961395247`, and the messages will arrive on the Portuguese WhatsApp number.
-
+Isso garante que **toda notificação admin terá os dados completos**, independente de como a function foi chamada.
