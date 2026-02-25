@@ -1,51 +1,71 @@
 
 
-# Fix: Authenticated Users Without Profile Get Stuck
+# Fix: WhatsApp Notifications Not Arriving (Wrong Phone Format)
 
-## Problem
+## Problem Found
 
-When a user creates an account but doesn't finish onboarding:
-1. They log in successfully via the "quick login" form
-2. The code checks alunos, instrutores, autoescolas tables - finds nothing
-3. It shows a toast "Selecione seu perfil" but the user stays on the same page seeing the login form again
-4. The user is authenticated but stuck - the login form is still shown instead of profile selection
+Looking at the Z-API logs, the messages are being sent to phone number **`55351961395247`** which is WRONG.
 
-Additionally, if the user is already authenticated when arriving at `/auth` (e.g. redirected from Index.tsx), the page doesn't detect this and shows the login form unnecessarily.
+- Admin phone is `351961395247` (Portugal, country code +351)
+- The `send-whatsapp-notification` function automatically prepends `55` (Brazil code) to any number not starting with `55`
+- Result: `55` + `351961395247` = `55351961395247` -- an invalid number
+- Z-API accepts the request (returns success + messageId) but the message never arrives because the destination number doesn't exist
+
+## Root Cause
+
+In `supabase/functions/send-whatsapp-notification/index.ts`, line ~80:
+
+```typescript
+const phoneFormatted = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
+```
+
+This logic assumes ALL numbers are Brazilian. Portuguese numbers (or any international number) get incorrectly prefixed with `55`.
 
 ## Solution
 
-### 1. Auto-detect authenticated users on Auth page mount
+### Option A (Recommended): Smart country code detection
 
-When Auth.tsx loads, if the user is already authenticated:
-- Check if they have a completed profile (aluno/instrutor/autoescola)
-- If YES: redirect to the correct dashboard
-- If NO: skip the login form and show the **profile type selection cards** so they can choose their type and proceed to onboarding
+Update the phone formatting logic to handle international numbers properly:
 
-### 2. Fix quick login redirect when no profile exists
+- If number already starts with a known country code (e.g., `351` for Portugal, `55` for Brazil), use it as-is
+- If number starts with `55` (Brazil), keep as-is
+- If number has 10-11 digits (Brazilian format without country code), prepend `55`
+- Otherwise, use number as-is (assume it already includes country code)
 
-After successful quick login finds no profile in any table:
-- Instead of just showing a toast, keep showing the profile selection cards below
-- The user can then tap a profile type, which sets `userType` and triggers `checkProfileAndRedirect` to send them to onboarding
+### Changes
 
-### Technical Details
+**File: `supabase/functions/send-whatsapp-notification/index.ts`**
 
-**File: `src/pages/Auth.tsx`**
+Replace the phone formatting block with:
 
-- Add a new `useEffect` that runs when `user` changes and `userType` is null (no type selected yet):
-  - If user is authenticated, check alunos/instrutores/autoescolas
-  - If profile found, redirect to dashboard
-  - If no profile found, ensure the page shows profile selection (set mode to show selection cards, hide login form)
+```typescript
+// Format phone: remove non-digits
+const phoneClean = phone.replace(/\D/g, "");
 
-- Modify the `handleQuickLogin` success path (lines 355-364):
-  - After finding no profile, scroll to or highlight the profile selection cards
-  - The existing cards at lines 544-589 already handle `handleSelectType` which sets `userType` and triggers redirect to onboarding
+// Smart country code detection:
+// - If starts with "55" and has 12-13 digits: Brazilian number, keep as-is
+// - If has 10-11 digits (no country code): assume Brazilian, prepend "55"  
+// - Otherwise: international number, keep as-is (already has country code)
+let phoneFormatted: string;
+if (phoneClean.startsWith("55") && (phoneClean.length === 12 || phoneClean.length === 13)) {
+  phoneFormatted = phoneClean; // Brazilian with country code
+} else if (phoneClean.length === 10 || phoneClean.length === 11) {
+  phoneFormatted = `55${phoneClean}`; // Brazilian without country code
+} else {
+  phoneFormatted = phoneClean; // International or already formatted
+}
+```
 
-- Add a state flag like `userAuthenticated` to track that the user is logged in but needs to pick a profile type, so the UI shows the selection cards prominently instead of the login form
+This ensures:
+- `351961395247` (Portugal) stays as `351961395247` (12 digits, not starting with 55)
+- `18997427195` (Brazil, 11 digits) becomes `5518997427195`
+- `5518997427195` (Brazil with code) stays as-is
 
-**Expected flow after fix:**
-1. User opens `/auth` while already logged in (or logs in via quick login)
-2. System detects no profile exists
-3. Login form is hidden, profile selection cards are shown prominently with message "Selecione seu perfil para completar o cadastro"
-4. User taps "Sou Aluno" (or other type)
-5. `checkProfileAndRedirect` fires, finds no aluno record, redirects to `/onboarding/aluno`
+### Also update `notify-admin-registration/index.ts`
+
+The `ADMIN_PHONE` constant is already correct (`351961395247`), no change needed there.
+
+## Expected Result
+
+After this fix, the Z-API will send to `351961395247` instead of `55351961395247`, and the messages will arrive on the Portuguese WhatsApp number.
 
