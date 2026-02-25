@@ -1,58 +1,53 @@
 
 
-# Correção: Notificação Admin Sempre com WhatsApp e Cidade
+# Tabela de Log de Notificações Admin + Verificação dos Fluxos
 
-## Problema
+## 1. Criar tabela `admin_notification_logs`
 
-Os dados de WhatsApp e Cidade do aluno FRANCO LUIGE ANDERSON existem no banco de dados (phone: `18991591661`, cidade: `RIO PRETO`), mas a notificação WhatsApp mostrou "N/A" para ambos. Isso acontece porque a edge function `notify-admin-registration` depende exclusivamente dos dados enviados pelo frontend no payload. Se por qualquer motivo (race condition, re-trigger, chamada manual) esses campos chegarem vazios, a notificação sai incompleta.
+Nova tabela no banco de dados para registrar todas as notificações admin enviadas:
 
-## Solução
+```sql
+CREATE TABLE public.admin_notification_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo TEXT NOT NULL,              -- 'aluno', 'instrutor', 'autoescola', 'novo_usuario'
+  user_id UUID,                    -- ID do usuário registrado
+  nome TEXT,
+  email TEXT,
+  whatsapp TEXT,
+  cidade TEXT,
+  message_id TEXT,                 -- messageId retornado pela Z-API
+  success BOOLEAN DEFAULT false,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 
-Tornar a edge function `notify-admin-registration` **autossuficiente**: sempre buscar os dados atualizados diretamente do banco de dados como fallback, garantindo que WhatsApp e cidade nunca apareçam como "N/A" quando existem no perfil do usuário.
-
-## Mudanças
-
-### Arquivo: `supabase/functions/notify-admin-registration/index.ts`
-
-1. **Adicionar lookup no banco de dados**: Quando `whatsapp` ou `cidade` estiverem vazios no payload, buscar da tabela `profiles` usando o email do usuário
-2. **Aceitar campo `user_id` opcional** no payload para busca mais precisa
-3. **Enriquecer os dados** antes de construir a mensagem
-
-### Lógica do enriquecimento:
-
-```text
-Payload recebido com dados do frontend
-         |
-   whatsapp ou cidade vazios?
-         |
-    SIM --> Buscar na tabela profiles (por user_id ou email)
-         |
-   Dados encontrados --> Preencher campos faltantes
-         |
-   Construir mensagem com dados completos
+-- RLS: somente service role pode inserir (edge function)
+ALTER TABLE public.admin_notification_logs ENABLE ROW LEVEL SECURITY;
+-- Nenhuma policy para anon/authenticated = apenas service role tem acesso
 ```
 
-### Arquivo: `src/pages/onboarding/AlunoOnboarding.tsx`
+## 2. Atualizar Edge Function `notify-admin-registration`
 
-Adicionar `user_id: user.id` ao payload da notificação para facilitar a busca no banco.
+Após enviar a mensagem WhatsApp, inserir um registro na tabela `admin_notification_logs` com:
+- Tipo de cadastro
+- Dados do usuário (nome, email, whatsapp, cidade)
+- `message_id` da Z-API
+- Status de sucesso/falha
+- Mensagem de erro (se houver)
 
-### Arquivo: `src/pages/onboarding/InstrutorOnboarding.tsx`
+## 3. Verificação dos Fluxos
 
-Mesmo ajuste: adicionar `user_id` ao payload.
+Os três onboarding (aluno, instrutor, autoescola) já estão configurados corretamente:
+- Todos enviam `user_id`, `nome`, `email`, `whatsapp`, `cidade` no payload
+- A edge function enriquece dados faltantes do banco
+- A formatação do telefone internacional está correta
 
-### Arquivo: `src/pages/onboarding/AutoescolaOnboarding.tsx`
+Nenhuma alteração necessária nos arquivos de onboarding -- apenas a edge function e a nova tabela.
 
-Mesmo ajuste: adicionar `user_id` ao payload.
+## Resumo das Mudanças
 
-## Detalhes Técnicos
+| Arquivo | Ação |
+|---------|------|
+| Migração SQL | Criar tabela `admin_notification_logs` |
+| `supabase/functions/notify-admin-registration/index.ts` | Adicionar insert na tabela de log após envio |
 
-Na edge function, após receber o payload:
-
-1. Verificar se `dados.whatsapp` e `dados.cidade` estão preenchidos
-2. Se algum estiver vazio, usar o Supabase Admin Client (service role key) para buscar da tabela `profiles`:
-   - Por `user_id` se fornecido
-   - Por `email` como fallback
-3. Preencher os campos faltantes com os dados do banco
-4. Formatar o telefone para exibição na mensagem (ex: `(18) 99159-1661`)
-
-Isso garante que **toda notificação admin terá os dados completos**, independente de como a function foi chamada.
