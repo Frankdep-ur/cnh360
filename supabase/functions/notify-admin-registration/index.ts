@@ -193,6 +193,25 @@ serve(async (req) => {
     const whatsappResult = await whatsappResponse.json();
     logStep("Resultado do envio WhatsApp", whatsappResult);
 
+    // Log to admin_notification_logs table
+    try {
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+      await supabaseAdmin.from("admin_notification_logs").insert({
+        tipo: payload.tipo,
+        user_id: payload.dados.user_id || null,
+        nome: payload.dados.nome || payload.dados.nome_fantasia || null,
+        email: payload.dados.email || null,
+        whatsapp: payload.dados.whatsapp || null,
+        cidade: payload.dados.cidade || null,
+        message_id: whatsappResult.messageId || null,
+        success: whatsappResult.success ?? false,
+        error_message: whatsappResult.success ? null : (whatsappResult.error || null),
+      });
+      logStep("Log inserido na tabela admin_notification_logs");
+    } catch (logError: any) {
+      logStep("Erro ao inserir log", { message: logError.message });
+    }
+
     return new Response(
       JSON.stringify({ success: whatsappResult.success ?? false, ...whatsappResult }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

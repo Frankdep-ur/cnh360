@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_notification_logs: {
+        Row: {
+          cidade: string | null
+          created_at: string | null
+          email: string | null
+          error_message: string | null
+          id: string
+          message_id: string | null
+          nome: string | null
+          success: boolean | null
+          tipo: string
+          user_id: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          nome?: string | null
+          success?: boolean | null
+          tipo: string
+          user_id?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          nome?: string | null
+          success?: boolean | null
+          tipo?: string
+          user_id?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       alunos: {
         Row: {
           categoria_pretendida: Database["public"]["Enums"]["categoria_cnh"]
