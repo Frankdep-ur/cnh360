@@ -325,6 +325,7 @@ export default function InstrutorOnboarding() {
           body: {
             tipo: "instrutor",
             dados: {
+              user_id: user.id,
               nome: name,
               email: user.email,
               whatsapp: whatsapp,
