@@ -1,121 +1,75 @@
 
 
-# Notificacao Admin via WhatsApp para Novos Cadastros
+# Correcao do Trigger de Cadastro Incompleto
 
-## Resumo
+## Status Atual
 
-Criar um sistema automatico que envia uma mensagem WhatsApp para o numero administrador (+351 961 395 247) sempre que:
-1. Um novo usuario **completa** o onboarding (aluno, instrutor ou autoescola)
-2. Um novo usuario **cria conta** mas ainda nao completou o onboarding
+- **Edge Function `notify-admin-registration`**: FUNCIONANDO. Teste enviou mensagem com sucesso (messageId: 97780BEA825CDC68C791). Voce deve ter recebido a mensagem no WhatsApp agora mesmo.
+- **Onboarding (cadastro completo)**: Codigo integrado nos 3 onboardings (aluno, instrutor, autoescola). Funcionara quando um usuario completar o cadastro.
+- **Trigger de cadastro incompleto**: NAO FUNCIONA. O `app.settings.service_role_key` nao esta configurado no PostgreSQL, entao o trigger `pg_net` nao consegue autenticar na edge function.
 
-## Arquitetura
+## Correcao Necessaria
 
-```text
-Cadastro Completo:
-  AlunoOnboarding.tsx ─────┐
-  InstrutorOnboarding.tsx ──┼──> Edge Function: notify-admin-registration
-  AutoescolaOnboarding.tsx ─┘          │
-                                       ▼
-                              send-whatsapp-notification
-                                       │
-                                       ▼
-                              WhatsApp Admin: +351961395247
+### Alternativa: Usar anon key no trigger (em vez de service_role_key)
 
-Cadastro Incompleto (apenas criou conta):
-  handle_new_user() trigger ──> pg_net HTTP call ──> notify-admin-registration
-                                                          │
-                                                          ▼
-                                                WhatsApp Admin: +351961395247
+Como o `app.settings.service_role_key` nao esta disponivel no PostgreSQL e a edge function `notify-admin-registration` ja tem `verify_jwt = false`, podemos usar a **anon key** diretamente no trigger. Isso funciona porque:
+
+1. A edge function nao valida JWT (verify_jwt = false)
+2. A edge function chama `send-whatsapp-notification` usando o service_role_key que ela mesma obtem via `Deno.env`
+3. A anon key e publica e ja esta disponivel
+
+### Migration SQL
+
+Atualizar a funcao `notify_new_user_registration()` para:
+- Usar a anon key hardcoded (ja e publica, nao e segredo)
+- Remover a dependencia de `app.settings.service_role_key`
+
+```sql
+CREATE OR REPLACE FUNCTION public.notify_new_user_registration()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  request_id bigint;
+  user_email text;
+  login_provider text;
+BEGIN
+  SELECT email INTO user_email FROM auth.users WHERE id = NEW.id;
+
+  SELECT COALESCE(
+    (SELECT raw_app_meta_data->>'provider' FROM auth.users WHERE id = NEW.id),
+    'email'
+  ) INTO login_provider;
+
+  SELECT net.http_post(
+    url := 'https://kyvtlmpkjjinhjelipvr.supabase.co/functions/v1/notify-admin-registration',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+    ),
+    body := jsonb_build_object(
+      'tipo', 'novo_usuario',
+      'dados', jsonb_build_object(
+        'nome', COALESCE(NEW.full_name, 'Sem nome'),
+        'email', COALESCE(user_email, 'N/A'),
+        'login_via', login_provider
+      )
+    )
+  ) INTO request_id;
+
+  RETURN NEW;
+END;
+$function$;
 ```
 
-## Alteracoes
+### Remover validacao de service_role_key na edge function
 
-### 1. Nova Edge Function: `notify-admin-registration`
+A edge function `notify-admin-registration` atualmente **nao valida** o caller (nao tem `validateInternalCall`), entao ja funciona com qualquer token. Nenhuma mudanca necessaria na edge function.
 
-Criar `supabase/functions/notify-admin-registration/index.ts`:
+## Resultado Esperado
 
-- Recebe payload com tipo (`aluno`, `instrutor`, `autoescola` ou `novo_usuario`)
-- Monta mensagem formatada conforme o tipo
-- Chama `send-whatsapp-notification` com `{ phone: "351961395247", message }` usando service role key
-- Validacao interna via service role key (mesma abordagem do send-whatsapp-notification)
-
-Mensagens por tipo:
-
-**Aluno completo:**
-```
-🚨 NOVO ALUNO CADASTRADO - CNH360
-👤 Nome: {nome}
-📧 E-mail: {email}
-📱 WhatsApp: {whatsapp}
-📍 Cidade: {cidade}
-🪪 Categoria pretendida: {categoria}
-📅 Data do cadastro: {data}
-Status: Cadastro finalizado ✅
-```
-
-**Instrutor completo:**
-```
-🚨 NOVO INSTRUTOR CADASTRADO - CNH360
-👤 Nome: {nome}
-📧 E-mail: {email}
-📱 WhatsApp: {whatsapp}
-📍 Cidade: {cidade}
-🚘 Categoria: B
-📅 Data do cadastro: {data}
-Status: Cadastro finalizado ✅
-```
-
-**Autoescola completa:**
-```
-🚨 NOVA AUTOESCOLA CADASTRADA - CNH360
-🏢 Nome: {nome_fantasia}
-👤 Responsável: {responsavel}
-📧 E-mail: {email}
-📱 WhatsApp: {whatsapp}
-📍 Cidade: {cidade}
-📅 Data do cadastro: {data}
-Status: Cadastro finalizado ✅
-```
-
-**Novo usuario (incompleto):**
-```
-⚠️ NOVO USUARIO REGISTRADO - CNH360
-👤 Nome: {nome}
-📧 E-mail: {email}
-🔑 Login via: {google/email}
-📅 Data: {data}
-Status: Aguardando completar cadastro ⏳
-```
-
-### 2. Trigger no banco de dados para cadastros incompletos
-
-Criar migration SQL que:
-- Habilita a extensao `pg_net` (para HTTP calls do Postgres)
-- Cria uma funcao `notify_new_user_registration()` que dispara apos INSERT na tabela `profiles`
-- Faz um HTTP POST para a edge function `notify-admin-registration` com os dados do novo usuario
-- Usa `net.http_post` para chamada assincrona
-
-### 3. Modificar paginas de Onboarding
-
-**AlunoOnboarding.tsx** (linha ~293, apos `navigate("/aluno")`):
-- Adicionar chamada `supabase.functions.invoke("notify-admin-registration", { body: { tipo, dados } })`
-- Fire-and-forget (nao bloqueia o usuario)
-
-**InstrutorOnboarding.tsx** (linha ~321, apos `navigate("/instrutor")`):
-- Mesma logica
-
-**AutoescolaOnboarding.tsx** (linha ~222, apos `navigate("/autoescola")`):
-- Mesma logica
-
-### 4. Configuracao
-
-- Adicionar `notify-admin-registration` ao `supabase/config.toml` com `verify_jwt = false`
-- O numero admin (+351961395247) sera hardcoded na edge function como constante
-- Usa os mesmos secrets Z-API ja configurados (ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN)
-
-## Detalhes tecnicos
-
-- A notificacao e fire-and-forget: se falhar, nao impacta o usuario
-- A edge function `notify-admin-registration` chama internamente `send-whatsapp-notification` via fetch com service role key
-- O trigger no banco usa `pg_net` para chamada HTTP assincrona, evitando bloquear a transacao
-- Logs sao registrados na edge function para auditoria
+Apos a correcao:
+1. **Novo usuario cria conta** -> trigger dispara -> WhatsApp enviado com "Aguardando completar cadastro"
+2. **Usuario completa onboarding** -> chamada do frontend -> WhatsApp enviado com "Cadastro finalizado"
