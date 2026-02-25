@@ -6,6 +6,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+
 export default function Index() {
   const navigate = useNavigate();
   const {
@@ -14,14 +16,57 @@ export default function Index() {
     loading: authLoading
   } = useAuth();
   const [showContent, setShowContent] = useState(false);
+  const [checkingProfile, setCheckingProfile] = useState(true);
+
+  // Redirecionar usuários autenticados
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setCheckingProfile(false);
+      return;
+    }
+
+    const checkProfile = async () => {
+      try {
+        const { data: aluno } = await supabase
+          .from("alunos")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (aluno) { navigate("/aluno", { replace: true }); return; }
+
+        const { data: instrutor } = await supabase
+          .from("instrutores")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (instrutor) { navigate("/instrutor", { replace: true }); return; }
+
+        const { data: autoescola } = await supabase
+          .from("autoescolas")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (autoescola) { navigate("/autoescola", { replace: true }); return; }
+
+        // Sem perfil → completar onboarding
+        navigate("/auth", { replace: true });
+      } catch (error) {
+        console.error("Erro ao verificar perfil:", error);
+        setCheckingProfile(false);
+      }
+    };
+
+    checkProfile();
+  }, [user, authLoading, navigate]);
 
   // Animação de entrada simples
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && !checkingProfile) {
       const timer = setTimeout(() => setShowContent(true), 100);
       return () => clearTimeout(timer);
     }
-  }, [authLoading]);
+  }, [authLoading, checkingProfile]);
   const handleLogout = async () => {
     try {
       await signOut();
@@ -63,10 +108,17 @@ export default function Index() {
     icon: Users,
     text: "Conecte-se com os melhores profissionais"
   }];
+  if (authLoading || checkingProfile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    );
+  }
+
   return <div className="min-h-screen bg-background flex flex-col">
       {/* Compliance Banner */}
       <ComplianceBanner variant="full" />
-
       {/* Hero Section */}
       <div className="gradient-hero text-primary-foreground px-6 pt-12 pb-12 safe-top">
         <div className={cn("max-w-md mx-auto transition-all duration-700", showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4")}>
