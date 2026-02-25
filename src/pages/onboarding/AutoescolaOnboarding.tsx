@@ -226,6 +226,7 @@ export default function AutoescolaOnboarding() {
         body: {
           tipo: "autoescola",
           dados: {
+            user_id: user.id,
             nome_fantasia: formData.nomeFantasia || formData.razaoSocial,
             responsavel: formData.responsavel,
             email: formData.email,

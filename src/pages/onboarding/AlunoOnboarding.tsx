@@ -298,6 +298,7 @@ export default function AlunoOnboarding() {
         body: {
           tipo: "aluno",
           dados: {
+            user_id: user.id,
             nome: name,
             email: user.email,
             whatsapp: whatsapp,
