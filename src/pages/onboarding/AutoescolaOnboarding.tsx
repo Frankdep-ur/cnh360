@@ -220,6 +220,20 @@ export default function AutoescolaOnboarding() {
       });
 
       navigate("/autoescola", { replace: true });
+
+      // Fire-and-forget: notificar admin via WhatsApp
+      supabase.functions.invoke("notify-admin-registration", {
+        body: {
+          tipo: "autoescola",
+          dados: {
+            nome_fantasia: formData.nomeFantasia || formData.razaoSocial,
+            responsavel: formData.responsavel,
+            email: formData.email,
+            whatsapp: formData.whatsapp,
+            cidade: formData.cidade,
+          },
+        },
+      }).catch(() => {});
     } catch (error: any) {
       console.error("Erro no cadastro:", error);
       toast({

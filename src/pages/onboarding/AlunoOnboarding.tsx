@@ -292,6 +292,20 @@ export default function AlunoOnboarding() {
       });
 
       navigate("/aluno");
+
+      // Fire-and-forget: notificar admin via WhatsApp
+      supabase.functions.invoke("notify-admin-registration", {
+        body: {
+          tipo: "aluno",
+          dados: {
+            nome: name,
+            email: user.email,
+            whatsapp: whatsapp,
+            cidade: city,
+            categoria: categoriaPretendida || selectedCategory,
+          },
+        },
+      }).catch(() => {});
     } catch (error: any) {
       toast({
         variant: "destructive",
