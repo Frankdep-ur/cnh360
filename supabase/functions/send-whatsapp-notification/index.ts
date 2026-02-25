@@ -62,13 +62,25 @@ async function sendWhatsAppViaZAPI(
     return { success: false, error: "ZAPI_CLIENT_TOKEN não configurado" };
   }
 
-  // Formatar número para padrão brasileiro (apenas dígitos, com 55)
+  // Formatar número: remover não-dígitos
   const phoneClean = phone.replace(/\D/g, "");
-  const phoneFormatted = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
 
-  // Validação mínima: 55 + DDD(2) + número(8-9) = mínimo 12 dígitos
-  if (phoneFormatted.length < 12) {
-    const errorMsg = `Telefone inválido: ${phoneFormatted.length} dígitos (mínimo 12). Número: ${phoneFormatted.substring(0, 4)}****`;
+  // Smart country code detection:
+  // - If starts with "55" and has 12-13 digits: Brazilian number, keep as-is
+  // - If has 10-11 digits (no country code): assume Brazilian, prepend "55"
+  // - Otherwise: international number, keep as-is (already has country code)
+  let phoneFormatted: string;
+  if (phoneClean.startsWith("55") && (phoneClean.length === 12 || phoneClean.length === 13)) {
+    phoneFormatted = phoneClean; // Brazilian with country code
+  } else if (phoneClean.length === 10 || phoneClean.length === 11) {
+    phoneFormatted = `55${phoneClean}`; // Brazilian without country code
+  } else {
+    phoneFormatted = phoneClean; // International or already formatted
+  }
+
+  // Validação mínima: número deve ter pelo menos 10 dígitos
+  if (phoneFormatted.length < 10) {
+    const errorMsg = `Telefone inválido: ${phoneFormatted.length} dígitos (mínimo 10). Número: ${phoneFormatted.substring(0, 4)}****`;
     logStep(errorMsg);
     return { success: false, error: errorMsg };
   }
