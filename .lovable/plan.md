@@ -1,50 +1,41 @@
 
 
-# Corrigir ComplianceBanner e Remover Step de Carro Proprio do Onboarding
+# Redirecionar Usuarios Autenticados sem Onboarding Completo
 
-## Resumo
+## Problema
 
-Duas correcoes a fazer:
-1. **ComplianceBanner**: Esclarecer que "2h" se refere ao minimo por sessao/agendamento, nao ao total de horas do curso
-2. **AlunoOnboarding**: Remover completamente o step de "carro proprio", ja que por enquanto o aluno nao vai ter essa opcao
+Quando alguem faz login pelo Google, o redirect volta para a pagina inicial (`/`). A pagina inicial (Index.tsx) nao verifica se o usuario ja completou o onboarding. Resultado: o usuario fica "preso" na landing page sem ser direcionado para escolher seu perfil (aluno, instrutor ou autoescola).
 
----
+## Solucao
 
-## 1. ComplianceBanner - Corrigir texto
+Adicionar logica no **Index.tsx** para detectar usuarios autenticados e redirecioná-los automaticamente:
 
-**Arquivo**: `src/components/layout/ComplianceBanner.tsx`
+1. Se ja tem perfil completo (existe em `alunos`, `instrutores` ou `autoescolas`) → redireciona para o dashboard correspondente
+2. Se esta autenticado mas NAO tem perfil → redireciona para `/auth` para escolher o tipo de perfil e completar o onboarding
 
-- **Variante "full" (linha 35)**: Trocar de:
-  `Res. CONTRAN 1.020/2025: 2h Mínimas + Instrutores Autônomos + EAD Grátis!`
-  Para:
-  `Res. CONTRAN 1.020/2025: Mínimo 2h por aula + Instrutores Autônomos + EAD Grátis!`
+## Alteracoes
 
-- **Variante "compact" (linha 59)**: Trocar de:
-  `Res. CONTRAN 1.020/2025: 2h práticas + EAD grátis`
-  Para:
-  `Res. CONTRAN 1.020/2025: Mínimo 2h por aula + EAD grátis`
+### Arquivo: `src/pages/Index.tsx`
 
----
+Adicionar um `useEffect` que roda quando `user` existe e `authLoading` termina:
 
-## 2. AlunoOnboarding - Remover step de carro proprio
+```text
+useEffect (user autenticado detectado)
+  ├── Consulta tabela alunos → se existe → navega /aluno
+  ├── Consulta tabela instrutores → se existe → navega /instrutor
+  ├── Consulta tabela autoescolas → se existe → navega /autoescola
+  └── Nenhum perfil encontrado → navega /auth (selecionar tipo)
+```
 
-**Arquivo**: `src/pages/onboarding/AlunoOnboarding.tsx`
+- Enquanto verifica, mostra o loading atual (ja existe o `showContent` com delay)
+- A verificacao so roda uma vez ao carregar a pagina
 
-Alteracoes:
+### Detalhes tecnicos
 
-- **Remover estado `useOwnCar`** (linha 66): remover `useState(false)` e todas as referencias
-- **Remover funcao `renderCarroProprioStep`** (linhas 480-567): deletar inteiramente
-- **Ajustar `getTotalSteps`** (linhas 72-76):
-  - Renovacao: de 3 para 2 (Nome/CPF, Objetivo)
-  - Primeira habilitacao: de 4 para 3 (Nome/CPF, Objetivo, Categoria)
-  - Adicao/mudanca: de 5 para 4 (Nome/CPF, Objetivo, Categoria atual, Categoria pretendida)
-- **Ajustar `renderStep3Content`** (linhas 570-581): remover o caso `renovacao` que chamava `renderCarroProprioStep`
-- **Ajustar `renderStep4Content`** (linhas 584-592): remover o caso `primeira_habilitacao` que chamava `renderCarroProprioStep`
-- **Ajustar `renderStep5Content`** (linhas 595-600): remover inteiramente (era so para carro proprio em adicao/mudanca)
-- **Ajustar `canProceed`** (linhas 186, 190): remover logica do carro proprio
-- **Ajustar `handleNext`** (linha 217): renovacao agora finaliza no step 2 em vez de ir para step 3
-- **Ajustar `saveToDatabase`** (linhas 272, 283): trocar `possui_carro_proprio: useOwnCar` por `possui_carro_proprio: false`
-- **Remover render do step 5** no JSX (se existir chamada a `renderStep5Content`)
+- Importar `supabase` do client
+- Adicionar estado `checkingProfile` para evitar flash da landing page
+- Usar `.maybeSingle()` para consultas seguras
+- Manter a landing page visivel apenas para usuarios nao autenticados
 
-No total: remover ~100 linhas de codigo morto e ajustar a navegacao dos steps.
+Isso resolve o caso da Mariana e de qualquer outro usuario que entrar via Google e nao completar o cadastro.
 
