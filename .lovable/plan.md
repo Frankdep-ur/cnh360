@@ -1,41 +1,121 @@
 
 
-# Redirecionar Usuarios Autenticados sem Onboarding Completo
+# Notificacao Admin via WhatsApp para Novos Cadastros
 
-## Problema
+## Resumo
 
-Quando alguem faz login pelo Google, o redirect volta para a pagina inicial (`/`). A pagina inicial (Index.tsx) nao verifica se o usuario ja completou o onboarding. Resultado: o usuario fica "preso" na landing page sem ser direcionado para escolher seu perfil (aluno, instrutor ou autoescola).
+Criar um sistema automatico que envia uma mensagem WhatsApp para o numero administrador (+351 961 395 247) sempre que:
+1. Um novo usuario **completa** o onboarding (aluno, instrutor ou autoescola)
+2. Um novo usuario **cria conta** mas ainda nao completou o onboarding
 
-## Solucao
+## Arquitetura
 
-Adicionar logica no **Index.tsx** para detectar usuarios autenticados e redirecioná-los automaticamente:
+```text
+Cadastro Completo:
+  AlunoOnboarding.tsx ─────┐
+  InstrutorOnboarding.tsx ──┼──> Edge Function: notify-admin-registration
+  AutoescolaOnboarding.tsx ─┘          │
+                                       ▼
+                              send-whatsapp-notification
+                                       │
+                                       ▼
+                              WhatsApp Admin: +351961395247
 
-1. Se ja tem perfil completo (existe em `alunos`, `instrutores` ou `autoescolas`) → redireciona para o dashboard correspondente
-2. Se esta autenticado mas NAO tem perfil → redireciona para `/auth` para escolher o tipo de perfil e completar o onboarding
+Cadastro Incompleto (apenas criou conta):
+  handle_new_user() trigger ──> pg_net HTTP call ──> notify-admin-registration
+                                                          │
+                                                          ▼
+                                                WhatsApp Admin: +351961395247
+```
 
 ## Alteracoes
 
-### Arquivo: `src/pages/Index.tsx`
+### 1. Nova Edge Function: `notify-admin-registration`
 
-Adicionar um `useEffect` que roda quando `user` existe e `authLoading` termina:
+Criar `supabase/functions/notify-admin-registration/index.ts`:
 
-```text
-useEffect (user autenticado detectado)
-  ├── Consulta tabela alunos → se existe → navega /aluno
-  ├── Consulta tabela instrutores → se existe → navega /instrutor
-  ├── Consulta tabela autoescolas → se existe → navega /autoescola
-  └── Nenhum perfil encontrado → navega /auth (selecionar tipo)
+- Recebe payload com tipo (`aluno`, `instrutor`, `autoescola` ou `novo_usuario`)
+- Monta mensagem formatada conforme o tipo
+- Chama `send-whatsapp-notification` com `{ phone: "351961395247", message }` usando service role key
+- Validacao interna via service role key (mesma abordagem do send-whatsapp-notification)
+
+Mensagens por tipo:
+
+**Aluno completo:**
+```
+🚨 NOVO ALUNO CADASTRADO - CNH360
+👤 Nome: {nome}
+📧 E-mail: {email}
+📱 WhatsApp: {whatsapp}
+📍 Cidade: {cidade}
+🪪 Categoria pretendida: {categoria}
+📅 Data do cadastro: {data}
+Status: Cadastro finalizado ✅
 ```
 
-- Enquanto verifica, mostra o loading atual (ja existe o `showContent` com delay)
-- A verificacao so roda uma vez ao carregar a pagina
+**Instrutor completo:**
+```
+🚨 NOVO INSTRUTOR CADASTRADO - CNH360
+👤 Nome: {nome}
+📧 E-mail: {email}
+📱 WhatsApp: {whatsapp}
+📍 Cidade: {cidade}
+🚘 Categoria: B
+📅 Data do cadastro: {data}
+Status: Cadastro finalizado ✅
+```
 
-### Detalhes tecnicos
+**Autoescola completa:**
+```
+🚨 NOVA AUTOESCOLA CADASTRADA - CNH360
+🏢 Nome: {nome_fantasia}
+👤 Responsável: {responsavel}
+📧 E-mail: {email}
+📱 WhatsApp: {whatsapp}
+📍 Cidade: {cidade}
+📅 Data do cadastro: {data}
+Status: Cadastro finalizado ✅
+```
 
-- Importar `supabase` do client
-- Adicionar estado `checkingProfile` para evitar flash da landing page
-- Usar `.maybeSingle()` para consultas seguras
-- Manter a landing page visivel apenas para usuarios nao autenticados
+**Novo usuario (incompleto):**
+```
+⚠️ NOVO USUARIO REGISTRADO - CNH360
+👤 Nome: {nome}
+📧 E-mail: {email}
+🔑 Login via: {google/email}
+📅 Data: {data}
+Status: Aguardando completar cadastro ⏳
+```
 
-Isso resolve o caso da Mariana e de qualquer outro usuario que entrar via Google e nao completar o cadastro.
+### 2. Trigger no banco de dados para cadastros incompletos
 
+Criar migration SQL que:
+- Habilita a extensao `pg_net` (para HTTP calls do Postgres)
+- Cria uma funcao `notify_new_user_registration()` que dispara apos INSERT na tabela `profiles`
+- Faz um HTTP POST para a edge function `notify-admin-registration` com os dados do novo usuario
+- Usa `net.http_post` para chamada assincrona
+
+### 3. Modificar paginas de Onboarding
+
+**AlunoOnboarding.tsx** (linha ~293, apos `navigate("/aluno")`):
+- Adicionar chamada `supabase.functions.invoke("notify-admin-registration", { body: { tipo, dados } })`
+- Fire-and-forget (nao bloqueia o usuario)
+
+**InstrutorOnboarding.tsx** (linha ~321, apos `navigate("/instrutor")`):
+- Mesma logica
+
+**AutoescolaOnboarding.tsx** (linha ~222, apos `navigate("/autoescola")`):
+- Mesma logica
+
+### 4. Configuracao
+
+- Adicionar `notify-admin-registration` ao `supabase/config.toml` com `verify_jwt = false`
+- O numero admin (+351961395247) sera hardcoded na edge function como constante
+- Usa os mesmos secrets Z-API ja configurados (ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN)
+
+## Detalhes tecnicos
+
+- A notificacao e fire-and-forget: se falhar, nao impacta o usuario
+- A edge function `notify-admin-registration` chama internamente `send-whatsapp-notification` via fetch com service role key
+- O trigger no banco usa `pg_net` para chamada HTTP assincrona, evitando bloquear a transacao
+- Logs sao registrados na edge function para auditoria
