@@ -293,30 +293,27 @@ export default function InstrutorGanhos() {
           
           <Card className="p-4 shadow-card">
             <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <span className="text-sm text-muted-foreground">A receber</span>
+              <Hourglass className="w-4 h-4 text-amber-500" />
+              <span className="text-sm text-muted-foreground">Em processamento</span>
             </div>
             <p className="text-xl font-bold text-foreground">
               {loadingBalance ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `R$ ${(saldo.pendente > 3.67 ? saldo.pendente - 3.67 : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                `R$ ${saldo.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
               )}
             </p>
-            {saldo.pendente > 3.67 ? (
-              <p className="text-xs text-muted-foreground">Líquido (taxa: R$ 3,67)</p>
-            ) : saldo.pendente > 0 ? (
-              <p className="text-xs text-muted-foreground">Valor insuficiente para saque</p>
-            ) : null}
+            {saldo.pendente > 0 && (
+              <p className="text-xs text-muted-foreground">(Valor das aulas ainda não liberadas)</p>
+            )}
           </Card>
           
           <Card className="p-4 shadow-card">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Este mês</span>
+              <span className="text-sm text-muted-foreground">Total já recebido</span>
             </div>
             <p className="text-xl font-bold text-foreground">R$ {saldo.totalMes.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Líquido</p>
           </Card>
         </div>
 
