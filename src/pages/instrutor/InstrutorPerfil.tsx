@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
 import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
-import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Clock, AlertTriangle, Check, MessageCircle } from "lucide-react";
+import { ArrowLeft, LogOut, Save, User, Mail, Phone, FileText, Car, Shield, ChevronRight, CreditCard, Wallet, AlertTriangle, Check, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -532,12 +532,18 @@ export default function InstrutorPerfil() {
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
 
-            <button className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card">
+            <button 
+              onClick={() => navigate("/instrutor/ganhos")}
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
+            >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-secondary" />
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-emerald-600" />
                 </div>
-                <span className="font-medium text-foreground">Disponibilidade</span>
+                <div>
+                  <span className="font-medium text-foreground">💵 Financeiro</span>
+                  <p className="text-xs text-muted-foreground">Ganhos, repasses e histórico</p>
+                </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
