@@ -48,7 +48,7 @@ export default function InstrutorPerfil() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const { activeLesson } = useActiveLessonBanner();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -58,7 +58,7 @@ export default function InstrutorPerfil() {
     cpf: "",
     phone: "",
     avatar_url: null,
-    is_test_account: false,
+    is_test_account: false
   });
   const [instrutorData, setInstrutorData] = useState<InstrutorData | null>(null);
   const [veiculoData, setVeiculoData] = useState<VeiculoData | null>(null);
@@ -72,11 +72,11 @@ export default function InstrutorPerfil() {
 
   const fetchProfile = async () => {
     try {
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user!.id)
-        .maybeSingle();
+      const { data: profileData, error: profileError } = await supabase.
+      from("profiles").
+      select("*").
+      eq("id", user!.id).
+      maybeSingle();
 
       if (profileError) throw profileError;
 
@@ -87,15 +87,15 @@ export default function InstrutorPerfil() {
           cpf: profileData.cpf || "",
           phone: profileData.phone || "",
           avatar_url: profileData.avatar_url,
-          is_test_account: isTest,
+          is_test_account: isTest
         });
       }
 
-      const { data: instrutorResult, error: instrutorError } = await supabase
-        .from("instrutores")
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const { data: instrutorResult, error: instrutorError } = await supabase.
+      from("instrutores").
+      select("*").
+      eq("user_id", user!.id).
+      maybeSingle();
 
       if (!instrutorError && instrutorResult) {
         setInstrutorData({
@@ -107,20 +107,20 @@ export default function InstrutorPerfil() {
           nota_media: Number(instrutorResult.nota_media) || 5,
           total_aulas: instrutorResult.total_aulas || 0,
           pagarme_recipient_id: instrutorResult.pagarme_recipient_id || null,
-          kyc_status: instrutorResult.kyc_status || null,
+          kyc_status: instrutorResult.kyc_status || null
         });
 
-        const { data: veiculoResult, error: veiculoError } = await supabase
-          .from("veiculos")
-          .select("*")
-          .eq("instrutor_id", instrutorResult.id)
-          .maybeSingle();
+        const { data: veiculoResult, error: veiculoError } = await supabase.
+        from("veiculos").
+        select("*").
+        eq("instrutor_id", instrutorResult.id).
+        maybeSingle();
 
         if (!veiculoError && veiculoResult) {
           setVeiculoData({
             modelo: veiculoResult.modelo,
             placa: veiculoResult.placa,
-            transmissao: veiculoResult.transmissao,
+            transmissao: veiculoResult.transmissao
           });
         }
       }
@@ -128,7 +128,7 @@ export default function InstrutorPerfil() {
       toast({
         variant: "destructive",
         title: "Erro ao carregar perfil",
-        description: error.message,
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -137,19 +137,19 @@ export default function InstrutorPerfil() {
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, "");
-    return numbers
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .replace(/(-\d{2})\d+?$/, "$1");
+    return numbers.
+    replace(/(\d{3})(\d)/, "$1.$2").
+    replace(/(\d{3})(\d)/, "$1.$2").
+    replace(/(\d{3})(\d{1,2})/, "$1-$2").
+    replace(/(-\d{2})\d+?$/, "$1");
   };
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
-    return numbers
-      .replace(/(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2")
-      .replace(/(-\d{4})\d+?$/, "$1");
+    return numbers.
+    replace(/(\d{2})(\d)/, "($1) $2").
+    replace(/(\d{5})(\d)/, "$1-$2").
+    replace(/(-\d{4})\d+?$/, "$1");
   };
 
   const handleNameChange = (value: string) => {
@@ -165,41 +165,41 @@ export default function InstrutorPerfil() {
       toast({
         variant: "destructive",
         title: "Nome inválido",
-        description: validation.message,
+        description: validation.message
       });
       return;
     }
 
     setSaving(true);
-    
+
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: profile.full_name,
-          cpf: profile.cpf,
-          phone: profile.phone,
-        })
-        .eq("id", user!.id);
+      const { error } = await supabase.
+      from("profiles").
+      update({
+        full_name: profile.full_name,
+        cpf: profile.cpf,
+        phone: profile.phone
+      }).
+      eq("id", user!.id);
 
       if (error) throw error;
 
-      setProfile(prev => ({
+      setProfile((prev) => ({
         ...prev,
         is_test_account: isTestAccountName(profile.full_name)
       }));
 
       toast({
         title: "Perfil atualizado!",
-        description: "Suas informações foram salvas.",
+        description: "Suas informações foram salvas."
       });
-      
+
       setEditing(false);
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: error.message,
+        description: error.message
       });
     } finally {
       setSaving(false);
@@ -207,7 +207,7 @@ export default function InstrutorPerfil() {
   };
 
   const handlePhotoUploaded = (url: string | null) => {
-    setProfile(prev => ({ ...prev, avatar_url: url }));
+    setProfile((prev) => ({ ...prev, avatar_url: url }));
   };
 
   const handleLogout = async () => {
@@ -230,26 +230,26 @@ export default function InstrutorPerfil() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Active Lesson Banner - fixed at top */}
-      {activeLesson && (
-        <div className="px-4 pt-2">
+      {activeLesson &&
+      <div className="px-4 pt-2">
           <ActiveLessonBanner lesson={activeLesson} />
         </div>
-      )}
+      }
       {/* Header */}
       <header className="bg-secondary text-secondary-foreground px-6 pt-6 pb-20 safe-top">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => navigate("/instrutor")}
-              className="w-10 h-10 rounded-xl bg-secondary-foreground/20 flex items-center justify-center"
-            >
+              className="w-10 h-10 rounded-xl bg-secondary-foreground/20 flex items-center justify-center">
+              
               <ArrowLeft className="w-5 h-5" />
             </button>
             <h1 className="text-xl font-bold">Meu Perfil</h1>
@@ -270,8 +270,8 @@ export default function InstrutorPerfil() {
                 onPhotoUploaded={handlePhotoUploaded}
                 userType="instrutor"
                 isTestAccount={profile.is_test_account}
-                userName={profile.full_name}
-              />
+                userName={profile.full_name} />
+              
               
               <h2 className="mt-4 text-xl font-bold text-foreground">
                 {profile.full_name || "Instrutor"}
@@ -280,63 +280,63 @@ export default function InstrutorPerfil() {
               
               {/* Badges */}
               <div className="flex items-center gap-2 mt-3">
-                {profile.is_test_account ? (
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
+                {profile.is_test_account ?
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
                     <AlertTriangle className="w-3 h-3" />
                     Conta de Teste
-                  </div>
-                ) : (
-                  <>
+                  </div> :
+
+                <>
                     <div className="px-3 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium">
                       Instrutor MEI
                     </div>
                     <VerifiedBadge isVerified={isVerified} kycStatus={kycStatus} size="sm" />
                   </>
-                )}
+                }
               </div>
 
               {/* Rating */}
-              {instrutorData && (
-                <div className="flex items-center gap-2 mt-3">
+              {instrutorData &&
+              <div className="flex items-center gap-2 mt-3">
                   <span className="text-amber-500 text-lg">★</span>
                   <span className="font-semibold text-foreground">{instrutorData.nota_media.toFixed(1)}</span>
                   <span className="text-sm text-muted-foreground">({instrutorData.total_aulas} aulas)</span>
                 </div>
-              )}
+              }
             </div>
 
             {/* Edit Toggle */}
-            {!editing ? (
-              <Button
-                variant="outline"
-                className="w-full mb-6"
-                onClick={() => setEditing(true)}
-              >
+            {!editing ?
+            <Button
+              variant="outline"
+              className="w-full mb-6"
+              onClick={() => setEditing(true)}>
+              
                 Editar dados
-              </Button>
-            ) : (
-              <div className="flex gap-3 mb-6">
+              </Button> :
+
+            <div className="flex gap-3 mb-6">
                 <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setEditing(false);
-                    setNameError(null);
-                  }}
-                >
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setEditing(false);
+                  setNameError(null);
+                }}>
+                
                   Cancelar
                 </Button>
                 <Button
-                  variant="hero-secondary"
-                  className="flex-1"
-                  onClick={handleSave}
-                  disabled={saving || !!nameError}
-                >
+                variant="hero-secondary"
+                className="flex-1"
+                onClick={handleSave}
+                disabled={saving || !!nameError}>
+                
                   {saving ? "Salvando..." : "Salvar"}
                   <Save className="w-4 h-4 ml-2" />
                 </Button>
               </div>
-            )}
+            }
 
             {/* Form Fields */}
             <div className="space-y-4">
@@ -354,15 +354,15 @@ export default function InstrutorPerfil() {
                     className={cn(
                       "h-12 pl-12 rounded-xl",
                       nameError && editing && "border-destructive focus-visible:ring-destructive"
-                    )}
-                  />
+                    )} />
+                  
                 </div>
-                {nameError && editing && (
-                  <p className="mt-1.5 text-xs text-destructive flex items-center gap-1">
+                {nameError && editing &&
+                <p className="mt-1.5 text-xs text-destructive flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
                     {nameError}
                   </p>
-                )}
+                }
               </div>
 
               <div>
@@ -376,8 +376,8 @@ export default function InstrutorPerfil() {
                     onChange={(e) => setProfile({ ...profile, cpf: formatCPF(e.target.value) })}
                     disabled={!editing}
                     maxLength={14}
-                    className="h-12 pl-12 rounded-xl"
-                  />
+                    className="h-12 pl-12 rounded-xl" />
+                  
                 </div>
               </div>
 
@@ -393,8 +393,8 @@ export default function InstrutorPerfil() {
                     disabled={!editing}
                     maxLength={15}
                     placeholder="(00) 00000-0000"
-                    className="h-12 pl-12 rounded-xl"
-                  />
+                    className="h-12 pl-12 rounded-xl" />
+                  
                 </div>
               </div>
 
@@ -407,16 +407,16 @@ export default function InstrutorPerfil() {
                   <Input
                     value={user?.email || ""}
                     disabled
-                    className="h-12 pl-12 rounded-xl bg-muted"
-                  />
+                    className="h-12 pl-12 rounded-xl bg-muted" />
+                  
                 </div>
               </div>
             </div>
           </div>
 
           {/* Instrutor Info */}
-          {instrutorData && (
-            <div className="bg-card rounded-2xl shadow-card p-4 mt-4">
+          {instrutorData &&
+          <div className="bg-card rounded-2xl shadow-card p-4 mt-4">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-secondary" />
                 Credenciais
@@ -443,11 +443,11 @@ export default function InstrutorPerfil() {
                 </div>
               </div>
             </div>
-          )}
+          }
 
           {/* Veiculo Info */}
-          {veiculoData && (
-            <div className="bg-card rounded-2xl shadow-card p-4 mt-4">
+          {veiculoData &&
+          <div className="bg-card rounded-2xl shadow-card p-4 mt-4">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Car className="w-5 h-5 text-secondary" />
                 Veículo
@@ -468,21 +468,21 @@ export default function InstrutorPerfil() {
                 </div>
               </div>
             </div>
-          )}
+          }
 
           {/* Balance Card */}
           <div className="mt-4">
-            <InstructorBalanceCard 
+            <InstructorBalanceCard
               hasRecipient={!!instrutorData?.pagarme_recipient_id}
               onSetupClick={() => setShowBankSetup(true)}
               onReRegisterClick={async () => {
                 // Clear old recipient to allow re-registration
                 if (instrutorData?.id) {
-                  const { error } = await supabase
-                    .from("instrutores")
-                    .update({ pagarme_recipient_id: null, kyc_status: "not_started" })
-                    .eq("id", instrutorData.id);
-                  
+                  const { error } = await supabase.
+                  from("instrutores").
+                  update({ pagarme_recipient_id: null, kyc_status: "not_started" }).
+                  eq("id", instrutorData.id);
+
                   if (error) {
                     toast({
                       variant: "destructive",
@@ -494,8 +494,8 @@ export default function InstrutorPerfil() {
                     fetchProfile();
                   }
                 }
-              }}
-            />
+              }} />
+            
           </div>
 
           {/* Notification Settings */}
@@ -505,57 +505,57 @@ export default function InstrutorPerfil() {
 
           {/* Actions */}
           <div className="mt-4 space-y-3">
-            <button 
+            <button
               onClick={() => setShowBankSetup(true)}
-              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
-            >
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card">
+              
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center",
                   instrutorData?.pagarme_recipient_id ? "bg-[#4CAF50]/10" : "bg-secondary/10"
                 )}>
-                  {instrutorData?.pagarme_recipient_id ? (
-                    <Check className="w-5 h-5 text-[#4CAF50]" />
-                  ) : (
-                    <CreditCard className="w-5 h-5 text-secondary" />
-                  )}
+                  {instrutorData?.pagarme_recipient_id ?
+                  <Check className="w-5 h-5 text-[#4CAF50]" /> :
+
+                  <CreditCard className="w-5 h-5 text-secondary" />
+                  }
                 </div>
                 <div className="text-left">
                   <span className="font-medium text-foreground block">Dados bancários</span>
-                  {instrutorData?.pagarme_recipient_id ? (
-                    <span className="text-xs text-[#4CAF50]">Configurado ✓</span>
-                  ) : (
-                    <span className="text-xs text-amber-500">Pendente - configure para receber</span>
-                  )}
+                  {instrutorData?.pagarme_recipient_id ?
+                  <span className="text-xs text-[#4CAF50]">Configurado ✓</span> :
+
+                  <span className="text-xs text-amber-500">Pendente - configure para receber</span>
+                  }
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
 
-            <button 
+            <button
               onClick={() => navigate("/instrutor/ganhos")}
-              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
-            >
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card">
+              
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                   <Wallet className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <span className="font-medium text-foreground">💵 Financeiro</span>
-                  <p className="text-xs text-muted-foreground">Ganhos, repasses e histórico</p>
+                  <span className="font-medium text-foreground"> Financeiro</span>
+                  
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 const phone = "5518981288372";
                 const message = encodeURIComponent("Olá! Preciso de ajuda com a CNH360.");
                 window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
               }}
-              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card"
-            >
+              className="w-full bg-card rounded-2xl p-4 flex items-center justify-between shadow-card">
+              
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#25D366]/10 flex items-center justify-center">
                   <MessageCircle className="w-5 h-5 text-[#25D366]" />
@@ -571,8 +571,8 @@ export default function InstrutorPerfil() {
             <Button
               variant="outline"
               className="w-full h-14 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-              onClick={handleLogout}
-            >
+              onClick={handleLogout}>
+              
               <LogOut className="w-5 h-5 mr-2" />
               Sair da conta
             </Button>
@@ -584,10 +584,10 @@ export default function InstrutorPerfil() {
         open={showBankSetup}
         onClose={() => setShowBankSetup(false)}
         onSuccess={() => fetchProfile()}
-        existingRecipientId={instrutorData?.pagarme_recipient_id}
-      />
+        existingRecipientId={instrutorData?.pagarme_recipient_id} />
+      
 
       <InstructorBottomNav />
-    </div>
-  );
+    </div>);
+
 }
