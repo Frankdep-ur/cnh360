@@ -3,7 +3,7 @@ import { ComplianceBanner } from "@/components/layout/ComplianceBanner";
 import { ActiveLessonBanner } from "@/components/instrutor/ActiveLessonBanner";
 import { useActiveLessonBanner } from "@/hooks/useActiveLessonBanner";
 import { InstructorBottomNav } from "@/components/layout/InstructorBottomNav";
-import { PremiumActivationModal } from "@/components/instrutor/PremiumActivationModal";
+
 import { WithdrawModal } from "@/components/instrutor/WithdrawModal";
 import { BankAccountSetup } from "@/components/instrutor/BankAccountSetup";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
   ArrowDownLeft,
   Clock,
   CheckCircle2,
-  Crown,
+  
   Calendar,
   Download,
   Filter,
@@ -35,10 +35,8 @@ import {
 
 export default function InstrutorGanhos() {
   const { activeLesson } = useActiveLessonBanner();
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showBankSetup, setShowBankSetup] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
   
   // Real balance from Pagar.me
   const [balance, setBalance] = useState<{ available: number; waitingFunds: number } | null>(null);
@@ -137,7 +135,7 @@ export default function InstrutorGanhos() {
     pendente: balance?.waitingFunds ?? 0,
     totalMes: 4850,
     taxaPaga: 1358,
-    taxaAtual: isPremium ? 18 : 28,
+    taxaAtual: 28,
   };
 
   const proximaAula = {
@@ -145,7 +143,7 @@ export default function InstrutorGanhos() {
     data: "Hoje",
     hora: "14:00",
     valor: 100,
-    liquido: isPremium ? 82 : 72,
+    liquido: 72,
   };
 
   const historicoPixRecebido = [
@@ -203,8 +201,8 @@ export default function InstrutorGanhos() {
     aulasRealizadas: 89,
     horasTotais: 89,
     ganhoBruto: 6208,
-    taxaTotal: isPremium ? Math.round(6208 * 0.18) : 1358,
-    ganhoLiquido: isPremium ? Math.round(6208 * 0.82) : 4850,
+    taxaTotal: 1358,
+    ganhoLiquido: 4850,
   };
 
   return (
@@ -314,32 +312,6 @@ export default function InstrutorGanhos() {
           </Card>
         </div>
 
-        {!isPremium && (
-          <Card className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/20">
-                <Crown className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-foreground">Economize com Premium!</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Com a taxa atual de {saldo.taxaAtual}%, você pagou <span className="font-semibold text-destructive">R${saldo.taxaPaga}</span> este mês.
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Com Premium (18%), economia de <span className="font-semibold text-primary">R${Math.round(saldo.taxaPaga * 0.36)}</span>!
-                </p>
-                <Button 
-                  size="sm" 
-                  className="mt-3 bg-amber-500 hover:bg-amber-600 text-white"
-                  onClick={() => setShowPremiumModal(true)}
-                >
-                  <Crown className="w-4 h-4 mr-1" />
-                  Ativar Premium R$89/mês
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
 
         <Card className="p-4 shadow-card">
           <div className="flex items-center justify-between mb-4">
@@ -514,15 +486,6 @@ export default function InstrutorGanhos() {
           </div>
         </Card>
       </div>
-
-      {/* Premium Modal */}
-      <PremiumActivationModal
-        open={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        onActivate={() => setIsPremium(true)}
-        currentTax={28}
-        taxPaidThisMonth={saldo.taxaPaga}
-      />
 
       {/* Withdraw Modal */}
       <WithdrawModal
