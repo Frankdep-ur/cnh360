@@ -575,13 +575,8 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
                 Em processamento
               </div>
               <div className="font-semibold text-foreground">
-                {formatCurrency(balance.waitingFunds, balance.currency)}
+                {formatCurrency(0, balance.currency)}
               </div>
-              {balance.waitingFunds > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  (Aulas ainda não liberadas)
-                </p>
-              )}
             </div>
             
             <div className="bg-muted/50 rounded-xl p-3">
