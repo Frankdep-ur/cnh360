@@ -1,30 +1,16 @@
 
 
-## Plano: Atualizar labels de saldo nos cards financeiros
+## Plano: Remover subtexto e zerar valor de "Em processamento"
 
-Modificar os textos em **2 arquivos** que exibem os cards "A receber" e "Já transferido":
+### Alterações
 
-### 1. `src/pages/instrutor/InstrutorGanhos.tsx` (linhas 294-320)
+**1. `src/pages/instrutor/InstrutorGanhos.tsx` (linhas 306-308)**
+- Remover o bloco condicional `{saldo.pendente > 0 && (...)}` com o texto "(Valor das aulas ainda não liberadas)"
+- Na linha 303, forçar exibição de `R$ 0,00` sempre (ignorar `saldo.pendente`)
 
-**Card "A receber" → "Em processamento":**
-- Trocar ícone `Clock` por `Hourglass` (já importado)
-- Label: **"Em processamento"**
-- Remover a linha "Líquido (taxa: R$ 3,67)" — exibir apenas `(Valor das aulas ainda não liberadas)` como subtexto
-- Mostrar valor bruto `saldo.pendente` sem subtrair taxa
-- Se pendente = 0, mostrar R$ 0,00 sem subtexto
+**2. `src/components/instrutor/InstructorBalanceCard.tsx` (linhas 580-584)**
+- Remover o bloco condicional com "(Aulas ainda não liberadas)"
+- Na linha 578, forçar `formatCurrency(0, balance.currency)` em vez de `balance.waitingFunds`
 
-**Card "Este mês" → "Total já recebido":**
-- Label: **"Total já recebido"**
-- Remover subtexto "Líquido"
-- Manter ícone `TrendingUp`
-
-### 2. `src/components/instrutor/InstructorBalanceCard.tsx` (linhas 571-602)
-
-**Mesmas mudanças no componente do dashboard:**
-- "A receber" → **"Em processamento"** com ícone `Hourglass`
-- Remover subtração da taxa e texto "Líquido (taxa: R$ 3,67)"
-- Subtexto: `(Aulas ainda não liberadas)`
-- "Já transferido" → **"Total já recebido"**
-
-Nenhuma mudança de lógica de saque — quando o saque zera o `waitingFunds`, o valor já aparece R$ 0,00 automaticamente.
+O card "Em processamento" sempre mostrará R$ 0,00, sem subtexto.
 
