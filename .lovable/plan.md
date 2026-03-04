@@ -1,28 +1,30 @@
 
 
-## Plano: Trocar "Disponibilidade" por seção "Financeiro" no perfil do instrutor
+## Plano: Atualizar labels de saldo nos cards financeiros
 
-### O que muda
+Modificar os textos em **2 arquivos** que exibem os cards "A receber" e "Já transferido":
 
-O botão "Disponibilidade" (linhas 535-543 de `InstrutorPerfil.tsx`) será substituído por um botão **"💵 Financeiro"** que navega para a página `/instrutor/ganhos` (que já existe com dados reais de saldo, aulas, repasses).
+### 1. `src/pages/instrutor/InstrutorGanhos.tsx` (linhas 294-320)
 
-### Alteração única
+**Card "A receber" → "Em processamento":**
+- Trocar ícone `Clock` por `Hourglass` (já importado)
+- Label: **"Em processamento"**
+- Remover a linha "Líquido (taxa: R$ 3,67)" — exibir apenas `(Valor das aulas ainda não liberadas)` como subtexto
+- Mostrar valor bruto `saldo.pendente` sem subtrair taxa
+- Se pendente = 0, mostrar R$ 0,00 sem subtexto
 
-**Arquivo:** `src/pages/instrutor/InstrutorPerfil.tsx` (linhas 535-543)
+**Card "Este mês" → "Total já recebido":**
+- Label: **"Total já recebido"**
+- Remover subtexto "Líquido"
+- Manter ícone `TrendingUp`
 
-Trocar o botão estático "Disponibilidade" por um botão que:
-- Ícone: `Wallet` (já importado via `InstructorBalanceCard`) ou `Banknote`
-- Texto: **"Financeiro"**
-- Subtexto: **"Ganhos, repasses e histórico"**
-- Cor: verde (`bg-emerald-500/10`, `text-emerald-600`)
-- `onClick`: navega para `/instrutor/ganhos`
+### 2. `src/components/instrutor/InstructorBalanceCard.tsx` (linhas 571-602)
 
-A página `InstrutorGanhos` já possui todos os dados reais conectados:
-- Saldo disponível (API Pagar.me)
-- Aulas realizadas e valores (tabela `pagamentos`)
-- Histórico de repasses (tabela `saques`)
-- Valor por aula
-- KYC e dados bancários
+**Mesmas mudanças no componente do dashboard:**
+- "A receber" → **"Em processamento"** com ícone `Hourglass`
+- Remover subtração da taxa e texto "Líquido (taxa: R$ 3,67)"
+- Subtexto: `(Aulas ainda não liberadas)`
+- "Já transferido" → **"Total já recebido"**
 
-Nenhuma tabela ou backend precisa ser alterado.
+Nenhuma mudança de lógica de saque — quando o saque zera o `waitingFunds`, o valor já aparece R$ 0,00 automaticamente.
 
