@@ -1,53 +1,28 @@
 
 
-# Tabela de Log de Notificações Admin + Verificação dos Fluxos
+## Plano: Trocar "Disponibilidade" por seção "Financeiro" no perfil do instrutor
 
-## 1. Criar tabela `admin_notification_logs`
+### O que muda
 
-Nova tabela no banco de dados para registrar todas as notificações admin enviadas:
+O botão "Disponibilidade" (linhas 535-543 de `InstrutorPerfil.tsx`) será substituído por um botão **"💵 Financeiro"** que navega para a página `/instrutor/ganhos` (que já existe com dados reais de saldo, aulas, repasses).
 
-```sql
-CREATE TABLE public.admin_notification_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tipo TEXT NOT NULL,              -- 'aluno', 'instrutor', 'autoescola', 'novo_usuario'
-  user_id UUID,                    -- ID do usuário registrado
-  nome TEXT,
-  email TEXT,
-  whatsapp TEXT,
-  cidade TEXT,
-  message_id TEXT,                 -- messageId retornado pela Z-API
-  success BOOLEAN DEFAULT false,
-  error_message TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+### Alteração única
 
--- RLS: somente service role pode inserir (edge function)
-ALTER TABLE public.admin_notification_logs ENABLE ROW LEVEL SECURITY;
--- Nenhuma policy para anon/authenticated = apenas service role tem acesso
-```
+**Arquivo:** `src/pages/instrutor/InstrutorPerfil.tsx` (linhas 535-543)
 
-## 2. Atualizar Edge Function `notify-admin-registration`
+Trocar o botão estático "Disponibilidade" por um botão que:
+- Ícone: `Wallet` (já importado via `InstructorBalanceCard`) ou `Banknote`
+- Texto: **"Financeiro"**
+- Subtexto: **"Ganhos, repasses e histórico"**
+- Cor: verde (`bg-emerald-500/10`, `text-emerald-600`)
+- `onClick`: navega para `/instrutor/ganhos`
 
-Após enviar a mensagem WhatsApp, inserir um registro na tabela `admin_notification_logs` com:
-- Tipo de cadastro
-- Dados do usuário (nome, email, whatsapp, cidade)
-- `message_id` da Z-API
-- Status de sucesso/falha
-- Mensagem de erro (se houver)
+A página `InstrutorGanhos` já possui todos os dados reais conectados:
+- Saldo disponível (API Pagar.me)
+- Aulas realizadas e valores (tabela `pagamentos`)
+- Histórico de repasses (tabela `saques`)
+- Valor por aula
+- KYC e dados bancários
 
-## 3. Verificação dos Fluxos
-
-Os três onboarding (aluno, instrutor, autoescola) já estão configurados corretamente:
-- Todos enviam `user_id`, `nome`, `email`, `whatsapp`, `cidade` no payload
-- A edge function enriquece dados faltantes do banco
-- A formatação do telefone internacional está correta
-
-Nenhuma alteração necessária nos arquivos de onboarding -- apenas a edge function e a nova tabela.
-
-## Resumo das Mudanças
-
-| Arquivo | Ação |
-|---------|------|
-| Migração SQL | Criar tabela `admin_notification_logs` |
-| `supabase/functions/notify-admin-registration/index.ts` | Adicionar insert na tabela de log após envio |
+Nenhuma tabela ou backend precisa ser alterado.
 
