@@ -300,12 +300,9 @@ export default function InstrutorGanhos() {
               {loadingBalance ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `R$ ${saldo.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+              `R$ 0,00`
               )}
             </p>
-            {saldo.pendente > 0 && (
-              <p className="text-xs text-muted-foreground">(Valor das aulas ainda não liberadas)</p>
-            )}
           </Card>
           
           <Card className="p-4 shadow-card">
