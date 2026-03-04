@@ -571,30 +571,23 @@ export function InstructorBalanceCard({ hasRecipient, onSetupClick, onReRegister
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted/50 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <Clock className="w-3 h-3" />
-                A receber
+                <Hourglass className="w-3 h-3" />
+                Em processamento
               </div>
               <div className="font-semibold text-foreground">
-                {balance.waitingFunds > 3.67
-                  ? formatCurrency(balance.waitingFunds - 3.67, balance.currency)
-                  : formatCurrency(0, balance.currency)}
+                {formatCurrency(balance.waitingFunds, balance.currency)}
               </div>
-              {balance.waitingFunds > 3.67 && (
+              {balance.waitingFunds > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Líquido (taxa: R$ 3,67)
-                </p>
-              )}
-              {balance.waitingFunds > 0 && balance.waitingFunds <= 3.67 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Valor insuficiente para saque
+                  (Aulas ainda não liberadas)
                 </p>
               )}
             </div>
             
             <div className="bg-muted/50 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <ArrowUpRight className="w-3 h-3" />
-                Já transferido
+                <TrendingUp className="w-3 h-3" />
+                Total já recebido
               </div>
               <div className="font-semibold text-foreground">
                 {formatCurrency(balance.transferred, balance.currency)}
